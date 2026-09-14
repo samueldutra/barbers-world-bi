@@ -8,8 +8,8 @@ export type StatusLead = 'cliente' | 'concorrente' | 'lead'
 
 export interface LeadMapeado {
   id: number
-  osm_type: string | null
-  osm_id: number | null
+  origem_tipo: string | null
+  origem_id: string | null
   nome: string
   nicho: string | null
   endereco: string | null
@@ -26,8 +26,8 @@ interface SalvarInput {
   nome: string
   latitude: number
   longitude: number
-  osmType?: string | null
-  osmId?: number | null
+  origemTipo?: string | null
+  origemId?: string | null
   nicho?: string | null
   endereco?: string | null
   telefone?: string | null
@@ -68,8 +68,8 @@ export function useLeadsMapeados() {
         p_nome: input.nome,
         p_latitude: input.latitude,
         p_longitude: input.longitude,
-        p_osm_type: input.osmType ?? null,
-        p_osm_id: input.osmId ?? null,
+        p_origem_tipo: input.origemTipo ?? null,
+        p_origem_id: input.origemId ?? null,
         p_nicho: input.nicho ?? null,
         p_endereco: input.endereco ?? null,
         p_telefone: input.telefone ?? null,

@@ -1,28 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-/** Busca estabelecimentos por nicho perto de um ponto, via Overpass API (OpenStreetMap).
- * Fica no server porque a Overpass não manda Access-Control-Allow-Origin — chamar direto
- * do navegador é bloqueado por CORS. (Nominatim, usado só pra geocodificar, já manda
- * `*` e pode ser chamado direto do client.) */
+/** Busca estabelecimentos por nicho perto de um ponto, via Google Places API (New).
+ * Fica no server porque usa a chave de servidor (GOOGLE_PLACES_API_KEY), que nunca deve
+ * chegar ao navegador — diferente da chave de mapa (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
+ * essa é só pra exibição e pode ser pública (restrita por HTTP referrer no Google Cloud). */
 
 export const dynamic = 'force-dynamic'
 
-interface ElementoOverpass {
-  type: 'node' | 'way' | 'relation'
-  id: number
-  lat?: number
-  lon?: number
-  center?: { lat: number; lon: number }
-  tags?: Record<string, string | undefined>
-}
-
-interface RespostaOverpass {
-  elements: ElementoOverpass[]
-}
-
 export interface ResultadoBusca {
-  osmType: 'node' | 'way' | 'relation'
-  osmId: number
+  origemTipo: 'google'
+  origemId: string
   nome: string
   endereco: string | null
   telefone: string | null
@@ -30,17 +17,30 @@ export interface ResultadoBusca {
   longitude: number
 }
 
-// Presets pros nichos mais comuns — mapeiam pra tags reais do OpenStreetMap, que dão
-// resultado muito mais confiável que buscar por nome. Fora desses, cai no fallback de
-// busca por nome (ver montarFiltroOverpass).
-const PRESETS_NICHO: Record<string, string> = {
-  barbearia: '["shop"="hairdresser"]',
-  'salao de beleza': '["shop"="beauty"]',
-  'barbearia e salao de beleza': '["shop"~"^(hairdresser|beauty)$"]',
-  academia: '["leisure"="fitness_centre"]',
-  farmacia: '["amenity"="pharmacy"]',
-  'pet shop': '["shop"="pet"]',
-  restaurante: '["amenity"="restaurant"]',
+interface LugarGoogle {
+  id: string
+  displayName?: { text: string }
+  formattedAddress?: string
+  nationalPhoneNumber?: string
+  location?: { latitude: number; longitude: number }
+}
+
+interface RespostaGoogle {
+  places?: LugarGoogle[]
+  error?: { message: string }
+}
+
+// Presets pros nichos mais comuns — mapeiam pro Table A do Google Places API (New)
+// (https://developers.google.com/maps/documentation/places/web-service/place-types).
+// Fora desses, cai no fallback de Text Search por texto livre.
+const PRESETS_NICHO: Record<string, string[]> = {
+  barbearia: ['barber_shop'],
+  'salao de beleza': ['beauty_salon'],
+  'barbearia e salao de beleza': ['barber_shop', 'beauty_salon'],
+  academia: ['gym'],
+  farmacia: ['pharmacy'],
+  'pet shop': ['pet_store'],
+  restaurante: ['restaurant'],
 }
 
 function normalizar(texto: string): string {
@@ -48,28 +48,37 @@ function normalizar(texto: string): string {
     .trim()
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\p{Diacritic}/gu, '')
 }
 
-function escaparRegexOverpass(texto: string): string {
-  return texto.replace(/["\\]/g, '\\$&')
+function mapearResultado(lugar: LugarGoogle): ResultadoBusca | null {
+  if (!lugar.location) return null
+  return {
+    origemTipo: 'google',
+    origemId: lugar.id,
+    nome: lugar.displayName?.text ?? 'Sem nome',
+    endereco: lugar.formattedAddress ?? null,
+    telefone: lugar.nationalPhoneNumber ?? null,
+    latitude: lugar.location.latitude,
+    longitude: lugar.location.longitude,
+  }
 }
 
-function montarFiltroOverpass(nicho: string): string {
-  const preset = PRESETS_NICHO[normalizar(nicho)]
-  if (preset) return preset
-  // Fallback: qualquer elemento nomeado cujo nome contenha o termo buscado.
-  return `["name"~"${escaparRegexOverpass(nicho)}",i]`
-}
-
-function formatarEndereco(tags: Record<string, string | undefined>): string | null {
-  const partes = [tags['addr:street'], tags['addr:housenumber'], tags['addr:suburb'], tags['addr:city']].filter(
-    Boolean
-  )
-  return partes.length > 0 ? partes.join(', ') : null
-}
+const CAMPOS = [
+  'places.id',
+  'places.displayName',
+  'places.formattedAddress',
+  'places.location',
+  'places.nationalPhoneNumber',
+].join(',')
 
 export async function POST(request: NextRequest) {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY
+  if (!apiKey) {
+    console.error('GOOGLE_PLACES_API_KEY não configurada.')
+    return NextResponse.json({ error: 'Busca de prospecção não configurada no servidor.' }, { status: 500 })
+  }
+
   let body: unknown
   try {
     body = await request.json()
@@ -84,52 +93,66 @@ export async function POST(request: NextRequest) {
   }
   const lat = Number(latitude)
   const lon = Number(longitude)
-  const raio = Math.min(Math.max(Number(raioMetros) || 5000, 200), 20000)
+  const raio = Math.min(Math.max(Number(raioMetros) || 5000, 200), 50000)
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
     return NextResponse.json({ error: 'Coordenadas inválidas.' }, { status: 400 })
   }
 
-  const filtro = montarFiltroOverpass(nicho)
-  const around = `(around:${raio},${lat},${lon})`
-  const query = `[out:json][timeout:25];(node${filtro}${around};way${filtro}${around};);out center 80;`
+  const tiposPreset = PRESETS_NICHO[normalizar(nicho)]
 
   try {
-    const resposta = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'BarbersWorldBI/1.0 (prospeccao interna; contato: samueldutra.rp@gmail.com)',
-      },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: AbortSignal.timeout(28000),
-    })
-
-    if (!resposta.ok) {
-      return NextResponse.json({ error: `Overpass API respondeu ${resposta.status}.` }, { status: 502 })
+    let resposta: Response
+    if (tiposPreset) {
+      resposta = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CAMPOS,
+        },
+        body: JSON.stringify({
+          includedTypes: tiposPreset,
+          maxResultCount: 20,
+          locationRestriction: {
+            circle: { center: { latitude: lat, longitude: lon }, radius: raio },
+          },
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
+    } else {
+      // Fallback: nicho fora dos presets conhecidos — busca por texto livre.
+      resposta = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': CAMPOS,
+        },
+        body: JSON.stringify({
+          textQuery: nicho,
+          maxResultCount: 20,
+          locationBias: {
+            circle: { center: { latitude: lat, longitude: lon }, radius: raio },
+          },
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
     }
 
-    const dados: RespostaOverpass = await resposta.json()
+    const dados: RespostaGoogle = await resposta.json()
 
-    const resultados: ResultadoBusca[] = dados.elements
-      .map((el) => {
-        const tags = el.tags ?? {}
-        const posicao = el.type === 'node' ? { lat: el.lat, lon: el.lon } : el.center
-        if (posicao?.lat === undefined || posicao?.lon === undefined) return null
-        return {
-          osmType: el.type,
-          osmId: el.id,
-          nome: tags.name ?? 'Sem nome',
-          endereco: formatarEndereco(tags),
-          telefone: tags.phone ?? tags['contact:phone'] ?? null,
-          latitude: posicao.lat,
-          longitude: posicao.lon,
-        }
-      })
+    if (!resposta.ok) {
+      console.error('Erro na busca de prospecção (Google Places):', dados.error)
+      return NextResponse.json({ error: dados.error?.message ?? `Google Places respondeu ${resposta.status}.` }, { status: 502 })
+    }
+
+    const resultados = (dados.places ?? [])
+      .map(mapearResultado)
       .filter((r): r is ResultadoBusca => r !== null)
 
     return NextResponse.json({ resultados })
   } catch (err) {
-    console.error('Erro na busca de prospecção (Overpass):', err)
+    console.error('Erro na busca de prospecção (Google Places):', err)
     return NextResponse.json({ error: 'Não foi possível buscar no momento. Tente novamente.' }, { status: 500 })
   }
 }
