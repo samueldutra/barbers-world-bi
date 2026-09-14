@@ -112,11 +112,10 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
                     {[lead.endereco, lead.telefone].filter(Boolean).join(' · ') || 'Sem endereço/telefone'}
                   </p>
                 </div>
+                <Badge variant={VARIANTE_STATUS[lead.status]}>{LABEL_STATUS[lead.status]}</Badge>
                 <Select value={lead.status} onValueChange={(v) => onAtualizarStatus(lead.id, v as StatusLead)}>
-                  <SelectTrigger className="w-36" size="sm">
-                    <Badge variant={VARIANTE_STATUS[lead.status]} className="pointer-events-none">
-                      {LABEL_STATUS[lead.status]}
-                    </Badge>
+                  <SelectTrigger className="w-32" size="sm">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cliente">Cliente</SelectItem>
