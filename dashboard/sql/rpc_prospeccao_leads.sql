@@ -111,7 +111,7 @@ BEGIN
             INSERT INTO %I.leads_mapeados
                 (osm_type, osm_id, nome, nicho, endereco, telefone, latitude, longitude, status, observacoes, criado_por)
             VALUES (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, auth.uid())
-            ON CONFLICT (osm_type, osm_id) DO UPDATE SET
+            ON CONFLICT (osm_type, osm_id) WHERE osm_type IS NOT NULL AND osm_id IS NOT NULL DO UPDATE SET
                 nome = EXCLUDED.nome,
                 nicho = COALESCE(EXCLUDED.nicho, %I.leads_mapeados.nicho),
                 endereco = COALESCE(EXCLUDED.endereco, %I.leads_mapeados.endereco),
