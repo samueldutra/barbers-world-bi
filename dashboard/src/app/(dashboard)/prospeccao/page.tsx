@@ -79,8 +79,8 @@ export default function ProspeccaoPage() {
         nome: resultado.nome,
         latitude: resultado.latitude,
         longitude: resultado.longitude,
-        osmType: resultado.osmType,
-        osmId: resultado.osmId,
+        origemTipo: resultado.origemTipo,
+        origemId: resultado.origemId,
         nicho,
         endereco: resultado.endereco,
         telefone: resultado.telefone,
@@ -124,7 +124,7 @@ export default function ProspeccaoPage() {
       <Card>
         <CardHeader>
           <CardTitle>Buscar no mapa</CardTitle>
-          <CardDescription>Dados do OpenStreetMap — gratuito, sem chave de API</CardDescription>
+          <CardDescription>Dados do Google Places</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
