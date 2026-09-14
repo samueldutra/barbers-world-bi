@@ -1,0 +1,22 @@
+# Segredos / ambiente
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+package/
+*.zip
+
+# Tokens OAuth capturados localmente
+.bling_tokens.json
+
+# Ferramentas locais
+.claude/
+
+# OS
+.DS_Store
