@@ -14,7 +14,7 @@ function ForgotPasswordFormWrapper() {
     <Suspense
       fallback={
         <div className="flex flex-col items-center justify-center py-8 space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Carregando...</p>
         </div>
       }

@@ -176,7 +176,7 @@ export function ForgotPasswordForm() {
               )}
             </Button>
             <div className="mt-3 text-center">
-              <Link href="/login" className="text-sm text-[#102694] hover:underline">
+              <Link href="/login" className="text-sm text-primary hover:underline">
                 Voltar para login
               </Link>
             </div>

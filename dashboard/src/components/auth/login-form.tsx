@@ -189,7 +189,7 @@ export function LoginForm() {
               </button>
             </div>
             <div className="mt-1 flex justify-end">
-              <Link href="/recuperar-senha" className="text-sm text-[#102694] hover:underline">
+              <Link href="/recuperar-senha" className="text-sm text-primary hover:underline">
                 Esqueceu a senha?
               </Link>
             </div>
