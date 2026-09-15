@@ -33,7 +33,6 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { useUser } from "@/hooks/use-user"
-import { RoleLabels, type UserRole } from "@/types"
 
 function initials(name: string) {
   return name
@@ -88,9 +87,9 @@ export function NavUser() {
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex flex-col gap-1 px-1 py-1.5 text-left text-sm">
-                {profile && (
+                {profile?.is_superadmin && (
                   <Badge variant="outline" className="h-5 w-fit px-1.5 text-[10px] uppercase">
-                    {RoleLabels[profile.role as UserRole]}
+                    Super Admin
                   </Badge>
                 )}
                 <span className="truncate font-medium">{displayName}</span>

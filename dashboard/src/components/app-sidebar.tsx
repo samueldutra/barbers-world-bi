@@ -17,25 +17,30 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useProfile } from "@/hooks/use-profile"
-import { isAdminOrAbove } from "@/types"
+import { useAuthorizedModules } from "@/hooks/use-authorized-modules"
+import { isSuperAdmin } from "@/types"
 
 const navMain = [
   {
+    id: "dashboard",
     title: "Dashboard",
     url: "/dashboard",
     icon: IconDashboard,
   },
   {
+    id: "relatorio-produtos",
     title: "Relatório de Vendas por Produto",
     url: "/relatorio-produtos",
     icon: IconReportAnalytics,
   },
   {
+    id: "relatorio-clientes",
     title: "Relatório de Vendas por Cliente",
     url: "/relatorio-clientes",
     icon: IconUsersGroup,
   },
   {
+    id: "prospeccao",
     title: "Prospecção de Leads",
     url: "/prospeccao",
     icon: IconMapPin,
@@ -44,10 +49,13 @@ const navMain = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { profile } = useProfile()
+  const { modules } = useAuthorizedModules()
+  const superAdmin = isSuperAdmin(profile)
 
-  const items = profile && isAdminOrAbove(profile)
-    ? [...navMain, { title: "Usuários", url: "/usuarios", icon: IconUsers }]
-    : navMain
+  const liberados = navMain.filter((item) => superAdmin || modules.includes(item.id))
+  const items = superAdmin
+    ? [...liberados, { id: "usuarios", title: "Usuários", url: "/usuarios", icon: IconUsers }]
+    : liberados
 
   return (
     <Sidebar collapsible="offcanvas" {...props}>
