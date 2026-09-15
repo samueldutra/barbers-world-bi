@@ -15,6 +15,7 @@ independente, então cada um fica autocontido, como no `etl-faturamento`).
 """
 
 import os
+import sys
 import json
 import re
 import boto3
@@ -478,7 +479,7 @@ def main():
     cliente_id = os.getenv('ETL_CLIENTE')
     if not cliente_id:
         log("[ERRO] ETL_CLIENTE não definido no .env")
-        return
+        sys.exit(1)
 
     start_time = time.time()
     discord_logger = DiscordLogger(DISCORD_WEBHOOK_URL)
@@ -502,6 +503,9 @@ def main():
             execution_time=execution_time,
             error_message=error_info,
         )
+
+    if status == "Falha":
+        sys.exit(1)
 
 
 if __name__ == "__main__":

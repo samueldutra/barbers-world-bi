@@ -15,6 +15,7 @@ VendasDadosDTO / VendasItemDTO / VendasParcelaDTO.
 """
 
 import os
+import sys
 import json
 import re
 import boto3
@@ -659,10 +660,10 @@ def main():
 
     if not cliente_id:
         log("[ERRO] ETL_CLIENTE não definido no .env")
-        return
+        sys.exit(1)
     if not data_inicial:
         log("[ERRO] ETL_DATA_INICIAL não definido no .env")
-        return
+        sys.exit(1)
 
     log(f"Cliente: {cliente_id}")
     log(f"Período: {data_inicial} a {data_final}")
@@ -680,6 +681,7 @@ def main():
     except Exception as e:
         log(f"Execução falhou: {e}")
         traceback.print_exc()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

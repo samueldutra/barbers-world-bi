@@ -1,0 +1,55 @@
+name: ETL Bling — Vendas e Clientes (a cada hora)
+
+# Roda a cada hora, cheia (UTC). Também pode ser disparado manualmente pela aba
+# "Actions" do GitHub (botão "Run workflow") pra testar sem esperar o cron.
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    # Os secrets foram cadastrados como "environment secret" desse ambiente (criado pela
+    # integração da Vercel), não como repository secret — declarar aqui é o que dá ao job
+    # acesso a eles. Sem proteção de branch configurada (confirmado via API), então roda
+    # normalmente no schedule/workflow_dispatch da main.
+    environment: "Production – barbers-world-bi-dashboard"
+    # A sincronização de clientes processa "rodadas" de contatos pendentes até não sobrar
+    # nenhum — na primeira execução (ou depois de um backfill grande de vendas) pode
+    # demorar bem mais que uma rodada incremental normal. Se estourar, é seguro rodar de
+    # novo (workflow_dispatch) — ela retoma de onde parou, só busca quem ainda está
+    # pendente.
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: etl-bling-pedidos-vendas
+    env:
+      # Mesmo caminho de execução local (sem SSM/AWS) — só troca de onde roda.
+      LOCAL_MODE: 'true'
+      ETL_CLIENTE: barbers
+      LOCAL_CLIENT_CONFIGS: '{"barbers":{"schema":"barbers"}}'
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      BLING_CLIENT_ID: ${{ secrets.BLING_CLIENT_ID }}
+      BLING_CLIENT_SECRET: ${{ secrets.BLING_CLIENT_SECRET }}
+      BLING_REDIRECT_URI: ${{ secrets.BLING_REDIRECT_URI }}
+      BLING_CONTA: barbers
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instala dependências
+        run: pip install -r requirements.txt
+
+      - name: Vendas (últimos 5 dias — upsert cuida de duplicata)
+        run: |
+          export ETL_DATA_INICIAL=$(date -u -d '5 days ago' +%F)
+          python etl-bling-pedidos-vendas.py
+
+      - name: Clientes (contatos pendentes de sincronizar)
+        run: python sync-clientes-bling.py
