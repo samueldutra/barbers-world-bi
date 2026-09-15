@@ -6,7 +6,7 @@ import { useUser } from '@/hooks/use-user'
 import type { UserProfile } from '@/types'
 
 /**
- * Perfil (role, nome, tema) do usuário logado, vindo de public.user_profiles.
+ * Perfil (nome, tema, is_superadmin) do usuário logado, vindo de public.user_profiles.
  * Versão simplificada do use-tenant.ts do datapro-findash — sem troca de tenant,
  * já que o BI da Barbers World atende só um tenant por enquanto.
  */
@@ -28,7 +28,7 @@ export function useProfile() {
     let isMounted = true
     supabase
       .from('user_profiles')
-      .select('id, full_name, role, is_active, theme_preference')
+      .select('id, full_name, is_superadmin, is_active, theme_preference')
       .eq('id', user.id)
       .single()
       .then(({ data }) => {
