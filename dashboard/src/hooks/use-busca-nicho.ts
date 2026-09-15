@@ -5,19 +5,28 @@ import type { ResultadoBusca } from '@/app/api/prospeccao/buscar/route'
 
 export type { ResultadoBusca }
 
+export interface PontoBusca {
+  lat: number
+  lon: number
+}
+
 export function useBuscaNicho() {
   const [resultados, setResultados] = useState<ResultadoBusca[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const buscar = async (nicho: string, latitude: number, longitude: number, raioMetros: number) => {
+  const buscar = async (nicho: string, pontos: PontoBusca[], raioMetros: number) => {
     setLoading(true)
     setError(null)
     try {
       const resposta = await fetch('/api/prospeccao/buscar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nicho, latitude, longitude, raioMetros }),
+        body: JSON.stringify({
+          nicho,
+          raioMetros,
+          pontos: pontos.map((p) => ({ latitude: p.lat, longitude: p.lon })),
+        }),
       })
       const dados = await resposta.json()
       if (!resposta.ok) throw new Error(dados.error || 'Erro na busca')
