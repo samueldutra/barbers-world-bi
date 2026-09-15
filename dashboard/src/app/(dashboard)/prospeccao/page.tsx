@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
-import { Search, Loader2 } from 'lucide-react'
+import { Search, Loader2, MapPinPlus, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LeadsSalvosLista } from '@/components/prospeccao/leads-salvos-lista'
-import { useBuscaNicho, type ResultadoBusca } from '@/hooks/use-busca-nicho'
+import { useBuscaNicho, type ResultadoBusca, type PontoBusca } from '@/hooks/use-busca-nicho'
 import { useLeadsMapeados, type StatusLead } from '@/hooks/use-leads-mapeados'
 
 const MapaProspeccao = dynamic(
@@ -30,6 +30,10 @@ const OPCOES_RAIO = [
   { valor: 20000, label: '20 km' },
 ]
 
+// O Google Places limita a 20 resultados por busca, então acima desse raio o retorno tende
+// a se repetir. Pra cobrir mais área, some pontos de busca em vez de só aumentar o raio.
+const MAX_PONTOS_EXTRAS = 8
+
 export default function ProspeccaoPage() {
   const [nicho, setNicho] = useState('barbearia')
   const [raioMetros, setRaioMetros] = useState(5000)
@@ -37,6 +41,8 @@ export default function ProspeccaoPage() {
   const [centro, setCentro] = useState(CENTRO_PADRAO)
   const [nomeCentro, setNomeCentro] = useState(NOME_CENTRO_PADRAO)
   const [geocodificando, setGeocodificando] = useState(false)
+  const [pontosExtras, setPontosExtras] = useState<PontoBusca[]>([])
+  const [modoAdicionarPonto, setModoAdicionarPonto] = useState(false)
 
   const { resultados, loading: buscando, error: erroBusca, buscar } = useBuscaNicho()
   const { leads, loading: carregandoLeads, salvar, atualizarStatus, excluir } = useLeadsMapeados()
@@ -46,7 +52,21 @@ export default function ProspeccaoPage() {
       toast.error('Informe um nicho pra buscar (ex.: barbearia).')
       return
     }
-    buscar(nicho, centro.lat, centro.lon, raioMetros)
+    buscar(nicho, [{ lat: centro.lat, lon: centro.lon }, ...pontosExtras], raioMetros)
+  }
+
+  const handleAdicionarPonto = (lat: number, lon: number) => {
+    setPontosExtras((atual) => {
+      if (atual.length >= MAX_PONTOS_EXTRAS) {
+        toast.error(`Máximo de ${MAX_PONTOS_EXTRAS} pontos extras por busca.`)
+        return atual
+      }
+      return [...atual, { lat, lon }]
+    })
+  }
+
+  const handleRemoverPonto = (index: number) => {
+    setPontosExtras((atual) => atual.filter((_, i) => i !== index))
   }
 
   const handleRecentralizar = async () => {
@@ -175,6 +195,27 @@ export default function ProspeccaoPage() {
             <p className="text-xs text-muted-foreground">{nomeCentro}</p>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              variant={modoAdicionarPonto ? 'default' : 'outline'}
+              onClick={() => setModoAdicionarPonto((v) => !v)}
+            >
+              <MapPinPlus className="h-4 w-4" />
+              {modoAdicionarPonto ? 'Clique no mapa pra adicionar...' : 'Adicionar ponto de busca'}
+            </Button>
+            {pontosExtras.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {pontosExtras.length} ponto(s) extra(s) — cada um busca até 20 resultados no raio escolhido.
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => setPontosExtras([])}>
+                  <X className="h-4 w-4" />
+                  Limpar pontos
+                </Button>
+              </>
+            )}
+          </div>
+
           {erroBusca && <p className="text-sm text-destructive">{erroBusca}</p>}
           {!buscando && resultados.length > 0 && (
             <p className="text-sm text-muted-foreground">{resultados.length} resultado(s) encontrado(s) — clique num marcador cinza no mapa pra salvar.</p>
@@ -186,8 +227,13 @@ export default function ProspeccaoPage() {
         <MapaProspeccao
           centro={centro}
           nomeCentro={nomeCentro}
+          raioMetros={raioMetros}
           resultados={resultados}
           leadsSalvos={leads}
+          pontosExtras={pontosExtras}
+          modoAdicionarPonto={modoAdicionarPonto}
+          onAdicionarPonto={handleAdicionarPonto}
+          onRemoverPonto={handleRemoverPonto}
           onSalvar={handleSalvar}
           onAtualizarStatus={handleAtualizarStatus}
           onExcluir={handleExcluir}
