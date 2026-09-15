@@ -10,6 +10,11 @@ on:
 jobs:
   etl:
     runs-on: ubuntu-latest
+    # Os secrets foram cadastrados como "environment secret" desse ambiente (criado pela
+    # integração da Vercel), não como repository secret — declarar aqui é o que dá ao job
+    # acesso a eles. Sem proteção de branch configurada (confirmado via API), então roda
+    # normalmente no schedule/workflow_dispatch da main.
+    environment: "Production – barbers-world-bi-dashboard"
     # A sincronização de clientes processa "rodadas" de contatos pendentes até não sobrar
     # nenhum — na primeira execução (ou depois de um backfill grande de vendas) pode
     # demorar bem mais que uma rodada incremental normal. Se estourar, é seguro rodar de
