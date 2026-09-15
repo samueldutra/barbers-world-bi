@@ -13,13 +13,17 @@ const LABEL_STATUS: Record<StatusLead, string> = {
   cliente: 'Cliente',
   concorrente: 'Concorrente',
   lead: 'Lead',
+  pendente: 'A classificar',
 }
 
 const VARIANTE_STATUS: Record<StatusLead, 'default' | 'secondary' | 'outline'> = {
   cliente: 'default',
   lead: 'secondary',
   concorrente: 'outline',
+  pendente: 'outline',
 }
+
+const CLASSE_BADGE_PENDENTE = 'border-sky-400 text-sky-600 dark:border-sky-500 dark:text-sky-400'
 
 interface Props {
   leads: LeadMapeado[]
@@ -77,6 +81,7 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="pendente">A classificar</SelectItem>
               <SelectItem value="cliente">Cliente</SelectItem>
               <SelectItem value="concorrente">Concorrente</SelectItem>
               <SelectItem value="lead">Lead</SelectItem>
@@ -98,7 +103,7 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
         ) : leadsFiltrados.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Nenhum lead {filtroStatus !== 'todos' ? `com status "${LABEL_STATUS[filtroStatus]}"` : 'salvo ainda'}.
-            Busque no mapa acima e salve os resultados.
+            Busque no mapa acima — os resultados são salvos automaticamente pra você classificar.
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-border">
@@ -112,12 +117,18 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
                     {[lead.endereco, lead.telefone].filter(Boolean).join(' · ') || 'Sem endereço/telefone'}
                   </p>
                 </div>
-                <Badge variant={VARIANTE_STATUS[lead.status]}>{LABEL_STATUS[lead.status]}</Badge>
+                <Badge
+                  variant={VARIANTE_STATUS[lead.status]}
+                  className={lead.status === 'pendente' ? CLASSE_BADGE_PENDENTE : undefined}
+                >
+                  {LABEL_STATUS[lead.status]}
+                </Badge>
                 <Select value={lead.status} onValueChange={(v) => onAtualizarStatus(lead.id, v as StatusLead)}>
                   <SelectTrigger className="w-32" size="sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="pendente">A classificar</SelectItem>
                     <SelectItem value="cliente">Cliente</SelectItem>
                     <SelectItem value="concorrente">Concorrente</SelectItem>
                     <SelectItem value="lead">Lead</SelectItem>

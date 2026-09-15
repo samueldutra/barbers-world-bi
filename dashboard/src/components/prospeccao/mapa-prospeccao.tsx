@@ -12,6 +12,7 @@ const CORES: Record<string, string> = {
   cliente: '#102694', // azul da marca
   concorrente: '#78716c', // cinza neutro (não usamos vermelho fora de erro/destrutivo)
   lead: '#f59e0b', // âmbar
+  pendente: '#0ea5e9', // azul-céu — salvo automaticamente pela busca, ainda sem classificar
   resultado: '#94a3b8', // cinza claro — resultado de busca ainda não salvo
   centro: '#16a34a', // verde — ponto de partida (Barbers World)
   pontoExtra: '#9333ea', // roxo — ponto extra de busca adicionado pelo usuário
@@ -34,12 +35,14 @@ const ICONES_STATUS: Record<StatusLead, string> = {
   cliente: svgCirculo(CORES.cliente),
   concorrente: svgCirculo(CORES.concorrente),
   lead: svgCirculo(CORES.lead),
+  pendente: svgCirculo(CORES.pendente),
 }
 
 const LABEL_STATUS: Record<StatusLead, string> = {
   cliente: 'Cliente',
   concorrente: 'Concorrente',
   lead: 'Lead',
+  pendente: 'A classificar',
 }
 
 function RecentrarMapa({ centro }: { centro: { lat: number; lon: number } }) {
@@ -186,7 +189,7 @@ export function MapaProspeccao({
 
         {selecionado?.tipo === 'centro' && (
           <InfoWindow position={{ lat: centro.lat, lng: centro.lon }} onCloseClick={() => setSelecionado(null)}>
-            <div className="text-sm">
+            <div className="force-light text-sm">
               <p className="font-medium">{nomeCentro}</p>
               <p className="text-xs text-muted-foreground">Ponto de partida</p>
             </div>
@@ -198,7 +201,7 @@ export function MapaProspeccao({
             position={{ lat: selecionado.lat, lng: selecionado.lon }}
             onCloseClick={() => setSelecionado(null)}
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="force-light flex flex-col gap-2 text-sm">
               <p className="font-medium">Ponto de busca extra</p>
               <Button
                 size="sm"
@@ -220,7 +223,7 @@ export function MapaProspeccao({
             position={{ lat: selecionado.item.latitude, lng: selecionado.item.longitude }}
             onCloseClick={() => setSelecionado(null)}
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="force-light flex flex-col gap-2 text-sm">
               <p className="font-medium">{selecionado.item.nome}</p>
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               {selecionado.item.telefone && <p className="text-xs text-muted-foreground">{selecionado.item.telefone}</p>}
@@ -248,7 +251,7 @@ export function MapaProspeccao({
             position={{ lat: selecionado.item.latitude, lng: selecionado.item.longitude }}
             onCloseClick={() => setSelecionado(null)}
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="force-light flex flex-col gap-2 text-sm">
               <p className="font-medium">{selecionado.item.nome}</p>
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               <p className="text-xs font-medium uppercase text-muted-foreground">{LABEL_STATUS[selecionado.item.status]}</p>

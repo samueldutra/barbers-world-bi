@@ -31,10 +31,12 @@ export function useBuscaNicho() {
       const dados = await resposta.json()
       if (!resposta.ok) throw new Error(dados.error || 'Erro na busca')
       setResultados((dados.resultados as ResultadoBusca[]) ?? [])
+      return { novosSalvos: (dados.novosSalvos as number) ?? 0 }
     } catch (err) {
       console.error('Erro ao buscar leads por nicho:', err)
       setError('Não foi possível buscar. Tente novamente em alguns segundos.')
       setResultados([])
+      return { novosSalvos: 0 }
     } finally {
       setLoading(false)
     }

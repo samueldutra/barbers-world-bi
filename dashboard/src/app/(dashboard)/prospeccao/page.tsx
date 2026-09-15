@@ -45,14 +45,18 @@ export default function ProspeccaoPage() {
   const [modoAdicionarPonto, setModoAdicionarPonto] = useState(false)
 
   const { resultados, loading: buscando, error: erroBusca, buscar } = useBuscaNicho()
-  const { leads, loading: carregandoLeads, salvar, atualizarStatus, excluir } = useLeadsMapeados()
+  const { leads, loading: carregandoLeads, salvar, atualizarStatus, excluir, recarregar: recarregarLeads } = useLeadsMapeados()
 
-  const handleBuscar = () => {
+  const handleBuscar = async () => {
     if (!nicho.trim()) {
       toast.error('Informe um nicho pra buscar (ex.: barbearia).')
       return
     }
-    buscar(nicho, [{ lat: centro.lat, lon: centro.lon }, ...pontosExtras], raioMetros)
+    const { novosSalvos } = await buscar(nicho, [{ lat: centro.lat, lon: centro.lon }, ...pontosExtras], raioMetros)
+    if (novosSalvos > 0) {
+      toast.success(`${novosSalvos} novo(s) lead(s) salvo(s) automaticamente — falta só classificar.`)
+      recarregarLeads()
+    }
   }
 
   const handleAdicionarPonto = (lat: number, lon: number) => {
@@ -218,7 +222,9 @@ export default function ProspeccaoPage() {
 
           {erroBusca && <p className="text-sm text-destructive">{erroBusca}</p>}
           {!buscando && resultados.length > 0 && (
-            <p className="text-sm text-muted-foreground">{resultados.length} resultado(s) encontrado(s) — clique num marcador cinza no mapa pra salvar.</p>
+            <p className="text-sm text-muted-foreground">
+              {resultados.length} resultado(s) encontrado(s) — os novos já foram salvos como &quot;A classificar&quot;, é só marcar o status na lista abaixo.
+            </p>
           )}
         </CardContent>
       </Card>

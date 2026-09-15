@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS barbers.leads_mapeados (
     latitude        DOUBLE PRECISION NOT NULL,
     longitude       DOUBLE PRECISION NOT NULL,
 
-    status          TEXT NOT NULL DEFAULT 'lead' CHECK (status IN ('cliente', 'concorrente', 'lead')),
+    status          TEXT NOT NULL DEFAULT 'lead' CHECK (status IN ('cliente', 'concorrente', 'lead', 'pendente')),
     observacoes     TEXT,
 
     criado_por      UUID,
@@ -59,6 +59,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_mapeados_origem
 
 CREATE INDEX IF NOT EXISTS idx_leads_mapeados_status
     ON barbers.leads_mapeados (status);
+
+-- Adiciona 'pendente' ao status (resultado de busca salvo automaticamente, ainda sem
+-- classificação) — ALTER explícito porque a tabela já existe em produção com o CHECK
+-- antigo (só cliente/concorrente/lead); CREATE TABLE IF NOT EXISTS não altera tabela
+-- já criada.
+ALTER TABLE barbers.leads_mapeados DROP CONSTRAINT IF EXISTS leads_mapeados_status_check;
+ALTER TABLE barbers.leads_mapeados ADD CONSTRAINT leads_mapeados_status_check
+    CHECK (status IN ('cliente', 'concorrente', 'lead', 'pendente'));
 
 
 -- Assinaturas antigas (v1, com osm_type/osm_id BIGINT) viram sobrecargas órfãs se não
@@ -171,6 +179,54 @@ $$;
 GRANT EXECUTE ON FUNCTION salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
 
+-- Salva em lote os resultados de uma busca como 'pendente' (a classificar), sem tocar em
+-- quem já foi salvo antes (ON CONFLICT DO NOTHING — preserva status/observações de quem já
+-- foi classificado). Chamada pelo server da busca (src/app/api/prospeccao/buscar), não pelo
+-- cliente. p_leads: array JSON de objetos {origemTipo, origemId, nome, nicho, endereco,
+-- telefone, latitude, longitude}. Retorna quantos leads foram realmente inseridos (novos).
+CREATE OR REPLACE FUNCTION salvar_leads_novos(
+    p_schema_name TEXT,
+    p_leads JSONB
+)
+RETURNS INT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_sql TEXT;
+    v_count INT;
+BEGIN
+    v_sql := format('
+        WITH dados AS (
+            SELECT
+                item->>''origemTipo''                     AS origem_tipo,
+                item->>''origemId''                        AS origem_id,
+                item->>''nome''                             AS nome,
+                item->>''nicho''                            AS nicho,
+                item->>''endereco''                         AS endereco,
+                item->>''telefone''                         AS telefone,
+                (item->>''latitude'')::DOUBLE PRECISION    AS latitude,
+                (item->>''longitude'')::DOUBLE PRECISION   AS longitude
+            FROM jsonb_array_elements(%L::JSONB) AS item
+        )
+        INSERT INTO %I.leads_mapeados
+            (origem_tipo, origem_id, nome, nicho, endereco, telefone, latitude, longitude, status, criado_por)
+        SELECT origem_tipo, origem_id, nome, nicho, endereco, telefone, latitude, longitude, ''pendente'', auth.uid()
+        FROM dados
+        WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL
+        ON CONFLICT (origem_tipo, origem_id) WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL DO NOTHING
+    ', p_leads, p_schema_name);
+
+    EXECUTE v_sql;
+    GET DIAGNOSTICS v_count = ROW_COUNT;
+    RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION salvar_leads_novos(TEXT, JSONB) TO authenticated;
+
+
 CREATE OR REPLACE FUNCTION atualizar_status_lead_mapeado(
     p_schema_name TEXT,
     p_id BIGINT,
@@ -185,7 +241,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
-    IF p_status NOT IN ('cliente', 'concorrente', 'lead') THEN
+    IF p_status NOT IN ('cliente', 'concorrente', 'lead', 'pendente') THEN
         RAISE EXCEPTION 'status inválido: %', p_status;
     END IF;
 
