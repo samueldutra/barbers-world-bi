@@ -1,15 +1,15 @@
 import { Box, Milk, Shirt, ShoppingBasket } from 'lucide-react'
 
-// Painel decorativo do login (mock de dashboard), com o azul da identidade visual da Barbers World (#102694).
+// Painel decorativo do login (mock de dashboard), com o roxo da identidade visual (#5b21b6).
 export function LoginAnimatedPanel() {
   return (
     <div
       aria-hidden="true"
-      className="auth-panel-bg relative h-full w-full overflow-hidden bg-gradient-to-br from-[#0a1550] via-[#1a35c4] to-[#7d9aff] p-5 text-white"
+      className="auth-panel-bg relative h-full w-full overflow-hidden bg-gradient-to-br from-[#1e0b36] via-[#5b21b6] to-[#c4b5fd] p-5 text-white"
     >
       <div className="pointer-events-none absolute -top-10 -left-6 h-36 w-36 rounded-full bg-white/10 blur-2xl auth-float" />
-      <div className="pointer-events-none absolute -right-10 top-1/3 h-40 w-40 rounded-full bg-[#9fb8ff]/35 blur-3xl auth-float-delayed" />
-      <div className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-[#8fa8ff]/30 blur-2xl auth-float" />
+      <div className="pointer-events-none absolute -right-10 top-1/3 h-40 w-40 rounded-full bg-[#c4b5fd]/35 blur-3xl auth-float-delayed" />
+      <div className="pointer-events-none absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-[#a78bfa]/30 blur-2xl auth-float" />
       <div className="pointer-events-none absolute inset-y-0 -left-1/4 w-1/3 bg-gradient-to-r from-transparent via-white/15 to-transparent auth-sweep" />
       {[10, 28, 43, 62, 81].map((left, idx) => (
         <span
