@@ -12,6 +12,7 @@ const CORES: Record<string, string> = {
   cliente: '#102694', // azul da marca
   concorrente: '#78716c', // cinza neutro (não usamos vermelho fora de erro/destrutivo)
   lead: '#f59e0b', // âmbar
+  pendente: '#0ea5e9', // azul-céu — salvo automaticamente pela busca, ainda sem classificar
   resultado: '#94a3b8', // cinza claro — resultado de busca ainda não salvo
   centro: '#16a34a', // verde — ponto de partida (Barbers World)
   pontoExtra: '#9333ea', // roxo — ponto extra de busca adicionado pelo usuário
@@ -34,12 +35,14 @@ const ICONES_STATUS: Record<StatusLead, string> = {
   cliente: svgCirculo(CORES.cliente),
   concorrente: svgCirculo(CORES.concorrente),
   lead: svgCirculo(CORES.lead),
+  pendente: svgCirculo(CORES.pendente),
 }
 
 const LABEL_STATUS: Record<StatusLead, string> = {
   cliente: 'Cliente',
   concorrente: 'Concorrente',
   lead: 'Lead',
+  pendente: 'A classificar',
 }
 
 function RecentrarMapa({ centro }: { centro: { lat: number; lon: number } }) {

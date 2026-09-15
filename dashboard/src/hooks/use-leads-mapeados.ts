@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 
-export type StatusLead = 'cliente' | 'concorrente' | 'lead'
+export type StatusLead = 'cliente' | 'concorrente' | 'lead' | 'pendente'
 
 export interface LeadMapeado {
   id: number

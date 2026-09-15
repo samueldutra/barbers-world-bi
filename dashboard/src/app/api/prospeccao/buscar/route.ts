@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { TENANT_SCHEMA } from '@/lib/tenant'
 
 /** Busca estabelecimentos por nicho perto de um ponto, via Google Places API (New).
  * Fica no server porque usa a chave de servidor (GOOGLE_PLACES_API_KEY), que nunca deve
@@ -187,7 +189,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ resultados })
+    // Salva automaticamente quem ainda não foi mapeado (status 'pendente', a classificar
+    // depois) — quem já foi salvo/classificado antes não é tocado (ON CONFLICT DO NOTHING
+    // dentro da função). Falha aqui não derruba a busca em si, só fica sem auto-salvar.
+    let novosSalvos = 0
+    if (resultados.length > 0) {
+      try {
+        const supabase = await createClient()
+        const { data, error } = await supabase.rpc('salvar_leads_novos', {
+          p_schema_name: TENANT_SCHEMA,
+          p_leads: resultados.map((r) => ({ ...r, nicho })),
+        })
+        if (error) {
+          console.error('Erro ao salvar leads automaticamente:', error)
+        } else {
+          novosSalvos = (data as number) ?? 0
+        }
+      } catch (err) {
+        console.error('Erro ao salvar leads automaticamente:', err)
+      }
+    }
+
+    return NextResponse.json({ resultados, novosSalvos })
   } catch (err) {
     console.error('Erro na busca de prospecção (Google Places):', err)
     const mensagem = err instanceof Error ? err.message : 'Não foi possível buscar no momento. Tente novamente.'
