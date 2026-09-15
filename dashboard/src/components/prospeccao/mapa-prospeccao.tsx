@@ -189,7 +189,7 @@ export function MapaProspeccao({
 
         {selecionado?.tipo === 'centro' && (
           <InfoWindow position={{ lat: centro.lat, lng: centro.lon }} onCloseClick={() => setSelecionado(null)}>
-            <div className="text-sm">
+            <div className="force-light text-sm">
               <p className="font-medium">{nomeCentro}</p>
               <p className="text-xs text-muted-foreground">Ponto de partida</p>
             </div>
@@ -201,7 +201,7 @@ export function MapaProspeccao({
             position={{ lat: selecionado.lat, lng: selecionado.lon }}
             onCloseClick={() => setSelecionado(null)}
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="force-light flex flex-col gap-2 text-sm">
               <p className="font-medium">Ponto de busca extra</p>
               <Button
                 size="sm"
@@ -223,7 +223,7 @@ export function MapaProspeccao({
             position={{ lat: selecionado.item.latitude, lng: selecionado.item.longitude }}
             onCloseClick={() => setSelecionado(null)}
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="force-light flex flex-col gap-2 text-sm">
               <p className="font-medium">{selecionado.item.nome}</p>
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               {selecionado.item.telefone && <p className="text-xs text-muted-foreground">{selecionado.item.telefone}</p>}
@@ -251,7 +251,7 @@ export function MapaProspeccao({
             position={{ lat: selecionado.item.latitude, lng: selecionado.item.longitude }}
             onCloseClick={() => setSelecionado(null)}
           >
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="force-light flex flex-col gap-2 text-sm">
               <p className="font-medium">{selecionado.item.nome}</p>
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               <p className="text-xs font-medium uppercase text-muted-foreground">{LABEL_STATUS[selecionado.item.status]}</p>

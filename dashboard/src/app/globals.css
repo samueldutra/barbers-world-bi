@@ -109,6 +109,34 @@
   --link: #60a5fa;
 }
 
+/* Força paleta clara num subtree, independente do tema do app — usar quando o container
+   real é sempre branco e não segue nosso CSS (ex.: InfoWindow do Google Maps), pra evitar
+   texto claro (tema escuro) sobre fundo branco fixo. */
+.force-light {
+  --background: #F5F5F5;
+  --foreground: #1f1f1f;
+  --card: #ffffff;
+  --card-foreground: #1f1f1f;
+  --popover: #ffffff;
+  --popover-foreground: #1f1f1f;
+  --primary: #10b981;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #1f2937;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
+  --accent: #f1f5f9;
+  --accent-foreground: #111827;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #10b981;
+  --link: #2563eb;
+  color: var(--foreground);
+  color-scheme: light;
+}
+
 /* Força paleta clara no grupo de autenticação */
 .auth-light {
   --background: #F5F5F5;
