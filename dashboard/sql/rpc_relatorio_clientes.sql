@@ -14,6 +14,12 @@
 -- no período selecionado — por isso a base da consulta é o histórico COMPLETO do cliente
 -- (todos_pedidos/por_cliente_geral), não só o período; o período (p_data_inicial/final)
 -- continua controlando só as colunas de pedidos/faturamento/ticket médio exibidas.
+--
+-- Frequência média de compra (frequencia_media_dias): (última compra - primeira compra) /
+-- (total de pedidos - 1), sobre o histórico COMPLETO do cliente (não o período) — mesmo
+-- raciocínio da última compra. Cliente com só 1 pedido não tem frequência (NULL), já que
+-- não há intervalo pra medir. p_frequencia_min_dias/p_frequencia_max_dias filtram por essa
+-- faixa (ex.: só cliente que compra em média a cada 30 dias ou menos).
 
 -- CREATE OR REPLACE só substitui uma função de mesma assinatura — como estamos tirando
 -- p_uf e trocando de posição/tipo os parâmetros, a assinatura antiga vira uma sobrecarga
@@ -21,6 +27,7 @@
 DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, TEXT, INTEGER, INTEGER);
 DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER);
 DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, TEXT, TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER);
 
 CREATE OR REPLACE FUNCTION obter_relatorio_vendas_clientes(
     p_schema_name TEXT,
@@ -31,7 +38,9 @@ CREATE OR REPLACE FUNCTION obter_relatorio_vendas_clientes(
     p_cidade TEXT DEFAULT NULL,                 -- NULL = "Todos"; valor deve bater com obter_municipios_clientes()
     p_ultima_compra_antes_de DATE DEFAULT NULL,  -- preenchido = traz cliente com última compra (histórico completo) nessa data ou antes, mesmo sem pedido no período
     p_incluir_sem_venda BOOLEAN DEFAULT TRUE,    -- TRUE (default) = mantém no relatório o cliente com histórico mas sem pedido no período (aparece com 0/zerado); FALSE = só cliente com pedido > 0 no período
-    p_ordenar_por TEXT DEFAULT 'valor_vendido',  -- 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra'
+    p_frequencia_min_dias NUMERIC DEFAULT NULL,  -- filtra cliente com frequência média de compra >= esse valor (histórico completo)
+    p_frequencia_max_dias NUMERIC DEFAULT NULL,  -- filtra cliente com frequência média de compra <= esse valor (histórico completo)
+    p_ordenar_por TEXT DEFAULT 'valor_vendido',  -- 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra' | 'frequencia_media'
     p_ordenar_direcao TEXT DEFAULT 'desc',       -- 'asc' | 'desc'
     p_pagina INTEGER DEFAULT 1,
     p_tamanho_pagina INTEGER DEFAULT 50
@@ -51,6 +60,7 @@ RETURNS TABLE(
     faturamento NUMERIC,
     ticket_medio NUMERIC,
     ultima_compra DATE,
+    frequencia_media_dias NUMERIC,
     status_cliente TEXT, -- 'Novo' | 'Recorrente' | 'Não identificado'
     total_registros BIGINT
 )
@@ -69,6 +79,7 @@ BEGIN
         WHEN 'qtde_pedidos' THEN 'total_pedidos'
         WHEN 'ticket_medio' THEN 'ticket_medio'
         WHEN 'ultima_compra' THEN 'ultima_compra'
+        WHEN 'frequencia_media' THEN 'frequencia_media_dias'
         ELSE 'faturamento'
     END;
     v_ordenar_direcao := CASE lower(p_ordenar_direcao) WHEN 'asc' THEN 'ASC' ELSE 'DESC' END;
@@ -102,7 +113,14 @@ BEGIN
                 MIN(nome_contato)::TEXT AS nome_contato,
                 MIN(documento_contato)::TEXT AS documento_contato,
                 MIN(tipo_pessoa_contato)::TEXT AS tipo_pessoa_contato,
-                max(data)::DATE AS ultima_compra
+                min(data)::DATE AS primeira_compra,
+                max(data)::DATE AS ultima_compra,
+                count(*)::BIGINT AS total_pedidos_geral,
+                -- NULL quando só tem 1 pedido (sem intervalo pra medir frequência).
+                CASE
+                    WHEN count(*) > 1
+                    THEN round((max(data)::DATE - min(data)::DATE) / (count(*) - 1)::NUMERIC, 1)
+                END AS frequencia_media_dias
             FROM todos_pedidos
             GROUP BY id_contato, (CASE WHEN id_contato IS NULL THEN COALESCE(documento_contato, nome_contato) END)
         ),
@@ -151,6 +169,7 @@ BEGIN
             COALESCE(ap.faturamento, 0)::NUMERIC AS faturamento,
             COALESCE(ap.ticket_medio, 0)::NUMERIC AS ticket_medio,
             pcg.ultima_compra,
+            pcg.frequencia_media_dias,
             CASE
                 WHEN pcg.id_contato IS NULL THEN ''Não identificado''
                 WHEN pcg.id_contato IN (SELECT id_contato FROM compras_anteriores) THEN ''Recorrente''
@@ -172,6 +191,8 @@ BEGIN
                 WHEN %L::DATE IS NOT NULL THEN pcg.ultima_compra <= %L::DATE
                 ELSE TRUE
             END
+            AND (%L::NUMERIC IS NULL OR pcg.frequencia_media_dias >= %L::NUMERIC)
+            AND (%L::NUMERIC IS NULL OR pcg.frequencia_media_dias <= %L::NUMERIC)
         ORDER BY %I %s NULLS LAST
         LIMIT %L OFFSET %L
     ', p_schema_name, p_schema_name,
@@ -184,13 +205,15 @@ BEGIN
        p_schema_name,
        p_incluir_sem_venda,
        p_ultima_compra_antes_de, p_ultima_compra_antes_de,
+       p_frequencia_min_dias, p_frequencia_min_dias,
+       p_frequencia_max_dias, p_frequencia_max_dias,
        v_ordenar_coluna, v_ordenar_direcao, p_tamanho_pagina, v_offset);
 
     RETURN QUERY EXECUTE v_sql;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, BOOLEAN, NUMERIC, NUMERIC, TEXT, TEXT, INTEGER, INTEGER) TO authenticated;
 
 
 -- Lista pra popular o filtro de cidade (mesmo padrão de obter_marcas_produtos): vem da

@@ -44,3 +44,8 @@ export function formatarAniversario(data: string): string {
   const [, mes, dia] = data.split('-')
   return `${dia}/${mes}`
 }
+
+/** Frequência média de compra (dias) — 1 casa decimal, mesmo padrão do valor calculado na RPC. */
+export function formatarDias(dias: number): string {
+  return `${dias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} dias`
+}

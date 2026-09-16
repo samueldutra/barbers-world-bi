@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 
-export type OrdenarClientesPor = 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra'
+export type OrdenarClientesPor = 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra' | 'frequencia_media'
 export type OrdenarDirecao = 'asc' | 'desc'
 export type StatusCliente = 'Novo' | 'Recorrente' | 'Não identificado'
 
@@ -24,6 +24,7 @@ export interface LinhaRelatorioCliente {
   faturamento: number
   ticket_medio: number
   ultima_compra: string | null
+  frequencia_media_dias: number | null
   status_cliente: StatusCliente
   total_registros: number
 }
@@ -35,6 +36,8 @@ interface Args {
   cidade: string | null
   ultimaCompraAntesDe: string | null
   incluirSemVenda: boolean
+  frequenciaMinDias: number | null
+  frequenciaMaxDias: number | null
   ordenarPor: OrdenarClientesPor
   ordenarDirecao: OrdenarDirecao
   pagina: number
@@ -48,6 +51,8 @@ export function useRelatorioClientes({
   cidade,
   ultimaCompraAntesDe,
   incluirSemVenda,
+  frequenciaMinDias,
+  frequenciaMaxDias,
   ordenarPor,
   ordenarDirecao,
   pagina,
@@ -78,6 +83,8 @@ export function useRelatorioClientes({
           p_cidade: cidade,
           p_ultima_compra_antes_de: ultimaCompraAntesDe,
           p_incluir_sem_venda: incluirSemVenda,
+          p_frequencia_min_dias: frequenciaMinDias,
+          p_frequencia_max_dias: frequenciaMaxDias,
           p_ordenar_por: ordenarPor,
           p_ordenar_direcao: ordenarDirecao,
           p_pagina: pagina,
@@ -104,7 +111,21 @@ export function useRelatorioClientes({
       ativo = false
       clearTimeout(timer)
     }
-  }, [atual, canais, busca, cidade, ultimaCompraAntesDe, incluirSemVenda, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
+  }, [
+    atual,
+    canais,
+    busca,
+    cidade,
+    ultimaCompraAntesDe,
+    incluirSemVenda,
+    frequenciaMinDias,
+    frequenciaMaxDias,
+    ordenarPor,
+    ordenarDirecao,
+    pagina,
+    tamanhoPagina,
+    gatilho,
+  ])
 
   return { linhas, totalRegistros, loading, error, recarregar: () => setGatilho((g) => g + 1) }
 }

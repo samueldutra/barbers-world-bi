@@ -7,6 +7,7 @@ import { RelatorioClientesTabela } from '@/components/relatorio-clientes/relator
 import { CurvaAbcClientesTabela } from '@/components/relatorio-clientes/curva-abc-clientes-tabela'
 import { FiltroSelecaoUnica } from '@/components/filtros/filtro-selecao-unica'
 import { FiltroUltimaCompra, calcularUltimaCompraAntesDe, type UltimaCompraPreset } from '@/components/relatorio-clientes/filtro-ultima-compra'
+import { FiltroFrequenciaCompra, calcularFrequenciaFaixa, type FrequenciaCompraPreset } from '@/components/relatorio-clientes/filtro-frequencia-compra'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
@@ -17,7 +18,7 @@ import { obterRangePreset, formatarRangeParaAPI, type PeriodoPreset, type RangeD
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { exportarCSV, exportarXLSX, type ColunaExportavel } from '@/lib/export'
-import { formatarData, formatarAniversario } from '@/lib/formatters'
+import { formatarData, formatarAniversario, formatarDias } from '@/lib/formatters'
 import { linkWhatsapp } from '@/lib/whatsapp'
 
 const TAMANHO_PAGINA = 50
@@ -39,6 +40,7 @@ const COLUNAS_EXPORTACAO: ColunaExportavel<LinhaRelatorioCliente>[] = [
   { cabecalho: 'Valor vendido (R$)', valor: (l) => Number(l.faturamento), largura: 18, formatoNumerico: '#,##0.00' },
   { cabecalho: 'Ticket médio (R$)', valor: (l) => Number(l.ticket_medio), largura: 16, formatoNumerico: '#,##0.00' },
   { cabecalho: 'Última compra', valor: (l) => (l.ultima_compra ? formatarData(l.ultima_compra) : ''), largura: 14 },
+  { cabecalho: 'Frequência média (dias)', valor: (l) => l.frequencia_media_dias ?? '', largura: 20 },
 ]
 
 export default function RelatorioClientesPage() {
@@ -49,6 +51,11 @@ export default function RelatorioClientesPage() {
   const [ultimaCompraPreset, setUltimaCompraPreset] = useState<UltimaCompraPreset>('todos')
   const [dataPersonalizadaUltimaCompra, setDataPersonalizadaUltimaCompra] = useState<Date | null>(null)
   const [incluirSemVenda, setIncluirSemVenda] = useState(true)
+  const [frequenciaPreset, setFrequenciaPreset] = useState<FrequenciaCompraPreset>('todos')
+  const [frequenciaPersonalizada, setFrequenciaPersonalizada] = useState<{ min: number | null; max: number | null }>({
+    min: null,
+    max: null,
+  })
   const [busca, setBusca] = useState('')
   const [ordenarPor, setOrdenarPor] = useState<OrdenarClientesPor>('valor_vendido')
   const [ordenarDirecao, setOrdenarDirecao] = useState<'asc' | 'desc'>('desc')
@@ -63,6 +70,10 @@ export default function RelatorioClientesPage() {
     () => calcularUltimaCompraAntesDe(ultimaCompraPreset, dataPersonalizadaUltimaCompra),
     [ultimaCompraPreset, dataPersonalizadaUltimaCompra]
   )
+  const frequenciaFaixa = useMemo(
+    () => calcularFrequenciaFaixa(frequenciaPreset, frequenciaPersonalizada),
+    [frequenciaPreset, frequenciaPersonalizada]
+  )
   const { canais } = useCanaisVenda()
   const { municipios } = useFiltrosClientes()
 
@@ -73,6 +84,8 @@ export default function RelatorioClientesPage() {
     cidade: cidadeSelecionada,
     ultimaCompraAntesDe,
     incluirSemVenda,
+    frequenciaMinDias: frequenciaFaixa.min,
+    frequenciaMaxDias: frequenciaFaixa.max,
     ordenarPor,
     ordenarDirecao,
     pagina,
@@ -143,6 +156,16 @@ export default function RelatorioClientesPage() {
     setIncluirSemVenda(v)
   }
 
+  const handleFrequenciaPresetChange = (p: FrequenciaCompraPreset) => {
+    setPagina(1)
+    setFrequenciaPreset(p)
+  }
+
+  const handleFrequenciaPersonalizadaChange = (f: { min: number | null; max: number | null }) => {
+    setPagina(1)
+    setFrequenciaPersonalizada(f)
+  }
+
   const handleExportar = async (formato: 'csv' | 'xlsx') => {
     setExportando(true)
     try {
@@ -157,6 +180,8 @@ export default function RelatorioClientesPage() {
         p_cidade: cidadeSelecionada,
         p_ultima_compra_antes_de: ultimaCompraAntesDe,
         p_incluir_sem_venda: incluirSemVenda,
+        p_frequencia_min_dias: frequenciaFaixa.min,
+        p_frequencia_max_dias: frequenciaFaixa.max,
         p_ordenar_por: ordenarPor,
         p_ordenar_direcao: ordenarDirecao,
         p_pagina: 1,
@@ -208,6 +233,12 @@ export default function RelatorioClientesPage() {
             dataPersonalizada={dataPersonalizadaUltimaCompra}
             onDataPersonalizadaChange={handleDataPersonalizadaChange}
           />
+          <FiltroFrequenciaCompra
+            preset={frequenciaPreset}
+            onPresetChange={handleFrequenciaPresetChange}
+            personalizada={frequenciaPersonalizada}
+            onPersonalizadaChange={handleFrequenciaPersonalizadaChange}
+          />
           <div className="flex items-center gap-2 rounded-md border px-3 py-2">
             <Checkbox
               id="incluir-sem-venda"
@@ -226,6 +257,17 @@ export default function RelatorioClientesPage() {
           Mostrando todo cliente sem comprar desde {ultimaCompraAntesDe ? formatarData(ultimaCompraAntesDe) : '—'} —
           independente do período selecionado acima. Pedidos/valor vendido/ticket médio abaixo continuam contando só
           o período em tela, não o histórico completo do cliente.
+        </div>
+      )}
+
+      {frequenciaPreset !== 'todos' && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+          Mostrando cliente com frequência média de compra{' '}
+          {frequenciaFaixa.min != null && `de pelo menos ${formatarDias(frequenciaFaixa.min)}`}
+          {frequenciaFaixa.min != null && frequenciaFaixa.max != null && ' e '}
+          {frequenciaFaixa.max != null && `de até ${formatarDias(frequenciaFaixa.max)}`} — calculada sobre o histórico
+          completo do cliente, não o período selecionado acima. Cliente com só 1 pedido no histórico fica de fora
+          (sem frequência pra medir).
         </div>
       )}
 
