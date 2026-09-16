@@ -2,15 +2,18 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, ExternalLink, Loader2, MapPin, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, ExternalLink, FileDown, Loader2, MapPin, Plus, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { CriarRotaCidadeDialog } from '@/components/prospeccao/criar-rota-cidade-dialog'
 import { montarUrlRota } from '@/lib/google-maps-route'
 import { formatarDataHora } from '@/lib/formatters'
+import { exportarRotaPDF } from '@/lib/pdf-rota'
 import type { RotaVisita, ParadaRota, StatusRota } from '@/hooks/use-rotas-visita'
+import type { LeadMapeado } from '@/hooks/use-leads-mapeados'
 
 const LABEL_STATUS_ROTA: Record<StatusRota, string> = {
   planejada: 'Planejada',
@@ -30,24 +33,29 @@ interface Props {
   rotas: RotaVisita[]
   loading: boolean
   centro: { lat: number; lon: number }
+  leads: LeadMapeado[]
   onCarregarParadas: (rotaId: number) => Promise<ParadaRota[]>
   onAtualizarStatusRota: (id: number, status: StatusRota) => Promise<void>
   onAtualizarParada: (paradaId: number, visitaRealizada: boolean) => Promise<void>
   onExcluirRota: (id: number) => Promise<void>
+  onCriarRota: (nome: string, descricao: string | null, leadIds: number[], pontoPartidaEndereco: string | null) => Promise<void>
 }
 
 export function RotasSalvasLista({
   rotas,
   loading,
   centro,
+  leads,
   onCarregarParadas,
   onAtualizarStatusRota,
   onAtualizarParada,
   onExcluirRota,
+  onCriarRota,
 }: Props) {
   const [expandida, setExpandida] = useState<number | null>(null)
   const [paradasPorRota, setParadasPorRota] = useState<Record<number, ParadaRota[]>>({})
   const [carregandoParadas, setCarregandoParadas] = useState<Set<number>>(new Set())
+  const [dialogCriarAberto, setDialogCriarAberto] = useState(false)
 
   const toggleExpandir = async (rotaId: number) => {
     if (expandida === rotaId) {
@@ -99,9 +107,15 @@ export function RotasSalvasLista({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Rotas salvas</CardTitle>
-        <CardDescription>{rotas.length} rota(s) — acompanhe o progresso e marque as visitas realizadas</CardDescription>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle>Rotas salvas</CardTitle>
+          <CardDescription>{rotas.length} rota(s) — acompanhe o progresso e marque as visitas realizadas</CardDescription>
+        </div>
+        <Button size="sm" onClick={() => setDialogCriarAberto(true)}>
+          <Plus className="h-4 w-4" />
+          Criar rota
+        </Button>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -126,6 +140,7 @@ export function RotasSalvasLista({
                       <p className="truncate text-sm font-medium">{rota.nome}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {rota.paradas_visitadas}/{rota.total_paradas} visitada(s) · criada em {formatarDataHora(rota.criado_em)}
+                        {rota.ponto_partida_endereco ? ` · partida: ${rota.ponto_partida_endereco}` : ''}
                         {rota.descricao ? ` · ${rota.descricao}` : ''}
                       </p>
                     </div>
@@ -164,11 +179,49 @@ export function RotasSalvasLista({
                         <p className="text-sm text-muted-foreground">Essa rota não tem paradas.</p>
                       ) : (
                         <>
-                          <div className="flex justify-end">
+                          <div className="flex flex-wrap justify-end gap-2">
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => window.open(montarUrlRota(centro, paradas), '_blank')}
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(montarUrlRota(rota.ponto_partida_endereco ?? centro, paradas))
+                                  toast.success('Link copiado!')
+                                } catch (err) {
+                                  console.error('Erro ao copiar link da rota:', err)
+                                  toast.error('Não foi possível copiar o link — copie manualmente pela barra de endereço do Maps.')
+                                }
+                              }}
+                            >
+                              <Copy className="h-4 w-4" />
+                              Copiar link
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                exportarRotaPDF({
+                                  nomeRota: rota.nome,
+                                  descricao: rota.descricao,
+                                  pontoPartida: rota.ponto_partida_endereco,
+                                  paradas: paradas.map((p, i) => ({
+                                    ordem: i + 1,
+                                    nome: p.nome,
+                                    endereco: p.endereco,
+                                    cidade: p.cidade,
+                                    telefone: p.telefone,
+                                  })),
+                                  urlGoogleMaps: montarUrlRota(rota.ponto_partida_endereco ?? centro, paradas),
+                                })
+                              }
+                            >
+                              <FileDown className="h-4 w-4" />
+                              Exportar PDF
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open(montarUrlRota(rota.ponto_partida_endereco ?? centro, paradas), '_blank')}
                             >
                               <ExternalLink className="h-4 w-4" />
                               Abrir no Google Maps
@@ -209,6 +262,8 @@ export function RotasSalvasLista({
           </ul>
         )}
       </CardContent>
+
+      <CriarRotaCidadeDialog open={dialogCriarAberto} onOpenChange={setDialogCriarAberto} leads={leads} onCriar={onCriarRota} />
     </Card>
   )
 }

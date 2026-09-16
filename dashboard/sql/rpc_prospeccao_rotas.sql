@@ -5,15 +5,21 @@
 -- ser reaberto, acompanhado e marcado como concluído depois da visita.
 
 CREATE TABLE IF NOT EXISTS barbers.rotas_visita (
-    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nome            TEXT NOT NULL,
-    descricao       TEXT,
-    status          TEXT NOT NULL DEFAULT 'planejada'
-                        CHECK (status IN ('planejada', 'em_andamento', 'concluida', 'cancelada')),
-    criado_por      UUID,
-    criado_em       TIMESTAMPTZ NOT NULL DEFAULT now(),
-    atualizado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome                    TEXT NOT NULL,
+    descricao               TEXT,
+    -- Endereço em texto livre (já geocodificado na tela) — guardado só como texto porque o
+    -- Google Maps aceita endereço de texto direto como origin no link de rota, não precisa
+    -- de lat/lon pra isso. NULL quando a rota foi montada manualmente (sem essa etapa).
+    ponto_partida_endereco  TEXT,
+    status                  TEXT NOT NULL DEFAULT 'planejada'
+                                CHECK (status IN ('planejada', 'em_andamento', 'concluida', 'cancelada')),
+    criado_por              UUID,
+    criado_em               TIMESTAMPTZ NOT NULL DEFAULT now(),
+    atualizado_em           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE barbers.rotas_visita ADD COLUMN IF NOT EXISTS ponto_partida_endereco TEXT;
 
 -- Parada = 1 lead dentro de 1 rota, com a ordem de visita e o checklist. ON DELETE CASCADE
 -- nas duas FKs: apagar a rota apaga as paradas; apagar o lead (raro, só se o usuário
@@ -37,11 +43,16 @@ CREATE INDEX IF NOT EXISTS idx_rotas_visita_paradas_rota
 
 -- Lista as rotas salvas com um resumo de progresso (contagem de paradas/visitadas) — a
 -- tela usa isso pra montar o card de cada rota sem precisar buscar as paradas de todas.
+-- DROP explícito: CREATE OR REPLACE não muda o conjunto de colunas de RETURNS TABLE
+-- (adicionamos "ponto_partida_endereco" depois da v1 dessa função).
+DROP FUNCTION IF EXISTS obter_rotas_visita(TEXT);
+
 CREATE OR REPLACE FUNCTION obter_rotas_visita(p_schema_name TEXT)
 RETURNS TABLE(
     id BIGINT,
     nome TEXT,
     descricao TEXT,
+    ponto_partida_endereco TEXT,
     status TEXT,
     total_paradas BIGINT,
     paradas_visitadas BIGINT,
@@ -57,7 +68,7 @@ DECLARE
 BEGIN
     v_sql := format('
         SELECT
-            r.id, r.nome, r.descricao, r.status,
+            r.id, r.nome, r.descricao, r.ponto_partida_endereco, r.status,
             count(p.id)::BIGINT AS total_paradas,
             count(p.id) FILTER (WHERE p.visita_realizada)::BIGINT AS paradas_visitadas,
             r.criado_em, r.atualizado_em
@@ -121,13 +132,19 @@ GRANT EXECUTE ON FUNCTION obter_rota_visita_paradas(TEXT, BIGINT) TO authenticat
 
 
 -- Cria a rota + as paradas em lote, na ordem em que p_lead_ids veio (a tela monta esse
--- array pela ordem de seleção no mapa/lista). unnest(...) WITH ORDINALITY gera a coluna de
--- ordem a partir da posição no array.
+-- array pela ordem de seleção no mapa/lista, ou já ordenado por proximidade quando vem da
+-- geração por cidade). unnest(...) WITH ORDINALITY gera a coluna de ordem a partir da
+-- posição no array.
+-- DROP explícito: adicionamos p_ponto_partida_endereco depois da v1 (parâmetro novo muda a
+-- assinatura — CREATE OR REPLACE criaria uma sobrecarga órfã em vez de substituir).
+DROP FUNCTION IF EXISTS salvar_rota_visita(TEXT, TEXT, BIGINT[], TEXT);
+
 CREATE OR REPLACE FUNCTION salvar_rota_visita(
     p_schema_name TEXT,
     p_nome TEXT,
     p_lead_ids BIGINT[],
-    p_descricao TEXT DEFAULT NULL
+    p_descricao TEXT DEFAULT NULL,
+    p_ponto_partida_endereco TEXT DEFAULT NULL
 )
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -146,10 +163,10 @@ BEGIN
     END IF;
 
     v_sql := format('
-        INSERT INTO %I.rotas_visita (nome, descricao, criado_por)
-        VALUES (%L, %L, auth.uid())
+        INSERT INTO %I.rotas_visita (nome, descricao, ponto_partida_endereco, criado_por)
+        VALUES (%L, %L, %L, auth.uid())
         RETURNING id
-    ', p_schema_name, p_nome, p_descricao);
+    ', p_schema_name, p_nome, p_descricao, p_ponto_partida_endereco);
     EXECUTE v_sql INTO v_rota_id;
 
     v_sql := format('
@@ -163,7 +180,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION salvar_rota_visita(TEXT, TEXT, BIGINT[], TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION salvar_rota_visita(TEXT, TEXT, BIGINT[], TEXT, TEXT) TO authenticated;
 
 
 CREATE OR REPLACE FUNCTION atualizar_status_rota_visita(
