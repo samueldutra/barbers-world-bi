@@ -34,6 +34,7 @@ interface Args {
   busca: string
   cidade: string | null
   ultimaCompraAntesDe: string | null
+  incluirSemVenda: boolean
   ordenarPor: OrdenarClientesPor
   ordenarDirecao: OrdenarDirecao
   pagina: number
@@ -46,6 +47,7 @@ export function useRelatorioClientes({
   busca,
   cidade,
   ultimaCompraAntesDe,
+  incluirSemVenda,
   ordenarPor,
   ordenarDirecao,
   pagina,
@@ -75,6 +77,7 @@ export function useRelatorioClientes({
           p_busca: busca.trim() || null,
           p_cidade: cidade,
           p_ultima_compra_antes_de: ultimaCompraAntesDe,
+          p_incluir_sem_venda: incluirSemVenda,
           p_ordenar_por: ordenarPor,
           p_ordenar_direcao: ordenarDirecao,
           p_pagina: pagina,
@@ -101,7 +104,7 @@ export function useRelatorioClientes({
       ativo = false
       clearTimeout(timer)
     }
-  }, [atual, canais, busca, cidade, ultimaCompraAntesDe, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
+  }, [atual, canais, busca, cidade, ultimaCompraAntesDe, incluirSemVenda, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
 
   return { linhas, totalRegistros, loading, error, recarregar: () => setGatilho((g) => g + 1) }
 }

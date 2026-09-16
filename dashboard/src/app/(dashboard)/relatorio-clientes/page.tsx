@@ -7,6 +7,8 @@ import { RelatorioClientesTabela } from '@/components/relatorio-clientes/relator
 import { CurvaAbcClientesTabela } from '@/components/relatorio-clientes/curva-abc-clientes-tabela'
 import { FiltroSelecaoUnica } from '@/components/filtros/filtro-selecao-unica'
 import { FiltroUltimaCompra, calcularUltimaCompraAntesDe, type UltimaCompraPreset } from '@/components/relatorio-clientes/filtro-ultima-compra'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useFiltrosClientes } from '@/hooks/use-filtros-clientes'
 import { useRelatorioClientes, type LinhaRelatorioCliente, type OrdenarClientesPor } from '@/hooks/use-relatorio-clientes'
@@ -46,6 +48,7 @@ export default function RelatorioClientesPage() {
   const [cidadeSelecionada, setCidadeSelecionada] = useState<string | null>(null)
   const [ultimaCompraPreset, setUltimaCompraPreset] = useState<UltimaCompraPreset>('todos')
   const [dataPersonalizadaUltimaCompra, setDataPersonalizadaUltimaCompra] = useState<Date | null>(null)
+  const [incluirSemVenda, setIncluirSemVenda] = useState(true)
   const [busca, setBusca] = useState('')
   const [ordenarPor, setOrdenarPor] = useState<OrdenarClientesPor>('valor_vendido')
   const [ordenarDirecao, setOrdenarDirecao] = useState<'asc' | 'desc'>('desc')
@@ -69,6 +72,7 @@ export default function RelatorioClientesPage() {
     busca,
     cidade: cidadeSelecionada,
     ultimaCompraAntesDe,
+    incluirSemVenda,
     ordenarPor,
     ordenarDirecao,
     pagina,
@@ -134,6 +138,11 @@ export default function RelatorioClientesPage() {
     setDataPersonalizadaUltimaCompra(d)
   }
 
+  const handleIncluirSemVendaChange = (v: boolean) => {
+    setPagina(1)
+    setIncluirSemVenda(v)
+  }
+
   const handleExportar = async (formato: 'csv' | 'xlsx') => {
     setExportando(true)
     try {
@@ -147,6 +156,7 @@ export default function RelatorioClientesPage() {
         p_busca: busca.trim() || null,
         p_cidade: cidadeSelecionada,
         p_ultima_compra_antes_de: ultimaCompraAntesDe,
+        p_incluir_sem_venda: incluirSemVenda,
         p_ordenar_por: ordenarPor,
         p_ordenar_direcao: ordenarDirecao,
         p_pagina: 1,
@@ -198,6 +208,16 @@ export default function RelatorioClientesPage() {
             dataPersonalizada={dataPersonalizadaUltimaCompra}
             onDataPersonalizadaChange={handleDataPersonalizadaChange}
           />
+          <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+            <Checkbox
+              id="incluir-sem-venda"
+              checked={incluirSemVenda}
+              onCheckedChange={(v) => handleIncluirSemVendaChange(v === true)}
+            />
+            <Label htmlFor="incluir-sem-venda" className="text-sm font-normal">
+              Filtrar clientes sem venda
+            </Label>
+          </div>
         </div>
       </div>
 
