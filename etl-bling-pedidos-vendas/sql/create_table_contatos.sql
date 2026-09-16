@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS barbers.contatos (
     telefone              VARCHAR(30),
     celular               VARCHAR(30),
     email                 VARCHAR(200),
+    data_nascimento       DATE,
 
     endereco              VARCHAR(255),
     numero_endereco       VARCHAR(20),
@@ -30,3 +31,6 @@ CREATE INDEX IF NOT EXISTS idx_contatos_documento
 
 CREATE INDEX IF NOT EXISTS idx_contatos_municipio_uf
     ON barbers.contatos (uf, municipio);
+
+-- Idempotente pra quem já tinha a tabela antes de data_nascimento existir.
+ALTER TABLE barbers.contatos ADD COLUMN IF NOT EXISTS data_nascimento DATE;

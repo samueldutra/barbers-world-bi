@@ -14,7 +14,8 @@ import { obterRangePreset, formatarRangeParaAPI, type PeriodoPreset, type RangeD
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { exportarCSV, exportarXLSX, type ColunaExportavel } from '@/lib/export'
-import { formatarData } from '@/lib/formatters'
+import { formatarData, formatarAniversario } from '@/lib/formatters'
+import { linkWhatsapp } from '@/lib/whatsapp'
 
 const TAMANHO_PAGINA = 50
 const LIMITE_EXPORTACAO = 20000
@@ -27,7 +28,9 @@ const COLUNAS_EXPORTACAO: ColunaExportavel<LinhaRelatorioCliente>[] = [
   { cabecalho: 'Cidade', valor: (l) => l.municipio || '', largura: 20 },
   { cabecalho: 'UF', valor: (l) => l.uf || '', largura: 6 },
   { cabecalho: 'Telefone', valor: (l) => l.telefone || '', largura: 18 },
+  { cabecalho: 'Link WhatsApp', valor: (l) => linkWhatsapp(l.telefone) || '', largura: 32 },
   { cabecalho: 'E-mail', valor: (l) => l.email || '', largura: 28 },
+  { cabecalho: 'Aniversário', valor: (l) => (l.data_nascimento ? formatarAniversario(l.data_nascimento) : ''), largura: 12 },
   { cabecalho: 'Pedidos', valor: (l) => Number(l.total_pedidos), largura: 12 },
   { cabecalho: 'Qtde vendida', valor: (l) => Number(l.unidades_vendidas), largura: 14 },
   { cabecalho: 'Valor vendido (R$)', valor: (l) => Number(l.faturamento), largura: 18, formatoNumerico: '#,##0.00' },

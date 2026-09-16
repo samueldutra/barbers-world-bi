@@ -37,3 +37,10 @@ export function formatarData(data: string | Date): string {
   const d = typeof data === 'string' ? new Date(data + 'T00:00:00') : data
   return d.toLocaleDateString('pt-BR')
 }
+
+/** Aniversário mostra só dia/mês — o ano em `data_nascimento` costuma não ser confiável
+ * (vem opcional do cadastro no Bling), o que importa aqui é saber quando parabenizar. */
+export function formatarAniversario(data: string): string {
+  const [, mes, dia] = data.split('-')
+  return `${dia}/${mes}`
+}

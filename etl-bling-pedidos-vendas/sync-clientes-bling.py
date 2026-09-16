@@ -361,8 +361,17 @@ def buscar_contato(cliente_id: str, conta: str, id_contato: int) -> Optional[dic
         return None
 
 
+def normalizar_data_nascimento(valor: Optional[str]) -> Optional[str]:
+    """Bling manda '0000-00-00' (ou vazio) quando o campo não foi preenchido — não é
+    uma data válida, então vira NULL em vez de quebrar o cast ::DATE no Postgres."""
+    if not valor or not valor.strip() or valor.startswith("0000"):
+        return None
+    return valor
+
+
 def transformar_contato(contato: dict, data_sincronizacao: str) -> dict:
     endereco = ((contato.get("endereco") or {}).get("geral")) or {}
+    dados_adicionais = contato.get("dadosAdicionais") or {}
     return {
         "id_contato": contato["id"],
         "nome": contato.get("nome"),
@@ -373,6 +382,7 @@ def transformar_contato(contato: dict, data_sincronizacao: str) -> dict:
         "telefone": contato.get("telefone"),
         "celular": contato.get("celular"),
         "email": contato.get("email"),
+        "data_nascimento": normalizar_data_nascimento(dados_adicionais.get("dataNascimento")),
         "endereco": endereco.get("endereco"),
         "numero_endereco": endereco.get("numero"),
         "bairro": endereco.get("bairro"),

@@ -18,6 +18,7 @@ export interface LinhaRelatorioCliente {
   uf: string | null
   telefone: string | null
   email: string | null
+  data_nascimento: string | null
   total_pedidos: number
   unidades_vendidas: number
   faturamento: number
