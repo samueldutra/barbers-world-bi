@@ -21,7 +21,7 @@ BEGIN
     v_sql := format('
         INSERT INTO %I.contatos (
             id_contato, nome, fantasia, tipo_pessoa, documento, situacao,
-            telefone, celular, email,
+            telefone, celular, email, data_nascimento,
             endereco, numero_endereco, bairro, municipio, uf, cep,
             data_sincronizacao
         )
@@ -35,6 +35,7 @@ BEGIN
             item->>''telefone'',
             item->>''celular'',
             item->>''email'',
+            (item->>''data_nascimento'')::DATE,
             item->>''endereco'',
             item->>''numero_endereco'',
             item->>''bairro'',
@@ -53,6 +54,7 @@ BEGIN
             telefone = EXCLUDED.telefone,
             celular = EXCLUDED.celular,
             email = EXCLUDED.email,
+            data_nascimento = EXCLUDED.data_nascimento,
             endereco = EXCLUDED.endereco,
             numero_endereco = EXCLUDED.numero_endereco,
             bairro = EXCLUDED.bairro,

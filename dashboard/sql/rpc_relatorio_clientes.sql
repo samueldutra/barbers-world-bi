@@ -14,6 +14,10 @@
 -- órfã se não for removida explicitamente.
 DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, TEXT, INTEGER, INTEGER);
 
+-- Adiciona data_nascimento ao retorno — muda o tipo composto de retorno, então precisa
+-- dropar a versão anterior (mesma assinatura de parâmetros) antes do CREATE OR REPLACE.
+DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER);
+
 CREATE OR REPLACE FUNCTION obter_relatorio_vendas_clientes(
     p_schema_name TEXT,
     p_data_inicial DATE,
@@ -36,6 +40,7 @@ RETURNS TABLE(
     uf TEXT,
     telefone TEXT,
     email TEXT,
+    data_nascimento DATE,
     total_pedidos BIGINT,
     unidades_vendidas NUMERIC,
     faturamento NUMERIC,
@@ -121,8 +126,9 @@ BEGIN
             a.tipo_pessoa_contato,
             c.municipio::TEXT AS municipio,
             c.uf::TEXT AS uf,
-            c.telefone::TEXT AS telefone,
+            COALESCE(c.celular, c.telefone)::TEXT AS telefone, -- celular é quem tem WhatsApp
             c.email::TEXT AS email,
+            c.data_nascimento,
             a.total_pedidos,
             a.unidades_vendidas,
             a.faturamento,

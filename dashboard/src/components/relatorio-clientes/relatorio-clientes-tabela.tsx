@@ -1,6 +1,7 @@
 'use client'
 
-import { User, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Download, Loader2 } from 'lucide-react'
+import { User, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Download, Loader2, Phone } from 'lucide-react'
+import { IconBrandWhatsappFilled } from '@tabler/icons-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { formatarMoeda, formatarNumero, formatarData } from '@/lib/formatters'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatarMoeda, formatarNumero, formatarData, formatarAniversario } from '@/lib/formatters'
+import { linkWhatsapp } from '@/lib/whatsapp'
 import type { LinhaRelatorioCliente, OrdenarClientesPor, OrdenarDirecao, StatusCliente } from '@/hooks/use-relatorio-clientes'
 
 const VARIANTE_POR_STATUS: Record<StatusCliente, 'default' | 'secondary' | 'outline'> = {
@@ -120,41 +123,75 @@ export function RelatorioClientesTabela({
                   <TableHead>Status</TableHead>
                   <TableHead>Documento</TableHead>
                   <TableHead>Cidade/UF</TableHead>
+                  <TableHead>Telefone</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Pedidos', 'qtde_pedidos')}</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Valor vendido', 'valor_vendido')}</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Ticket médio', 'ticket_medio')}</TableHead>
                   <TableHead className="text-right">Última compra</TableHead>
+                  <TableHead className="text-right">Aniversário</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {linhas.map((linha, index) => (
-                  <TableRow key={`${linha.id_contato ?? linha.documento_contato ?? 'cliente'}-${index}`}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                          <User className="h-4 w-4 text-muted-foreground" />
+                {linhas.map((linha, index) => {
+                  const whatsapp = linkWhatsapp(linha.telefone)
+                  return (
+                    <TableRow key={`${linha.id_contato ?? linha.documento_contato ?? 'cliente'}-${index}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="max-w-56 truncate text-sm font-medium">{linha.nome_contato || 'Cliente sem nome'}</p>
+                            {linha.email && <p className="max-w-56 truncate text-xs text-muted-foreground">{linha.email}</p>}
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="max-w-56 truncate text-sm font-medium">{linha.nome_contato || 'Cliente sem nome'}</p>
-                          {linha.email && <p className="max-w-56 truncate text-xs text-muted-foreground">{linha.email}</p>}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={VARIANTE_POR_STATUS[linha.status_cliente]}>{linha.status_cliente}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{linha.documento_contato || '—'}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {[linha.municipio, linha.uf].filter(Boolean).join('/') || '—'}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatarNumero(Number(linha.total_pedidos))}</TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{formatarMoeda(Number(linha.faturamento))}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatarMoeda(Number(linha.ticket_medio))}</TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
-                      {linha.ultima_compra ? formatarData(linha.ultima_compra) : '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={VARIANTE_POR_STATUS[linha.status_cliente]}>{linha.status_cliente}</Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{linha.documento_contato || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {[linha.municipio, linha.uf].filter(Boolean).join('/') || '—'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {linha.telefone ? (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <span className="whitespace-nowrap">{linha.telefone}</span>
+                            {whatsapp && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <a
+                                    href={whatsapp}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={`Chamar ${linha.nome_contato || 'cliente'} no WhatsApp`}
+                                    className="text-[#25D366] hover:opacity-80"
+                                  >
+                                    <IconBrandWhatsappFilled className="h-4 w-4" />
+                                  </a>
+                                </TooltipTrigger>
+                                <TooltipContent>Chamar no WhatsApp</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{formatarNumero(Number(linha.total_pedidos))}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{formatarMoeda(Number(linha.faturamento))}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatarMoeda(Number(linha.ticket_medio))}</TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                        {linha.ultima_compra ? formatarData(linha.ultima_compra) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                        {linha.data_nascimento ? formatarAniversario(linha.data_nascimento) : '—'}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
 
