@@ -6,6 +6,7 @@ import { VendasFiltros } from '@/components/dashboard/vendas-filtros'
 import { RelatorioClientesTabela } from '@/components/relatorio-clientes/relatorio-clientes-tabela'
 import { CurvaAbcClientesTabela } from '@/components/relatorio-clientes/curva-abc-clientes-tabela'
 import { FiltroSelecaoUnica } from '@/components/filtros/filtro-selecao-unica'
+import { FiltroUltimaCompra, calcularUltimaCompraAntesDe, type UltimaCompraPreset } from '@/components/relatorio-clientes/filtro-ultima-compra'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useFiltrosClientes } from '@/hooks/use-filtros-clientes'
 import { useRelatorioClientes, type LinhaRelatorioCliente, type OrdenarClientesPor } from '@/hooks/use-relatorio-clientes'
@@ -42,8 +43,9 @@ export default function RelatorioClientesPage() {
   const [periodo, setPeriodo] = useState<PeriodoPreset>('mes_atual')
   const [rangePersonalizado, setRangePersonalizado] = useState<RangeData | null>(null)
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
-  const [ufSelecionada, setUfSelecionada] = useState<string | null>(null)
   const [cidadeSelecionada, setCidadeSelecionada] = useState<string | null>(null)
+  const [ultimaCompraPreset, setUltimaCompraPreset] = useState<UltimaCompraPreset>('todos')
+  const [dataPersonalizadaUltimaCompra, setDataPersonalizadaUltimaCompra] = useState<Date | null>(null)
   const [busca, setBusca] = useState('')
   const [ordenarPor, setOrdenarPor] = useState<OrdenarClientesPor>('valor_vendido')
   const [ordenarDirecao, setOrdenarDirecao] = useState<'asc' | 'desc'>('desc')
@@ -54,15 +56,19 @@ export default function RelatorioClientesPage() {
     () => (periodo === 'personalizado' ? (rangePersonalizado ?? obterRangePreset(periodo)) : obterRangePreset(periodo)),
     [periodo, rangePersonalizado]
   )
+  const ultimaCompraAntesDe = useMemo(
+    () => calcularUltimaCompraAntesDe(ultimaCompraPreset, dataPersonalizadaUltimaCompra),
+    [ultimaCompraPreset, dataPersonalizadaUltimaCompra]
+  )
   const { canais } = useCanaisVenda()
-  const { ufs, municipios } = useFiltrosClientes(ufSelecionada)
+  const { municipios } = useFiltrosClientes()
 
   const { linhas, totalRegistros, loading, error, recarregar } = useRelatorioClientes({
     atual,
     canais: canaisSelecionados,
     busca,
-    uf: ufSelecionada,
     cidade: cidadeSelecionada,
+    ultimaCompraAntesDe,
     ordenarPor,
     ordenarDirecao,
     pagina,
@@ -72,7 +78,6 @@ export default function RelatorioClientesPage() {
   const { clientes: clientesAbc, loading: loadingAbc } = useCurvaAbcClientes({
     atual,
     canais: canaisSelecionados,
-    uf: ufSelecionada,
     cidade: cidadeSelecionada,
     limite: LIMITE_CURVA_ABC,
   })
@@ -107,15 +112,26 @@ export default function RelatorioClientesPage() {
     setCanaisSelecionados(ids)
   }
 
-  const handleUfChange = (v: string | null) => {
-    setPagina(1)
-    setUfSelecionada(v)
-    setCidadeSelecionada(null) // cidade depende da UF — troca de UF invalida a cidade escolhida
-  }
-
   const handleCidadeChange = (v: string | null) => {
     setPagina(1)
     setCidadeSelecionada(v)
+  }
+
+  const handleUltimaCompraPresetChange = (p: UltimaCompraPreset) => {
+    setPagina(1)
+    setUltimaCompraPreset(p)
+    // Quem tá procurando cliente sumido normalmente quer ver primeiro quem tá sumido há
+    // mais tempo — troca a ordenação padrão pra ajudar, sem travar se a pessoa já tinha
+    // escolhido outra coluna.
+    if (p !== 'todos' && ordenarPor !== 'ultima_compra') {
+      setOrdenarPor('ultima_compra')
+      setOrdenarDirecao('asc')
+    }
+  }
+
+  const handleDataPersonalizadaChange = (d: Date) => {
+    setPagina(1)
+    setDataPersonalizadaUltimaCompra(d)
   }
 
   const handleExportar = async (formato: 'csv' | 'xlsx') => {
@@ -129,8 +145,8 @@ export default function RelatorioClientesPage() {
         p_data_final: data_final,
         p_canais: canaisSelecionados,
         p_busca: busca.trim() || null,
-        p_uf: ufSelecionada,
         p_cidade: cidadeSelecionada,
+        p_ultima_compra_antes_de: ultimaCompraAntesDe,
         p_ordenar_por: ordenarPor,
         p_ordenar_direcao: ordenarDirecao,
         p_pagina: 1,
@@ -175,10 +191,23 @@ export default function RelatorioClientesPage() {
             onAtualizar={recarregar}
             atualizando={loading}
           />
-          <FiltroSelecaoUnica label="UF" opcoes={ufs} valor={ufSelecionada} onValorChange={handleUfChange} />
           <FiltroSelecaoUnica label="Cidade" opcoes={municipios} valor={cidadeSelecionada} onValorChange={handleCidadeChange} />
+          <FiltroUltimaCompra
+            preset={ultimaCompraPreset}
+            onPresetChange={handleUltimaCompraPresetChange}
+            dataPersonalizada={dataPersonalizadaUltimaCompra}
+            onDataPersonalizadaChange={handleDataPersonalizadaChange}
+          />
         </div>
       </div>
+
+      {ultimaCompraPreset !== 'todos' && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm text-muted-foreground">
+          Mostrando todo cliente sem comprar desde {ultimaCompraAntesDe ? formatarData(ultimaCompraAntesDe) : '—'} —
+          independente do período selecionado acima. Pedidos/valor vendido/ticket médio abaixo continuam contando só
+          o período em tela, não o histórico completo do cliente.
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">

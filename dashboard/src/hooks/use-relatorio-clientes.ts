@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 
-export type OrdenarClientesPor = 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio'
+export type OrdenarClientesPor = 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra'
 export type OrdenarDirecao = 'asc' | 'desc'
 export type StatusCliente = 'Novo' | 'Recorrente' | 'Não identificado'
 
@@ -32,15 +32,25 @@ interface Args {
   atual: RangeData
   canais: number[] | null
   busca: string
-  uf: string | null
   cidade: string | null
+  ultimaCompraAntesDe: string | null
   ordenarPor: OrdenarClientesPor
   ordenarDirecao: OrdenarDirecao
   pagina: number
   tamanhoPagina: number
 }
 
-export function useRelatorioClientes({ atual, canais, busca, uf, cidade, ordenarPor, ordenarDirecao, pagina, tamanhoPagina }: Args) {
+export function useRelatorioClientes({
+  atual,
+  canais,
+  busca,
+  cidade,
+  ultimaCompraAntesDe,
+  ordenarPor,
+  ordenarDirecao,
+  pagina,
+  tamanhoPagina,
+}: Args) {
   const [linhas, setLinhas] = useState<LinhaRelatorioCliente[]>([])
   const [totalRegistros, setTotalRegistros] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -63,8 +73,8 @@ export function useRelatorioClientes({ atual, canais, busca, uf, cidade, ordenar
           p_data_final: data_final,
           p_canais: canais,
           p_busca: busca.trim() || null,
-          p_uf: uf,
           p_cidade: cidade,
+          p_ultima_compra_antes_de: ultimaCompraAntesDe,
           p_ordenar_por: ordenarPor,
           p_ordenar_direcao: ordenarDirecao,
           p_pagina: pagina,
@@ -91,7 +101,7 @@ export function useRelatorioClientes({ atual, canais, busca, uf, cidade, ordenar
       ativo = false
       clearTimeout(timer)
     }
-  }, [atual, canais, busca, uf, cidade, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
+  }, [atual, canais, busca, cidade, ultimaCompraAntesDe, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
 
   return { linhas, totalRegistros, loading, error, recarregar: () => setGatilho((g) => g + 1) }
 }
