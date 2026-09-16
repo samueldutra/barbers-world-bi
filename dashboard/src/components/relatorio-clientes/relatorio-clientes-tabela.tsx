@@ -127,7 +127,7 @@ export function RelatorioClientesTabela({
                   <TableHead className="text-right">{cabecalhoOrdenavel('Pedidos', 'qtde_pedidos')}</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Valor vendido', 'valor_vendido')}</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Ticket médio', 'ticket_medio')}</TableHead>
-                  <TableHead className="text-right">Última compra</TableHead>
+                  <TableHead className="text-right">{cabecalhoOrdenavel('Última compra', 'ultima_compra')}</TableHead>
                   <TableHead className="text-right">Aniversário</TableHead>
                 </TableRow>
               </TableHeader>

@@ -27,7 +27,7 @@ export interface RangeData {
   fim: Date
 }
 
-function toISODate(d: Date): string {
+export function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
@@ -37,7 +37,7 @@ function inicioDoDia(d: Date): Date {
   return r
 }
 
-function adicionarDias(d: Date, dias: number): Date {
+export function adicionarDias(d: Date, dias: number): Date {
   const r = new Date(d)
   r.setDate(r.getDate() + dias)
   return r
