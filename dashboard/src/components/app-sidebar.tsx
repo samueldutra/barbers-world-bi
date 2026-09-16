@@ -67,7 +67,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
               <Link href="/dashboard">
-                <Image src="/logo.svg" alt="Barbers World" width={28} height={28} className="size-7 rounded" />
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white">
+                  <Image src="/logo.svg" alt="Barbers World" width={22} height={22} className="object-contain" />
+                </span>
                 <span className="text-base font-semibold">Barbers World BI</span>
               </Link>
             </SidebarMenuButton>
