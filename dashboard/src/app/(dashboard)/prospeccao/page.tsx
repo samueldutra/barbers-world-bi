@@ -3,15 +3,17 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
-import { Search, Loader2, MapPinPlus, X } from 'lucide-react'
+import { Search, Loader2, MapPinPlus, Route, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { LeadsSalvosLista } from '@/components/prospeccao/leads-salvos-lista'
+import { RotasSalvasLista } from '@/components/prospeccao/rotas-salvas-lista'
 import { useBuscaNicho, type ResultadoBusca, type PontoBusca } from '@/hooks/use-busca-nicho'
 import { useLeadsMapeados, type StatusLead } from '@/hooks/use-leads-mapeados'
+import { useRotasVisita } from '@/hooks/use-rotas-visita'
 
 const MapaProspeccao = dynamic(
   () => import('@/components/prospeccao/mapa-prospeccao').then((m) => m.MapaProspeccao),
@@ -34,6 +36,9 @@ const OPCOES_RAIO = [
 // a se repetir. Pra cobrir mais área, some pontos de busca em vez de só aumentar o raio.
 const MAX_PONTOS_EXTRAS = 8
 
+// O link de rota do Google Maps aceita no máximo ~25 pontos (origem + destino + waypoints).
+const MAX_PARADAS_ROTA = 23
+
 export default function ProspeccaoPage() {
   const [nicho, setNicho] = useState('barbearia')
   const [raioMetros, setRaioMetros] = useState(5000)
@@ -43,9 +48,20 @@ export default function ProspeccaoPage() {
   const [geocodificando, setGeocodificando] = useState(false)
   const [pontosExtras, setPontosExtras] = useState<PontoBusca[]>([])
   const [modoAdicionarPonto, setModoAdicionarPonto] = useState(false)
+  const [modoSelecionarRota, setModoSelecionarRota] = useState(false)
+  const [leadsSelecionadosRota, setLeadsSelecionadosRota] = useState<Set<number>>(new Set())
 
   const { resultados, loading: buscando, error: erroBusca, buscar } = useBuscaNicho()
   const { leads, loading: carregandoLeads, salvar, atualizarStatus, excluir, recarregar: recarregarLeads } = useLeadsMapeados()
+  const {
+    rotas,
+    loading: carregandoRotas,
+    salvar: salvarRota,
+    carregarParadas,
+    atualizarStatus: atualizarStatusRota,
+    atualizarParada,
+    excluir: excluirRota,
+  } = useRotasVisita()
 
   const handleBuscar = async () => {
     if (!nicho.trim()) {
@@ -71,6 +87,57 @@ export default function ProspeccaoPage() {
 
   const handleRemoverPonto = (index: number) => {
     setPontosExtras((atual) => atual.filter((_, i) => i !== index))
+  }
+
+  const handleToggleModoSelecionarRota = () => {
+    setModoAdicionarPonto(false)
+    setModoSelecionarRota((v) => !v)
+  }
+
+  const handleToggleLeadRota = (id: number) => {
+    setLeadsSelecionadosRota((atual) => {
+      const novo = new Set(atual)
+      if (novo.has(id)) {
+        novo.delete(id)
+      } else {
+        if (novo.size >= MAX_PARADAS_ROTA) {
+          toast.error(`Máximo de ${MAX_PARADAS_ROTA} paradas por rota.`)
+          return atual
+        }
+        novo.add(id)
+      }
+      return novo
+    })
+  }
+
+  const handleLimparSelecaoRota = () => setLeadsSelecionadosRota(new Set())
+
+  const handleSalvarRota = async (nome: string, descricao: string | null, leadIds: number[]) => {
+    try {
+      await salvarRota(nome, leadIds, descricao)
+      toast.success(`Rota "${nome}" salva com ${leadIds.length} parada(s).`)
+    } catch (err) {
+      console.error('Erro ao salvar rota:', err)
+      toast.error('Não foi possível salvar essa rota.')
+      throw err
+    }
+  }
+
+  const handleAtualizarStatusRota = async (id: number, status: Parameters<typeof atualizarStatusRota>[1]) => {
+    try {
+      await atualizarStatusRota(id, status)
+    } catch (err) {
+      console.error('Erro ao atualizar status da rota:', err)
+      toast.error('Não foi possível atualizar o status da rota.')
+    }
+  }
+
+  const handleAtualizarParada = async (paradaId: number, visitaRealizada: boolean) => {
+    await atualizarParada(paradaId, visitaRealizada)
+  }
+
+  const handleExcluirRota = async (id: number) => {
+    await excluirRota(id)
   }
 
   const handleRecentralizar = async () => {
@@ -202,7 +269,10 @@ export default function ProspeccaoPage() {
           <div className="flex flex-wrap items-center gap-2 border-t pt-3">
             <Button
               variant={modoAdicionarPonto ? 'default' : 'outline'}
-              onClick={() => setModoAdicionarPonto((v) => !v)}
+              onClick={() => {
+                setModoSelecionarRota(false)
+                setModoAdicionarPonto((v) => !v)
+              }}
             >
               <MapPinPlus className="h-4 w-4" />
               {modoAdicionarPonto ? 'Clique no mapa pra adicionar...' : 'Adicionar ponto de busca'}
@@ -229,6 +299,22 @@ export default function ProspeccaoPage() {
         </CardContent>
       </Card>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant={modoSelecionarRota ? 'default' : 'outline'} onClick={handleToggleModoSelecionarRota}>
+          <Route className="h-4 w-4" />
+          {modoSelecionarRota ? 'Clique nos leads do mapa pra adicionar à rota...' : 'Selecionar pontos no mapa pra rota'}
+        </Button>
+        {leadsSelecionadosRota.size > 0 && (
+          <>
+            <p className="text-xs text-muted-foreground">{leadsSelecionadosRota.size} ponto(s) selecionado(s) pra rota.</p>
+            <Button variant="ghost" size="sm" onClick={handleLimparSelecaoRota}>
+              <X className="h-4 w-4" />
+              Limpar seleção
+            </Button>
+          </>
+        )}
+      </div>
+
       <div className="h-[500px] overflow-hidden rounded-lg border">
         <MapaProspeccao
           centro={centro}
@@ -243,6 +329,9 @@ export default function ProspeccaoPage() {
           onSalvar={handleSalvar}
           onAtualizarStatus={handleAtualizarStatus}
           onExcluir={handleExcluir}
+          modoSelecionarRota={modoSelecionarRota}
+          leadsSelecionadosRota={leadsSelecionadosRota}
+          onToggleLeadRota={handleToggleLeadRota}
         />
       </div>
 
@@ -250,8 +339,22 @@ export default function ProspeccaoPage() {
         leads={leads}
         loading={carregandoLeads}
         centro={centro}
+        selecionados={leadsSelecionadosRota}
+        onToggleSelecionado={handleToggleLeadRota}
+        onLimparSelecao={handleLimparSelecaoRota}
+        onSalvarRota={handleSalvarRota}
         onAtualizarStatus={handleAtualizarStatus}
         onExcluir={handleExcluir}
+      />
+
+      <RotasSalvasLista
+        rotas={rotas}
+        loading={carregandoRotas}
+        centro={centro}
+        onCarregarParadas={carregarParadas}
+        onAtualizarStatusRota={handleAtualizarStatusRota}
+        onAtualizarParada={handleAtualizarParada}
+        onExcluirRota={handleExcluirRota}
       />
     </div>
   )

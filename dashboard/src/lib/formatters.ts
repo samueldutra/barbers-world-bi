@@ -49,3 +49,9 @@ export function formatarAniversario(data: string): string {
 export function formatarDias(dias: number): string {
   return `${dias.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} dias`
 }
+
+/** Data + hora pra TIMESTAMPTZ (ex.: criado_em) — diferente de formatarData, que espera uma
+ * DATE pura ("YYYY-MM-DD") e quebraria com o "T..." que já vem num timestamp completo. */
+export function formatarDataHora(data: string): string {
+  return new Date(data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
