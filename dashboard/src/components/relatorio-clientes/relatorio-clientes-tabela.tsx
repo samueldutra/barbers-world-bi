@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { formatarMoeda, formatarNumero, formatarData, formatarAniversario } from '@/lib/formatters'
+import { formatarMoeda, formatarNumero, formatarData, formatarAniversario, formatarDias } from '@/lib/formatters'
 import { linkWhatsapp } from '@/lib/whatsapp'
 import type { LinhaRelatorioCliente, OrdenarClientesPor, OrdenarDirecao, StatusCliente } from '@/hooks/use-relatorio-clientes'
 
@@ -128,6 +128,7 @@ export function RelatorioClientesTabela({
                   <TableHead className="text-right">{cabecalhoOrdenavel('Valor vendido', 'valor_vendido')}</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Ticket médio', 'ticket_medio')}</TableHead>
                   <TableHead className="text-right">{cabecalhoOrdenavel('Última compra', 'ultima_compra')}</TableHead>
+                  <TableHead className="text-right">{cabecalhoOrdenavel('Frequência média', 'frequencia_media')}</TableHead>
                   <TableHead className="text-right">Aniversário</TableHead>
                 </TableRow>
               </TableHeader>
@@ -185,6 +186,9 @@ export function RelatorioClientesTabela({
                       <TableCell className="text-right tabular-nums">{formatarMoeda(Number(linha.ticket_medio))}</TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                         {linha.ultima_compra ? formatarData(linha.ultima_compra) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
+                        {linha.frequencia_media_dias != null ? formatarDias(linha.frequencia_media_dias) : '—'}
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground tabular-nums">
                         {linha.data_nascimento ? formatarAniversario(linha.data_nascimento) : '—'}
