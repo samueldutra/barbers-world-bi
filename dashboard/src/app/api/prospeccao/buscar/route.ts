@@ -14,17 +14,36 @@ export interface ResultadoBusca {
   origemId: string
   nome: string
   endereco: string | null
+  cidade: string | null
   telefone: string | null
   latitude: number
   longitude: number
+}
+
+interface ComponenteEndereco {
+  longText?: string
+  shortText?: string
+  types: string[]
 }
 
 interface LugarGoogle {
   id: string
   displayName?: { text: string }
   formattedAddress?: string
+  addressComponents?: ComponenteEndereco[]
   nationalPhoneNumber?: string
   location?: { latitude: number; longitude: number }
+}
+
+/** Cidade vem estruturada (addressComponents), não extraída do endereço em texto livre —
+ * mais confiável. "locality" é o tipo padrão do Google pra cidade; em áreas raramente
+ * cobertas por município formal (raro no Brasil urbano), cai pro nível administrativo 2. */
+function extrairCidade(componentes: ComponenteEndereco[] | undefined): string | null {
+  if (!componentes) return null
+  const cidade =
+    componentes.find((c) => c.types.includes('locality')) ??
+    componentes.find((c) => c.types.includes('administrative_area_level_2'))
+  return cidade?.longText ?? null
 }
 
 interface RespostaGoogle {
@@ -60,6 +79,7 @@ function mapearResultado(lugar: LugarGoogle): ResultadoBusca | null {
     origemId: lugar.id,
     nome: lugar.displayName?.text ?? 'Sem nome',
     endereco: lugar.formattedAddress ?? null,
+    cidade: extrairCidade(lugar.addressComponents),
     telefone: lugar.nationalPhoneNumber ?? null,
     latitude: lugar.location.latitude,
     longitude: lugar.location.longitude,
@@ -70,6 +90,7 @@ const CAMPOS = [
   'places.id',
   'places.displayName',
   'places.formattedAddress',
+  'places.addressComponents',
   'places.location',
   'places.nationalPhoneNumber',
 ].join(',')

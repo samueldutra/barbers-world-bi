@@ -27,6 +27,7 @@ export interface ParadaRota {
   observacoes: string | null
   nome: string
   endereco: string | null
+  cidade: string | null
   telefone: string | null
   latitude: number
   longitude: number

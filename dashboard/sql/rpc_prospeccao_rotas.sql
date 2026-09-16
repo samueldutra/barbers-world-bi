@@ -76,6 +76,10 @@ GRANT EXECUTE ON FUNCTION obter_rotas_visita(TEXT) TO authenticated;
 
 -- Paradas de 1 rota específica, já com os dados do lead (nome/endereço/telefone/posição)
 -- pra desenhar no mapa e montar o link do Google Maps sem round-trip extra.
+-- DROP explícito: CREATE OR REPLACE não muda o conjunto de colunas de RETURNS TABLE
+-- (adicionamos "cidade" depois da v1 dessa função).
+DROP FUNCTION IF EXISTS obter_rota_visita_paradas(TEXT, BIGINT);
+
 CREATE OR REPLACE FUNCTION obter_rota_visita_paradas(p_schema_name TEXT, p_rota_id BIGINT)
 RETURNS TABLE(
     parada_id BIGINT,
@@ -86,6 +90,7 @@ RETURNS TABLE(
     observacoes TEXT,
     nome TEXT,
     endereco TEXT,
+    cidade TEXT,
     telefone TEXT,
     latitude DOUBLE PRECISION,
     longitude DOUBLE PRECISION,
@@ -101,7 +106,7 @@ BEGIN
     v_sql := format('
         SELECT
             p.id, p.lead_id, p.ordem, p.visita_realizada, p.visitado_em, p.observacoes,
-            l.nome, l.endereco, l.telefone, l.latitude, l.longitude, l.status
+            l.nome, l.endereco, l.cidade, l.telefone, l.latitude, l.longitude, l.status
         FROM %I.rotas_visita_paradas p
         JOIN %I.leads_mapeados l ON l.id = p.lead_id
         WHERE p.rota_id = %L

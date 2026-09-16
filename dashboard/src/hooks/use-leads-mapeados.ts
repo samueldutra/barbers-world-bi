@@ -13,6 +13,7 @@ export interface LeadMapeado {
   nome: string
   nicho: string | null
   endereco: string | null
+  cidade: string | null
   telefone: string | null
   latitude: number
   longitude: number
@@ -30,6 +31,7 @@ interface SalvarInput {
   origemId?: string | null
   nicho?: string | null
   endereco?: string | null
+  cidade?: string | null
   telefone?: string | null
   status: StatusLead
   observacoes?: string | null
@@ -72,6 +74,7 @@ export function useLeadsMapeados() {
         p_origem_id: input.origemId ?? null,
         p_nicho: input.nicho ?? null,
         p_endereco: input.endereco ?? null,
+        p_cidade: input.cidade ?? null,
         p_telefone: input.telefone ?? null,
         p_status: input.status,
         p_observacoes: input.observacoes ?? null,
