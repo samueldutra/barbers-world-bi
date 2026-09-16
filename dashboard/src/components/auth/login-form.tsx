@@ -11,8 +11,11 @@ import Link from 'next/link'
 import { CheckCircle2, AlertCircle, Info, Eye, EyeOff, Loader2, Mail, Lock } from 'lucide-react'
 
 export function LoginForm() {
+  // Sempre a paleta clara (color-scheme forçado por .auth-light no layout) — sem dark:
+  // aqui de propósito, senão o tema escuro do sistema (Mac/iPhone) troca o texto do input
+  // pra branco e ele some em cima do fundo claro.
   const inputClassName =
-    'h-10 border-[#C7C7C7] bg-background text-[#171717] placeholder:text-[#707070] dark:border-input dark:bg-card dark:text-[#FFFFFF] dark:placeholder:text-[#898989] focus-visible:border-input focus-visible:ring-0'
+    'h-10 border-[#C7C7C7] bg-background text-[#171717] placeholder:text-[#707070] focus-visible:border-input focus-visible:ring-0'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
