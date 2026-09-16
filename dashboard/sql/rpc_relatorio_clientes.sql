@@ -20,6 +20,7 @@
 -- órfã se não for removida explicitamente.
 DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, TEXT, INTEGER, INTEGER);
 DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, TEXT, TEXT, INTEGER, INTEGER);
 
 CREATE OR REPLACE FUNCTION obter_relatorio_vendas_clientes(
     p_schema_name TEXT,
@@ -29,6 +30,7 @@ CREATE OR REPLACE FUNCTION obter_relatorio_vendas_clientes(
     p_busca TEXT DEFAULT NULL,
     p_cidade TEXT DEFAULT NULL,                 -- NULL = "Todos"; valor deve bater com obter_municipios_clientes()
     p_ultima_compra_antes_de DATE DEFAULT NULL,  -- preenchido = traz cliente com última compra (histórico completo) nessa data ou antes, mesmo sem pedido no período
+    p_incluir_sem_venda BOOLEAN DEFAULT TRUE,    -- TRUE (default) = mantém no relatório o cliente com histórico mas sem pedido no período (aparece com 0/zerado); FALSE = só cliente com pedido > 0 no período
     p_ordenar_por TEXT DEFAULT 'valor_vendido',  -- 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra'
     p_ordenar_direcao TEXT DEFAULT 'desc',       -- 'asc' | 'desc'
     p_pagina INTEGER DEFAULT 1,
@@ -163,6 +165,7 @@ BEGIN
         WHERE
             CASE
                 WHEN %L::DATE IS NOT NULL THEN pcg.ultima_compra <= %L::DATE
+                WHEN %L::BOOLEAN THEN TRUE
                 ELSE ap.total_pedidos IS NOT NULL
             END
         ORDER BY %I %s NULLS LAST
@@ -176,13 +179,14 @@ BEGIN
        p_schema_name,
        p_schema_name,
        p_ultima_compra_antes_de, p_ultima_compra_antes_de,
+       p_incluir_sem_venda,
        v_ordenar_coluna, v_ordenar_direcao, p_tamanho_pagina, v_offset);
 
     RETURN QUERY EXECUTE v_sql;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, TEXT, TEXT, INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_relatorio_vendas_clientes(TEXT, DATE, DATE, BIGINT[], TEXT, TEXT, DATE, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER) TO authenticated;
 
 
 -- Lista pra popular o filtro de cidade (mesmo padrão de obter_marcas_produtos): vem da
