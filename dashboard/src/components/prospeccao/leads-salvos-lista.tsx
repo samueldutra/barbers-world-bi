@@ -1,12 +1,17 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { MapPin, Route, Trash2 } from 'lucide-react'
+import { MapPin, Route, Save, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { montarUrlRota } from '@/lib/google-maps-route'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
 
 const LABEL_STATUS: Record<StatusLead, string> = {
@@ -29,52 +34,66 @@ interface Props {
   leads: LeadMapeado[]
   loading: boolean
   centro: { lat: number; lon: number }
+  selecionados: Set<number>
+  onToggleSelecionado: (id: number) => void
+  onLimparSelecao: () => void
   onAtualizarStatus: (id: number, status: StatusLead) => void
   onExcluir: (id: number) => void
+  onSalvarRota: (nome: string, descricao: string | null, leadIds: number[]) => Promise<void>
 }
 
-/** Monta um link do Google Maps com paradas nos leads selecionados — não precisa de
- * nenhuma API paga, o próprio Google Maps calcula a rota ao abrir o link. */
-function montarUrlRota(centro: { lat: number; lon: number }, selecionados: LeadMapeado[]): string {
-  const origem = `${centro.lat},${centro.lon}`
-  const destino = `${selecionados[selecionados.length - 1].latitude},${selecionados[selecionados.length - 1].longitude}`
-  const paradas = selecionados
-    .slice(0, -1)
-    .map((l) => `${l.latitude},${l.longitude}`)
-    .join('|')
-  const params = new URLSearchParams({ api: '1', origin: origem, destination: destino, travelmode: 'driving' })
-  if (paradas) params.set('waypoints', paradas)
-  return `https://www.google.com/maps/dir/?${params.toString()}`
-}
-
-export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, onExcluir }: Props) {
+export function LeadsSalvosLista({
+  leads,
+  loading,
+  centro,
+  selecionados,
+  onToggleSelecionado,
+  onLimparSelecao,
+  onAtualizarStatus,
+  onExcluir,
+  onSalvarRota,
+}: Props) {
   const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
-  const [selecionados, setSelecionados] = useState<Set<number>>(new Set())
+  const [dialogAberto, setDialogAberto] = useState(false)
+  const [nomeRota, setNomeRota] = useState('')
+  const [descricaoRota, setDescricaoRota] = useState('')
+  const [salvandoRota, setSalvandoRota] = useState(false)
 
   const leadsFiltrados = useMemo(
     () => (filtroStatus === 'todos' ? leads : leads.filter((l) => l.status === filtroStatus)),
     [leads, filtroStatus]
   )
 
-  const toggleSelecionado = (id: number) => {
-    setSelecionados((atual) => {
-      const novo = new Set(atual)
-      if (novo.has(id)) novo.delete(id)
-      else novo.add(id)
-      return novo
-    })
-  }
+  // Ordem de seleção (não a ordem da lista) — Set preserva a ordem de inserção em JS, então
+  // isso respeita a sequência em que o usuário clicou no mapa/lista, que é a ordem da rota.
+  const leadsSelecionados = Array.from(selecionados)
+    .map((id) => leads.find((l) => l.id === id))
+    .filter((l): l is LeadMapeado => l != null)
 
-  const leadsSelecionados = leads.filter((l) => selecionados.has(l.id))
+  const handleSalvarRota = async () => {
+    if (!nomeRota.trim()) return
+    setSalvandoRota(true)
+    try {
+      await onSalvarRota(nomeRota.trim(), descricaoRota.trim() || null, leadsSelecionados.map((l) => l.id))
+      setDialogAberto(false)
+      setNomeRota('')
+      setDescricaoRota('')
+      onLimparSelecao()
+    } finally {
+      setSalvandoRota(false)
+    }
+  }
 
   return (
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle>Leads mapeados</CardTitle>
-          <CardDescription>{leads.length} salvos no total — marque pra gerar rota de visita</CardDescription>
+          <CardDescription>
+            {leads.length} salvos no total — marque (ou selecione no mapa acima) pra gerar ou salvar uma rota de visita
+          </CardDescription>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v as StatusLead | 'todos')}>
             <SelectTrigger className="w-40" size="sm">
               <SelectValue />
@@ -87,13 +106,23 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
               <SelectItem value="lead">Lead</SelectItem>
             </SelectContent>
           </Select>
+          {selecionados.size > 0 && (
+            <Button size="sm" variant="ghost" onClick={onLimparSelecao}>
+              Limpar seleção
+            </Button>
+          )}
           <Button
             size="sm"
+            variant="outline"
             disabled={leadsSelecionados.length === 0}
             onClick={() => window.open(montarUrlRota(centro, leadsSelecionados), '_blank')}
           >
             <Route className="h-4 w-4" />
             Gerar rota ({leadsSelecionados.length})
+          </Button>
+          <Button size="sm" disabled={leadsSelecionados.length === 0} onClick={() => setDialogAberto(true)}>
+            <Save className="h-4 w-4" />
+            Salvar rota
           </Button>
         </div>
       </CardHeader>
@@ -109,7 +138,7 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
           <ul className="flex flex-col divide-y divide-border">
             {leadsFiltrados.map((lead) => (
               <li key={lead.id} className="flex items-center gap-3 py-3">
-                <Checkbox checked={selecionados.has(lead.id)} onCheckedChange={() => toggleSelecionado(lead.id)} />
+                <Checkbox checked={selecionados.has(lead.id)} onCheckedChange={() => onToggleSelecionado(lead.id)} />
                 <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{lead.nome}</p>
@@ -142,6 +171,45 @@ export function LeadsSalvosLista({ leads, loading, centro, onAtualizarStatus, on
           </ul>
         )}
       </CardContent>
+
+      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Salvar rota de visita</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              {leadsSelecionados.length} parada(s), na ordem em que foram selecionadas.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nome-rota">Nome</Label>
+              <Input
+                id="nome-rota"
+                placeholder="ex.: Rota zona norte — semana 1"
+                value={nomeRota}
+                onChange={(e) => setNomeRota(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="descricao-rota">Descrição (opcional)</Label>
+              <Textarea
+                id="descricao-rota"
+                placeholder="Observações sobre essa rota..."
+                value={descricaoRota}
+                onChange={(e) => setDescricaoRota(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={salvandoRota}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSalvarRota} disabled={!nomeRota.trim() || salvandoRota}>
+              {salvandoRota ? 'Salvando...' : 'Salvar rota'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

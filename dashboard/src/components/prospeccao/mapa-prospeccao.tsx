@@ -28,6 +28,13 @@ function svgCruz(cor: string, tamanho = 20): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
+/** Mesmo círculo de status, com um anel dourado por fora — indica que o lead está
+ * selecionado pra montar uma rota (modo "selecionar no mapa"). */
+function svgCirculoSelecionado(cor: string, tamanho = 24): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tamanho}" height="${tamanho}"><circle cx="${tamanho / 2}" cy="${tamanho / 2}" r="${tamanho / 2 - 2}" fill="none" stroke="#f59e0b" stroke-width="2.5"/><circle cx="${tamanho / 2}" cy="${tamanho / 2}" r="${tamanho / 2 - 6}" fill="${cor}" stroke="white" stroke-width="2"/></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
 const ICONE_CENTRO = svgCirculo(CORES.centro, 22)
 const ICONE_RESULTADO = svgCirculo(CORES.resultado)
 const ICONE_PONTO_EXTRA = svgCruz(CORES.pontoExtra)
@@ -36,6 +43,12 @@ const ICONES_STATUS: Record<StatusLead, string> = {
   concorrente: svgCirculo(CORES.concorrente),
   lead: svgCirculo(CORES.lead),
   pendente: svgCirculo(CORES.pendente),
+}
+const ICONES_STATUS_SELECIONADO: Record<StatusLead, string> = {
+  cliente: svgCirculoSelecionado(CORES.cliente),
+  concorrente: svgCirculoSelecionado(CORES.concorrente),
+  lead: svgCirculoSelecionado(CORES.lead),
+  pendente: svgCirculoSelecionado(CORES.pendente),
 }
 
 const LABEL_STATUS: Record<StatusLead, string> = {
@@ -96,6 +109,9 @@ interface Props {
   onSalvar: (resultado: ResultadoBusca, status: StatusLead) => void
   onAtualizarStatus: (id: number, status: StatusLead) => void
   onExcluir: (id: number) => void
+  modoSelecionarRota: boolean
+  leadsSelecionadosRota: Set<number>
+  onToggleLeadRota: (id: number) => void
 }
 
 export function MapaProspeccao({
@@ -111,6 +127,9 @@ export function MapaProspeccao({
   onSalvar,
   onAtualizarStatus,
   onExcluir,
+  modoSelecionarRota,
+  leadsSelecionadosRota,
+  onToggleLeadRota,
 }: Props) {
   const [selecionado, setSelecionado] = useState<SelecaoAberta>(null)
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
@@ -145,7 +164,7 @@ export function MapaProspeccao({
         gestureHandling="greedy"
         disableDefaultUI={false}
         onClick={handleClickMapa}
-        style={{ width: '100%', height: '100%', cursor: modoAdicionarPonto ? 'crosshair' : undefined }}
+        style={{ width: '100%', height: '100%', cursor: modoAdicionarPonto || modoSelecionarRota ? 'crosshair' : undefined }}
       >
         <RecentrarMapa centro={centro} />
 
@@ -182,8 +201,14 @@ export function MapaProspeccao({
           <Marker
             key={`lead-${lead.id}`}
             position={{ lat: lead.latitude, lng: lead.longitude }}
-            icon={ICONES_STATUS[lead.status]}
-            onClick={() => setSelecionado({ tipo: 'lead', item: lead })}
+            icon={leadsSelecionadosRota.has(lead.id) ? ICONES_STATUS_SELECIONADO[lead.status] : ICONES_STATUS[lead.status]}
+            onClick={() => {
+              if (modoSelecionarRota) {
+                onToggleLeadRota(lead.id)
+                return
+              }
+              setSelecionado({ tipo: 'lead', item: lead })
+            }}
           />
         ))}
 
