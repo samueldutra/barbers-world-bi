@@ -112,9 +112,14 @@ export default function ProspeccaoPage() {
 
   const handleLimparSelecaoRota = () => setLeadsSelecionadosRota(new Set())
 
-  const handleSalvarRota = async (nome: string, descricao: string | null, leadIds: number[]) => {
+  const handleSalvarRota = async (
+    nome: string,
+    descricao: string | null,
+    leadIds: number[],
+    pontoPartidaEndereco?: string | null
+  ) => {
     try {
-      await salvarRota(nome, leadIds, descricao)
+      await salvarRota(nome, leadIds, descricao, pontoPartidaEndereco)
       toast.success(`Rota "${nome}" salva com ${leadIds.length} parada(s).`)
     } catch (err) {
       console.error('Erro ao salvar rota:', err)
@@ -352,10 +357,12 @@ export default function ProspeccaoPage() {
         rotas={rotas}
         loading={carregandoRotas}
         centro={centro}
+        leads={leads}
         onCarregarParadas={carregarParadas}
         onAtualizarStatusRota={handleAtualizarStatusRota}
         onAtualizarParada={handleAtualizarParada}
         onExcluirRota={handleExcluirRota}
+        onCriarRota={handleSalvarRota}
       />
     </div>
   )

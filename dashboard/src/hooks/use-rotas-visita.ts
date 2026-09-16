@@ -11,6 +11,7 @@ export interface RotaVisita {
   id: number
   nome: string
   descricao: string | null
+  ponto_partida_endereco: string | null
   status: StatusRota
   total_paradas: number
   paradas_visitadas: number
@@ -57,7 +58,7 @@ export function useRotasVisita() {
     carregar()
   }, [carregar])
 
-  const salvar = async (nome: string, leadIds: number[], descricao?: string | null) => {
+  const salvar = async (nome: string, leadIds: number[], descricao?: string | null, pontoPartidaEndereco?: string | null) => {
     const supabase = createClient()
     const { data, error } = await Promise.resolve(
       supabase.rpc('salvar_rota_visita', {
@@ -65,6 +66,7 @@ export function useRotasVisita() {
         p_nome: nome,
         p_lead_ids: leadIds,
         p_descricao: descricao ?? null,
+        p_ponto_partida_endereco: pontoPartidaEndereco ?? null,
       })
     )
     if (error) throw error
