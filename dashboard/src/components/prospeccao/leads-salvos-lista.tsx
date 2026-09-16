@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { montarUrlRota } from '@/lib/google-maps-route'
+import { ordenarPorProximidade } from '@/lib/distancia'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
 
 const LABEL_STATUS: Record<StatusLead, string> = {
@@ -57,6 +58,7 @@ export function LeadsSalvosLista({
   const [dialogAberto, setDialogAberto] = useState(false)
   const [nomeRota, setNomeRota] = useState('')
   const [descricaoRota, setDescricaoRota] = useState('')
+  const [ordenarPorDistancia, setOrdenarPorDistancia] = useState(true)
   const [salvandoRota, setSalvandoRota] = useState(false)
 
   const leadsFiltrados = useMemo(
@@ -74,7 +76,8 @@ export function LeadsSalvosLista({
     if (!nomeRota.trim()) return
     setSalvandoRota(true)
     try {
-      await onSalvarRota(nomeRota.trim(), descricaoRota.trim() || null, leadsSelecionados.map((l) => l.id))
+      const leadsFinal = ordenarPorDistancia ? ordenarPorProximidade(centro, leadsSelecionados) : leadsSelecionados
+      await onSalvarRota(nomeRota.trim(), descricaoRota.trim() || null, leadsFinal.map((l) => l.id))
       setDialogAberto(false)
       setNomeRota('')
       setDescricaoRota('')
@@ -146,6 +149,11 @@ export function LeadsSalvosLista({
                     {[lead.endereco, lead.telefone].filter(Boolean).join(' · ') || 'Sem endereço/telefone'}
                   </p>
                 </div>
+                {lead.cidade && (
+                  <Badge variant="outline" className="shrink-0">
+                    {lead.cidade}
+                  </Badge>
+                )}
                 <Badge
                   variant={VARIANTE_STATUS[lead.status]}
                   className={lead.status === 'pendente' ? CLASSE_BADGE_PENDENTE : undefined}
@@ -178,9 +186,7 @@ export function LeadsSalvosLista({
             <DialogTitle>Salvar rota de visita</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-muted-foreground">
-              {leadsSelecionados.length} parada(s), na ordem em que foram selecionadas.
-            </p>
+            <p className="text-sm text-muted-foreground">{leadsSelecionados.length} parada(s) selecionada(s).</p>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="nome-rota">Nome</Label>
               <Input
@@ -199,6 +205,21 @@ export function LeadsSalvosLista({
                 onChange={(e) => setDescricaoRota(e.target.value)}
               />
             </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="ordenar-distancia"
+                checked={ordenarPorDistancia}
+                onCheckedChange={(v) => setOrdenarPorDistancia(v === true)}
+              />
+              <Label htmlFor="ordenar-distancia" className="text-sm font-normal">
+                Ordenar pela distância entre os pontos (rota mais eficiente)
+              </Label>
+            </div>
+            {!ordenarPorDistancia && (
+              <p className="text-xs text-muted-foreground">
+                Desmarcado: mantém a ordem em que os pontos foram selecionados no mapa/lista.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={salvandoRota}>

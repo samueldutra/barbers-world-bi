@@ -188,7 +188,7 @@ export function RotasSalvasLista({
                                     {parada.nome}
                                   </p>
                                   <p className="truncate text-xs text-muted-foreground">
-                                    {[parada.endereco, parada.telefone].filter(Boolean).join(' · ') || 'Sem endereço/telefone'}
+                                    {[parada.cidade, parada.endereco, parada.telefone].filter(Boolean).join(' · ') || 'Sem endereço/telefone'}
                                   </p>
                                 </div>
                                 {parada.visita_realizada && parada.visitado_em && (

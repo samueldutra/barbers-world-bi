@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS barbers.leads_mapeados (
     nome            TEXT NOT NULL,
     nicho           TEXT,
     endereco        TEXT,
+    cidade          TEXT, -- vem estruturado do Google Places (addressComponents, tipo "locality"), não extraído do endereco em texto livre
     telefone        TEXT,
     latitude        DOUBLE PRECISION NOT NULL,
     longitude       DOUBLE PRECISION NOT NULL,
@@ -49,6 +50,10 @@ CREATE TABLE IF NOT EXISTS barbers.leads_mapeados (
     criado_em       TIMESTAMPTZ NOT NULL DEFAULT now(),
     atualizado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- CREATE TABLE IF NOT EXISTS não altera uma tabela que já existe em produção — ALTER
+-- explícito e idempotente pra quem já tem leads salvos sem essa coluna.
+ALTER TABLE barbers.leads_mapeados ADD COLUMN IF NOT EXISTS cidade TEXT;
 
 -- Índice único parcial: só aplica dedupe quando o lead veio de uma fonte externa
 -- (origem_tipo/origem_id preenchidos). Permite múltiplos leads manuais com esses campos
@@ -74,6 +79,7 @@ ALTER TABLE barbers.leads_mapeados ADD CONSTRAINT leads_mapeados_status_check
 -- assinatura.
 DROP FUNCTION IF EXISTS obter_leads_mapeados(TEXT, TEXT);
 DROP FUNCTION IF EXISTS salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, BIGINT, TEXT, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
 
 
 -- Lista os leads salvos, opcionalmente filtrado por status.
@@ -88,6 +94,7 @@ RETURNS TABLE(
     nome TEXT,
     nicho TEXT,
     endereco TEXT,
+    cidade TEXT,
     telefone TEXT,
     latitude DOUBLE PRECISION,
     longitude DOUBLE PRECISION,
@@ -104,7 +111,7 @@ DECLARE
     v_sql TEXT;
 BEGIN
     v_sql := format('
-        SELECT id, origem_tipo, origem_id, nome, nicho, endereco, telefone, latitude, longitude,
+        SELECT id, origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude,
                status, observacoes, criado_em, atualizado_em
         FROM %I.leads_mapeados
         WHERE (%L::TEXT IS NULL OR status = %L)
@@ -132,7 +139,8 @@ CREATE OR REPLACE FUNCTION salvar_lead_mapeado(
     p_endereco TEXT DEFAULT NULL,
     p_telefone TEXT DEFAULT NULL,
     p_status TEXT DEFAULT 'lead',
-    p_observacoes TEXT DEFAULT NULL
+    p_observacoes TEXT DEFAULT NULL,
+    p_cidade TEXT DEFAULT NULL
 )
 RETURNS BIGINT
 LANGUAGE plpgsql
@@ -149,26 +157,27 @@ BEGIN
     IF p_origem_tipo IS NOT NULL AND p_origem_id IS NOT NULL THEN
         v_sql := format('
             INSERT INTO %I.leads_mapeados
-                (origem_tipo, origem_id, nome, nicho, endereco, telefone, latitude, longitude, status, observacoes, criado_por)
-            VALUES (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, auth.uid())
+                (origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude, status, observacoes, criado_por)
+            VALUES (%L, %L, %L, %L, %L, %L, %L, %L, %L, %L, %L, auth.uid())
             ON CONFLICT (origem_tipo, origem_id) WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL DO UPDATE SET
                 nome = EXCLUDED.nome,
                 nicho = COALESCE(EXCLUDED.nicho, %I.leads_mapeados.nicho),
                 endereco = COALESCE(EXCLUDED.endereco, %I.leads_mapeados.endereco),
+                cidade = COALESCE(EXCLUDED.cidade, %I.leads_mapeados.cidade),
                 telefone = COALESCE(EXCLUDED.telefone, %I.leads_mapeados.telefone),
                 status = EXCLUDED.status,
                 atualizado_em = now()
             RETURNING id
-        ', p_schema_name, p_origem_tipo, p_origem_id, p_nome, p_nicho, p_endereco, p_telefone,
+        ', p_schema_name, p_origem_tipo, p_origem_id, p_nome, p_nicho, p_endereco, p_cidade, p_telefone,
            p_latitude, p_longitude, v_status, p_observacoes,
-           p_schema_name, p_schema_name, p_schema_name);
+           p_schema_name, p_schema_name, p_schema_name, p_schema_name);
     ELSE
         v_sql := format('
             INSERT INTO %I.leads_mapeados
-                (nome, nicho, endereco, telefone, latitude, longitude, status, observacoes, criado_por)
-            VALUES (%L, %L, %L, %L, %L, %L, %L, %L, auth.uid())
+                (nome, nicho, endereco, cidade, telefone, latitude, longitude, status, observacoes, criado_por)
+            VALUES (%L, %L, %L, %L, %L, %L, %L, %L, %L, auth.uid())
             RETURNING id
-        ', p_schema_name, p_nome, p_nicho, p_endereco, p_telefone, p_latitude, p_longitude, v_status, p_observacoes);
+        ', p_schema_name, p_nome, p_nicho, p_endereco, p_cidade, p_telefone, p_latitude, p_longitude, v_status, p_observacoes);
     END IF;
 
     EXECUTE v_sql INTO v_id;
@@ -176,14 +185,15 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
 
--- Salva em lote os resultados de uma busca como 'pendente' (a classificar), sem tocar em
--- quem já foi salvo antes (ON CONFLICT DO NOTHING — preserva status/observações de quem já
--- foi classificado). Chamada pelo server da busca (src/app/api/prospeccao/buscar), não pelo
--- cliente. p_leads: array JSON de objetos {origemTipo, origemId, nome, nicho, endereco,
--- telefone, latitude, longitude}. Retorna quantos leads foram realmente inseridos (novos).
+-- Salva em lote os resultados de uma busca como 'pendente' (a classificar). Pra quem já foi
+-- salvo antes, só backfilla a cidade se ainda estiver NULL (ex.: lead salvo antes dessa
+-- coluna existir) — não mexe em status/observações/nome de quem já foi classificado. Chamada
+-- pelo server da busca (src/app/api/prospeccao/buscar), não pelo cliente. p_leads: array
+-- JSON de objetos {origemTipo, origemId, nome, nicho, endereco, cidade, telefone, latitude,
+-- longitude}. Retorna quantos leads foram realmente inseridos (novos).
 CREATE OR REPLACE FUNCTION salvar_leads_novos(
     p_schema_name TEXT,
     p_leads JSONB
@@ -197,6 +207,8 @@ DECLARE
     v_sql TEXT;
     v_count INT;
 BEGIN
+    -- Passo 1: insere só quem é realmente novo (ON CONFLICT DO NOTHING) — o ROW_COUNT daqui
+    -- vira o retorno da função, então não pode contar update de quem já existia.
     v_sql := format('
         WITH dados AS (
             SELECT
@@ -205,14 +217,15 @@ BEGIN
                 item->>''nome''                             AS nome,
                 item->>''nicho''                            AS nicho,
                 item->>''endereco''                         AS endereco,
+                item->>''cidade''                           AS cidade,
                 item->>''telefone''                         AS telefone,
                 (item->>''latitude'')::DOUBLE PRECISION    AS latitude,
                 (item->>''longitude'')::DOUBLE PRECISION   AS longitude
             FROM jsonb_array_elements(%L::JSONB) AS item
         )
         INSERT INTO %I.leads_mapeados
-            (origem_tipo, origem_id, nome, nicho, endereco, telefone, latitude, longitude, status, criado_por)
-        SELECT origem_tipo, origem_id, nome, nicho, endereco, telefone, latitude, longitude, ''pendente'', auth.uid()
+            (origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude, status, criado_por)
+        SELECT origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude, ''pendente'', auth.uid()
         FROM dados
         WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL
         ON CONFLICT (origem_tipo, origem_id) WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL DO NOTHING
@@ -220,6 +233,26 @@ BEGIN
 
     EXECUTE v_sql;
     GET DIAGNOSTICS v_count = ROW_COUNT;
+
+    -- Passo 2: backfill de cidade em quem já existia sem essa coluna preenchida (lead salvo
+    -- antes dela existir) — separado do INSERT de propósito, pra não contar como "novo".
+    v_sql := format('
+        WITH dados AS (
+            SELECT
+                item->>''origemTipo'' AS origem_tipo,
+                item->>''origemId''   AS origem_id,
+                item->>''cidade''     AS cidade
+            FROM jsonb_array_elements(%L::JSONB) AS item
+        )
+        UPDATE %I.leads_mapeados l
+        SET cidade = d.cidade
+        FROM dados d
+        WHERE l.origem_tipo = d.origem_tipo AND l.origem_id = d.origem_id
+          AND l.cidade IS NULL AND d.cidade IS NOT NULL
+    ', p_leads, p_schema_name);
+
+    EXECUTE v_sql;
+
     RETURN v_count;
 END;
 $$;

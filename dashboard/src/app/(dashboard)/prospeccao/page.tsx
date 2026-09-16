@@ -174,6 +174,7 @@ export default function ProspeccaoPage() {
         origemId: resultado.origemId,
         nicho,
         endereco: resultado.endereco,
+        cidade: resultado.cidade,
         telefone: resultado.telefone,
         status,
       })
