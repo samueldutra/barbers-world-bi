@@ -341,18 +341,6 @@ export default function ProspeccaoPage() {
         />
       </div>
 
-      <LeadsSalvosLista
-        leads={leads}
-        loading={carregandoLeads}
-        centro={centro}
-        selecionados={leadsSelecionadosRota}
-        onToggleSelecionado={handleToggleLeadRota}
-        onLimparSelecao={handleLimparSelecaoRota}
-        onSalvarRota={handleSalvarRota}
-        onAtualizarStatus={handleAtualizarStatus}
-        onExcluir={handleExcluir}
-      />
-
       <RotasSalvasLista
         rotas={rotas}
         loading={carregandoRotas}
@@ -363,6 +351,18 @@ export default function ProspeccaoPage() {
         onAtualizarParada={handleAtualizarParada}
         onExcluirRota={handleExcluirRota}
         onCriarRota={handleSalvarRota}
+      />
+
+      <LeadsSalvosLista
+        leads={leads}
+        loading={carregandoLeads}
+        centro={centro}
+        selecionados={leadsSelecionadosRota}
+        onToggleSelecionado={handleToggleLeadRota}
+        onLimparSelecao={handleLimparSelecaoRota}
+        onSalvarRota={handleSalvarRota}
+        onAtualizarStatus={handleAtualizarStatus}
+        onExcluir={handleExcluir}
       />
     </div>
   )
