@@ -164,9 +164,13 @@ BEGIN
         LEFT JOIN %I.contatos c ON c.id_contato = pcg.id_contato
         WHERE
             CASE
+                -- Checkbox desmarcado sempre exige pedido > 0 no período, mesmo com o
+                -- filtro de última compra ativo (senão o checkbox vira "decorativo" quando
+                -- combinado com ele, já que cliente sumido normalmente tem 0 pedido no
+                -- período mesmo).
+                WHEN NOT %L::BOOLEAN THEN ap.total_pedidos IS NOT NULL
                 WHEN %L::DATE IS NOT NULL THEN pcg.ultima_compra <= %L::DATE
-                WHEN %L::BOOLEAN THEN TRUE
-                ELSE ap.total_pedidos IS NOT NULL
+                ELSE TRUE
             END
         ORDER BY %I %s NULLS LAST
         LIMIT %L OFFSET %L
@@ -178,8 +182,8 @@ BEGIN
        p_data_inicial, p_data_final,
        p_schema_name,
        p_schema_name,
-       p_ultima_compra_antes_de, p_ultima_compra_antes_de,
        p_incluir_sem_venda,
+       p_ultima_compra_antes_de, p_ultima_compra_antes_de,
        v_ordenar_coluna, v_ordenar_direcao, p_tamanho_pagina, v_offset);
 
     RETURN QUERY EXECUTE v_sql;
