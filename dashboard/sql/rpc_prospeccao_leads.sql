@@ -293,6 +293,35 @@ $$;
 GRANT EXECUTE ON FUNCTION atualizar_status_lead_mapeado(TEXT, BIGINT, TEXT, TEXT) TO authenticated;
 
 
+-- Atualiza só a cidade de 1 lead — usada pelo backfill (script que geocodifica
+-- reversamente lat/lon dos leads salvos antes da coluna "cidade" existir, sem precisar
+-- buscar de novo no Google Places) e serve também pra correção manual pontual.
+CREATE OR REPLACE FUNCTION atualizar_cidade_lead_mapeado(
+    p_schema_name TEXT,
+    p_id BIGINT,
+    p_cidade TEXT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_sql TEXT;
+BEGIN
+    v_sql := format('
+        UPDATE %I.leads_mapeados
+        SET cidade = %L, atualizado_em = now()
+        WHERE id = %L
+    ', p_schema_name, p_cidade, p_id);
+
+    EXECUTE v_sql;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION atualizar_cidade_lead_mapeado(TEXT, BIGINT, TEXT) TO authenticated;
+
+
 CREATE OR REPLACE FUNCTION excluir_lead_mapeado(p_schema_name TEXT, p_id BIGINT)
 RETURNS VOID
 LANGUAGE plpgsql
