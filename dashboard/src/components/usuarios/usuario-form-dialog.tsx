@@ -90,7 +90,7 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
         // Dispara o email de "definir senha" — mesmo fluxo de "Esqueci minha senha".
         const supabase = createClient()
         const { error } = await supabase.auth.resetPasswordForEmail(criado.email, {
-          redirectTo: `${window.location.origin}/redefinir-senha`,
+          redirectTo: `${window.location.origin}/api/auth/recovery`,
         })
         if (error) {
           toast.warning('Usuário criado, mas não consegui enviar o email de acesso. Peça pra ele usar "Esqueci minha senha" no login.')
