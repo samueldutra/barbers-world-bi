@@ -210,6 +210,8 @@ export function RotasSalvasLista({
                                     endereco: p.endereco,
                                     cidade: p.cidade,
                                     telefone: p.telefone,
+                                    latitude: p.latitude,
+                                    longitude: p.longitude,
                                   })),
                                   urlGoogleMaps: montarUrlRota(rota.ponto_partida_endereco ?? centro, paradas),
                                 })

@@ -4,6 +4,15 @@ interface ParadaPDF {
   endereco: string | null
   cidade: string | null
   telefone: string | null
+  latitude: number
+  longitude: number
+}
+
+/** Link do Google Maps pra um ponto específico (não a rota inteira) — usa lat/lon em vez do
+ * endereço em texto porque sempre existe e é preciso, mesmo quando o endereço vem incompleto
+ * ou mal formatado do Google Places. */
+function montarUrlPonto(lat: number, lon: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`
 }
 
 interface ExportarRotaPDFInput {
@@ -73,7 +82,15 @@ export async function exportarRotaPDF({ nomeRota, descricao, pontoPartida, parad
       doc.text(linhas, MARGEM_ESQUERDA, y)
       y += linhas.length * 4.5
     }
-    y += 4
+
+    quebrarPagina(5)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(37, 99, 235)
+    doc.textWithLink('Abrir endereço no Google Maps', MARGEM_ESQUERDA, y, {
+      url: montarUrlPonto(parada.latitude, parada.longitude),
+    })
+    y += 9
   }
 
   quebrarPagina(10)
@@ -81,7 +98,9 @@ export async function exportarRotaPDF({ nomeRota, descricao, pontoPartida, parad
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(37, 99, 235)
-  doc.textWithLink('Abrir rota no Google Maps', MARGEM_ESQUERDA, y, { url: urlGoogleMaps })
+  doc.textWithLink('Abrir rota completa no Google Maps (todas as paradas em sequência)', MARGEM_ESQUERDA, y, {
+    url: urlGoogleMaps,
+  })
 
   const nomeArquivo = `${nomeRota.replace(/[^\w\-]+/g, '_')}.pdf`
   doc.save(nomeArquivo)
