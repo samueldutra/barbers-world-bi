@@ -29,4 +29,11 @@ ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS data_sincronizacao_listage
 ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS id_produto_pai BIGINT;
 ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS formato VARCHAR(1);
 
+-- O Bling não expõe data de alteração do produto (nem da listagem nem do detalhe), então a
+-- mudança de preço é detectada na carga: quando o preço que chega difere do gravado, guarda
+-- o valor antigo e carimba a hora. Precisão = intervalo entre syncs (cron de hora em hora).
+-- Sem retroativo: só registra mudanças a partir da primeira listagem.
+ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS preco_anterior DECIMAL(15,2);
+ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS data_alteracao_preco TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_produtos_situacao ON barbers.produtos (situacao);

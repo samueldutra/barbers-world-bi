@@ -19,7 +19,7 @@ BEGIN
     END IF;
 
     v_sql := format('
-        INSERT INTO %I.produtos (
+        INSERT INTO %I.produtos AS alvo (
             id_produto, codigo, nome, marca, categoria_id, categoria_descricao,
             situacao, imagem_url, preco, data_sincronizacao
         )
@@ -44,6 +44,13 @@ BEGIN
             categoria_descricao = EXCLUDED.categoria_descricao,
             situacao = EXCLUDED.situacao,
             imagem_url = EXCLUDED.imagem_url,
+            -- Mesma detecção de mudança de preço da carga da listagem (ver lá).
+            preco_anterior = CASE WHEN alvo.data_sincronizacao_listagem IS NOT NULL
+                                   AND alvo.preco IS DISTINCT FROM EXCLUDED.preco
+                                  THEN alvo.preco ELSE alvo.preco_anterior END,
+            data_alteracao_preco = CASE WHEN alvo.data_sincronizacao_listagem IS NOT NULL
+                                         AND alvo.preco IS DISTINCT FROM EXCLUDED.preco
+                                        THEN EXCLUDED.data_sincronizacao ELSE alvo.data_alteracao_preco END,
             preco = EXCLUDED.preco,
             data_sincronizacao = EXCLUDED.data_sincronizacao
     ', p_schema_name);
@@ -121,7 +128,7 @@ BEGIN
     END IF;
 
     v_sql := format('
-        INSERT INTO %I.produtos (
+        INSERT INTO %I.produtos AS alvo (
             id_produto, id_produto_pai, codigo, nome, formato, situacao, imagem_url, preco,
             data_sincronizacao_listagem
         )
@@ -144,6 +151,16 @@ BEGIN
             formato = EXCLUDED.formato,
             situacao = EXCLUDED.situacao,
             imagem_url = EXCLUDED.imagem_url,
+            -- Detecção de mudança de preço (o Bling não informa data de alteração). Só
+            -- compara quando o preço gravado já veio de uma listagem anterior: na primeira
+            -- listagem o preço antigo pode ser do detalhe de até 30 dias atrás, e carimbar
+            -- "agora" daria uma data errada.
+            preco_anterior = CASE WHEN alvo.data_sincronizacao_listagem IS NOT NULL
+                                   AND alvo.preco IS DISTINCT FROM EXCLUDED.preco
+                                  THEN alvo.preco ELSE alvo.preco_anterior END,
+            data_alteracao_preco = CASE WHEN alvo.data_sincronizacao_listagem IS NOT NULL
+                                         AND alvo.preco IS DISTINCT FROM EXCLUDED.preco
+                                        THEN EXCLUDED.data_sincronizacao_listagem ELSE alvo.data_alteracao_preco END,
             preco = EXCLUDED.preco,
             data_sincronizacao_listagem = EXCLUDED.data_sincronizacao_listagem
     ', p_schema_name);

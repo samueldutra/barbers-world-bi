@@ -1,7 +1,8 @@
 -- Lista de preços por produto: preço atual de cadastro no Bling (produtos.preco, mantido em
 -- dia pela listagem de ativos do sync-produtos-bling.py) x preço praticado na última venda
 -- válida (pedidos_vendas.valor_unitario_item do pedido mais recente, mesmas situações de
--- situacoes_validas_faturamento() usadas no resto do BI).
+-- situacoes_validas_faturamento() usadas no resto do BI), mais o preço anterior e a data da
+-- última mudança de preço (detectadas pelo sync — o Bling não expõe essa data).
 --
 -- Base = dimensão produtos (catálogo), não as vendas: produto ativo que nunca vendeu
 -- aparece com ultimo_preco_venda NULL. Paginado server-side (o Supabase corta RPC em ~1000
@@ -12,7 +13,7 @@ CREATE OR REPLACE FUNCTION obter_produtos_precos(
     p_marca TEXT DEFAULT NULL,        -- NULL = "Todos"; valor deve bater com obter_marcas_produtos()
     p_categoria TEXT DEFAULT NULL,    -- NULL = "Todos"; valor deve bater com obter_categorias_produtos()
     p_somente_ativos BOOLEAN DEFAULT TRUE,
-    p_ordenar_por TEXT DEFAULT 'nome', -- 'nome' | 'preco_atual' | 'ultimo_preco_venda' | 'data_ultima_venda' | 'diferenca_percentual'
+    p_ordenar_por TEXT DEFAULT 'nome', -- 'nome' | 'preco_atual' | 'data_alteracao_preco' | 'ultimo_preco_venda' | 'data_ultima_venda' | 'diferenca_percentual'
     p_ordenar_direcao TEXT DEFAULT 'asc',
     p_pagina INTEGER DEFAULT 1,
     p_tamanho_pagina INTEGER DEFAULT 50
@@ -26,6 +27,8 @@ RETURNS TABLE(
     situacao TEXT,
     imagem_url TEXT,
     preco_atual NUMERIC,
+    preco_anterior NUMERIC,                 -- NULL = sem mudança de preço registrada
+    data_alteracao_preco TIMESTAMPTZ,
     ultimo_preco_venda NUMERIC,             -- valor unitário do item no pedido (antes do desconto do item)
     ultimo_desconto_item_percentual NUMERIC,
     data_ultima_venda DATE,
@@ -46,6 +49,7 @@ DECLARE
 BEGIN
     v_ordenar_coluna := CASE p_ordenar_por
         WHEN 'preco_atual' THEN 'preco_atual'
+        WHEN 'data_alteracao_preco' THEN 'data_alteracao_preco'
         WHEN 'ultimo_preco_venda' THEN 'ultimo_preco_venda'
         WHEN 'data_ultima_venda' THEN 'data_ultima_venda'
         WHEN 'diferenca_percentual' THEN 'diferenca_percentual'
@@ -78,6 +82,8 @@ BEGIN
                 p.situacao::TEXT AS situacao,
                 p.imagem_url::TEXT AS imagem_url,
                 p.preco::NUMERIC AS preco_atual,
+                p.preco_anterior::NUMERIC AS preco_anterior,
+                p.data_alteracao_preco,
                 uv.valor_unitario_item::NUMERIC AS ultimo_preco_venda,
                 uv.desconto_item_percentual::NUMERIC AS ultimo_desconto_item_percentual,
                 uv.data AS data_ultima_venda,
