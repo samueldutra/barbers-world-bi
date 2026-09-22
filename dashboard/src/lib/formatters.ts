@@ -55,3 +55,18 @@ export function formatarDias(dias: number): string {
 export function formatarDataHora(data: string): string {
   return new Date(data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+
+/** Lê um preço digitado em pt-BR ("1.234,56", "12,5") ou com ponto decimal ("12.50").
+ * Devolve null se não for um número positivo. */
+export function parsePreco(texto: string): number | null {
+  const limpo = texto.trim().replace(/^R\$\s*/, '')
+  if (!limpo) return null
+  const normalizado = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo
+  const valor = Number(normalizado)
+  return Number.isFinite(valor) && valor > 0 ? Math.round(valor * 100) / 100 : null
+}
+
+/** Preço no formato de edição (sem "R$", vírgula decimal) — o inverso de parsePreco. */
+export function formatarPrecoEdicao(valor: number): string {
+  return valor.toFixed(2).replace('.', ',')
+}

@@ -3,7 +3,7 @@
 import * as React from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { IconDashboard, IconUsers, IconReportAnalytics, IconUsersGroup, IconMapPin } from "@tabler/icons-react"
+import { IconDashboard, IconUsers, IconReportAnalytics, IconUsersGroup, IconMapPin, IconTags } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -38,6 +38,12 @@ const navMain = [
     title: "Relatório de Vendas por Cliente",
     url: "/relatorio-clientes",
     icon: IconUsersGroup,
+  },
+  {
+    id: "conferencia-precos",
+    title: "Conferência de Preços",
+    url: "/conferencia-precos",
+    icon: IconTags,
   },
   {
     id: "prospeccao",
