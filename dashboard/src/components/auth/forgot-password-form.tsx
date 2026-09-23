@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -20,7 +19,6 @@ export function ForgotPasswordForm() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
-  const supabase = createClient()
 
   const getResetPasswordErrorMessage = (authError: unknown): string => {
     const errorMessage =
@@ -89,11 +87,19 @@ export function ForgotPasswordForm() {
     setError(null)
     setSuccess(false)
 
-    const { error } = await supabase.auth
-      .resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/redefinir-senha`,
+    // Pelo servidor (fluxo implícito): o link funciona mesmo se o email for aberto em outro
+    // aparelho — ver src/lib/supabase/links-acesso.ts.
+    const error = await fetch('/api/auth/recuperar-senha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim() }),
+    })
+      .then(async (resp) => {
+        if (resp.ok) return null
+        const corpo = await resp.json().catch(() => null)
+        return { status: resp.status, message: corpo?.error ?? `Erro ${resp.status}` }
       })
-      .catch((caughtError) => ({ data: null, error: caughtError }))
+      .catch((caughtError) => caughtError)
 
     if (error) {
       setError(getResetPasswordErrorMessage(error))

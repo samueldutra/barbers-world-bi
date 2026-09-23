@@ -1,30 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { randomBytes } from 'crypto'
-import { createClient } from '@/lib/supabase/server'
+import { exigirSuperAdmin } from '@/lib/usuarios/exigir-super-admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MODULE_IDS } from '@/types/modules'
+import { mensagemErroEmail, urlDefinirSenha } from '@/lib/supabase/links-acesso'
 
 export const dynamic = 'force-dynamic'
-
-/** Confere que quem está chamando é super admin. Devolve a resposta de erro pronta (ou
- * null se pode seguir) — evita repetir a checagem em cada handler. */
-async function exigirSuperAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return { erro: NextResponse.json({ error: 'Não autenticado.' }, { status: 401 }) }
-  }
-  const { data: perfil } = await supabase
-    .from('user_profiles')
-    .select('is_superadmin')
-    .eq('id', user.id)
-    .single()
-  if (!perfil?.is_superadmin) {
-    return { erro: NextResponse.json({ error: 'Só o super admin pode gerenciar usuários.' }, { status: 403 }) }
-  }
-  return { erro: null, user }
-}
 
 export async function GET() {
   const { erro } = await exigirSuperAdmin()
@@ -45,6 +26,16 @@ export async function GET() {
   }
 
   const emailPorId = new Map(authData.users.map((u) => [u.id, u.email ?? '']))
+  // Situação do acesso — mostra quem ainda não entrou pela primeira vez (convite pendente).
+  const acessoPorId = new Map(
+    authData.users.map((u) => [
+      u.id,
+      {
+        ultimo_acesso: u.last_sign_in_at ?? null,
+        convite_pendente: !u.email_confirmed_at || !u.last_sign_in_at,
+      },
+    ])
+  )
   const modulosPorId = new Map<string, string[]>()
   for (const m of modulos ?? []) {
     const lista = modulosPorId.get(m.user_id) ?? []
@@ -59,6 +50,7 @@ export async function GET() {
     is_superadmin: p.is_superadmin,
     is_active: p.is_active,
     created_at: p.created_at,
+    ...acessoPorId.get(p.id),
     modules: p.is_superadmin ? MODULE_IDS : (modulosPorId.get(p.id) ?? []),
   }))
 
@@ -72,6 +64,20 @@ const criarUsuarioSchema = z.object({
   modules: z.array(z.string()),
 })
 
+function emailJaCadastrado(err: { message?: string; code?: string } | null): boolean {
+  const msg = err?.message?.toLowerCase() ?? ''
+  return err?.code === 'email_exists' || msg.includes('already') || msg.includes('registered')
+}
+
+/**
+ * Cria o usuário e manda o convite pra ele definir a senha.
+ *
+ * O convite sai daqui (servidor, fluxo implícito) — antes era disparado pelo navegador do
+ * super admin em fluxo PKCE, e o link só funcionava no navegador do próprio admin (ver
+ * src/lib/supabase/links-acesso.ts). Se o Supabase não conseguir mandar o email (limite de
+ * envio, SMTP), o usuário é criado do mesmo jeito e a resposta traz um link de acesso pro
+ * admin enviar por outro canal.
+ */
 export async function POST(request: NextRequest) {
   const { erro } = await exigirSuperAdmin()
   if (erro) return erro
@@ -98,49 +104,59 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = createAdminClient()
+  const redirectTo = urlDefinirSenha(request)
 
-  // Senha inicial aleatória e descartada — o usuário define a própria pelo fluxo de
-  // "Esqueci minha senha" (o convite dispara esse email logo depois de criar a conta).
-  const senhaInicial = randomBytes(24).toString('base64url')
+  let novoId: string
+  let emailEnviado = true
+  let erroEmail: string | null = null
+  let linkAcesso: string | null = null
 
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email,
-    password: senhaInicial,
-    email_confirm: true,
-    user_metadata: { full_name },
-  })
-
-  if (authError) {
-    const msg = authError.message?.toLowerCase() ?? ''
-    if (msg.includes('already') || msg.includes('registered') || msg.includes('duplicate')) {
+  const convite = await admin.auth.admin.inviteUserByEmail(email, { data: { full_name }, redirectTo })
+  if (convite.error) {
+    if (emailJaCadastrado(convite.error)) {
       return NextResponse.json({ error: 'Já existe uma conta com esse email.' }, { status: 400 })
     }
-    console.error('Erro ao criar usuário (auth):', authError)
-    return NextResponse.json({ error: 'Não foi possível criar o usuário.' }, { status: 500 })
+    // Email não saiu: cria pelo generateLink (não envia nada) e devolve o link pro admin.
+    console.warn('[usuarios] Convite por email falhou, gerando link manual:', convite.error.message)
+    emailEnviado = false
+    erroEmail = mensagemErroEmail(convite.error)
+    const gerado = await admin.auth.admin.generateLink({
+      type: 'invite',
+      email,
+      options: { data: { full_name }, redirectTo },
+    })
+    if (gerado.error || !gerado.data.user) {
+      if (emailJaCadastrado(gerado.error)) {
+        return NextResponse.json({ error: 'Já existe uma conta com esse email.' }, { status: 400 })
+      }
+      console.error('[usuarios] Erro ao criar usuário (generateLink):', gerado.error)
+      return NextResponse.json({ error: 'Não foi possível criar o usuário.' }, { status: 500 })
+    }
+    novoId = gerado.data.user.id
+    linkAcesso = gerado.data.properties.action_link
+  } else {
+    novoId = convite.data.user.id
   }
 
-  const novoId = authData.user.id
+  // Criação é tudo-ou-nada: se perfil ou módulos falharem, apaga a conta recém-criada pra
+  // não sobrar usuário "meio cadastrado" (sem módulos, sem acesso a nada).
+  const desfazer = async (motivo: string, detalhe: unknown) => {
+    console.error(`[usuarios] ${motivo}:`, detalhe)
+    await admin.auth.admin.deleteUser(novoId)
+    return NextResponse.json({ error: 'Não foi possível criar o usuário.' }, { status: 500 })
+  }
 
   const { error: perfilError } = await admin
     .from('user_profiles')
     .upsert({ id: novoId, full_name, is_superadmin, is_active: true }, { onConflict: 'id' })
-
-  if (perfilError) {
-    console.error('Erro ao gravar perfil do novo usuário:', perfilError)
-    await admin.auth.admin.deleteUser(novoId)
-    return NextResponse.json({ error: 'Não foi possível criar o usuário.' }, { status: 500 })
-  }
+  if (perfilError) return desfazer('Erro ao gravar perfil do novo usuário', perfilError)
 
   if (!is_superadmin && modules.length > 0) {
     const { error: modulosError } = await admin
       .from('user_authorized_modules')
       .insert(modules.map((module) => ({ user_id: novoId, module })))
-
-    if (modulosError) {
-      console.error('Erro ao gravar módulos do novo usuário:', modulosError)
-      // Não desfaz a criação por causa disso — o super admin pode ajustar os módulos depois.
-    }
+    if (modulosError) return desfazer('Erro ao gravar módulos do novo usuário', modulosError)
   }
 
-  return NextResponse.json({ id: novoId, email })
+  return NextResponse.json({ id: novoId, email, emailEnviado, erroEmail, linkAcesso })
 }

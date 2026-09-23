@@ -35,10 +35,10 @@ export default function ResetPasswordPage() {
                 <Image src="/logo.svg" alt="Barbers World" className="h-36 w-36" width={280} height={280} />
               </div>
               <h1 className="w-full text-2xl font-semibold leading-tight tracking-tight">
-                Redefinir senha
+                Definir senha
               </h1>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Crie uma nova senha segura para sua conta.
+                Crie uma senha segura para acessar sua conta.
               </p>
             </div>
             <ResetPasswordFormWrapper />

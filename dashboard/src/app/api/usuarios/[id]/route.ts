@@ -1,27 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { exigirSuperAdmin } from '@/lib/usuarios/exigir-super-admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MODULE_IDS } from '@/types/modules'
 
 export const dynamic = 'force-dynamic'
-
-async function exigirSuperAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return { erro: NextResponse.json({ error: 'Não autenticado.' }, { status: 401 }) }
-  }
-  const { data: perfil } = await supabase
-    .from('user_profiles')
-    .select('is_superadmin')
-    .eq('id', user.id)
-    .single()
-  if (!perfil?.is_superadmin) {
-    return { erro: NextResponse.json({ error: 'Só o super admin pode gerenciar usuários.' }, { status: 403 }) }
-  }
-  return { erro: null, user }
-}
 
 /** true se `id` for o único super admin ativo — usado pra bloquear ações que deixariam
  * o sistema sem ninguém pra gerenciar usuários. */

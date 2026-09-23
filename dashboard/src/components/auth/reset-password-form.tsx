@@ -25,52 +25,86 @@ export function ResetPasswordForm() {
   const [status, setStatus] = useState<FormStatus>('validating')
   const [error, setError] = useState<string | null>(null)
   const [countdown, setCountdown] = useState(3)
+  // Convite (primeiro acesso) x redefinição — só muda o texto da tela.
+  const [ehConvite, setEhConvite] = useState(false)
 
   const router = useRouter()
   const supabase = createClient()
 
   const passwordsMatch = password.trim() === confirmPassword.trim() && confirmPassword.length > 0
 
-  // Check for active session on mount
+  // Valida o link ao abrir a página. O link pode chegar em três formatos:
+  // 1) #access_token=...&refresh_token=...&type=invite|recovery — fluxo implícito, usado pelo
+  //    convite de usuário e pelo "Esqueci minha senha" (ambos saem do servidor, ver
+  //    lib/supabase/links-acesso.ts). O client do navegador é PKCE e REJEITA esse formato
+  //    ("Not a valid PKCE flow url"), então a sessão é montada aqui com setSession.
+  // 2) #error=...&error_code=otp_expired — link expirado/já usado.
+  // 3) ?code=... — PKCE (links antigos); o próprio client troca o code se o link foi aberto
+  //    no mesmo navegador que pediu. Em outro navegador não há como concluir.
   useEffect(() => {
     let isMounted = true
 
-    const checkSession = async () => {
-      console.log('[ResetPassword] Checking for active session...')
+    const limparUrl = () => window.history.replaceState(null, '', window.location.pathname)
 
-      await new Promise(resolve => setTimeout(resolve, 500))
+    const validarLink = async () => {
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+      const query = new URLSearchParams(window.location.search)
+      const tipo = hash.get('type') ?? query.get('type')
+      if (tipo === 'invite' || tipo === 'signup') setEhConvite(true)
 
+      const erroLink = hash.get('error_description') ?? query.get('error_description')
+      if (erroLink) {
+        limparUrl()
+        const codigo = hash.get('error_code') ?? query.get('error_code')
+        setError(
+          codigo === 'otp_expired' || /expired|invalid/i.test(erroLink)
+            ? 'Este link expirou ou já foi usado. Peça um novo link ao administrador (ou use "Esqueci minha senha").'
+            : erroLink.replace(/\+/g, ' ')
+        )
+        setStatus('error')
+        return
+      }
+
+      const accessToken = hash.get('access_token')
+      const refreshToken = hash.get('refresh_token')
+      if (accessToken && refreshToken) {
+        const { error: sessaoError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        })
+        limparUrl()
+        if (!isMounted) return
+        if (sessaoError) {
+          console.error('[ResetPassword] Erro ao abrir sessão do link:', sessaoError)
+          setError('Não foi possível validar este link. Peça um novo link de acesso.')
+          setStatus('error')
+        } else {
+          setStatus('ready')
+        }
+        return
+      }
+
+      const temCode = query.has('code')
       const { data: { session } } = await supabase.auth.getSession()
-
+      if (temCode) limparUrl()
       if (!isMounted) return
 
       if (session) {
-        console.log('[ResetPassword] Session found, ready for password update')
         setStatus('ready')
       } else {
-        console.log('[ResetPassword] No session found')
-        setError('Sessão não encontrada. Por favor, solicite um novo link de recuperação.')
+        setError(
+          temCode
+            ? 'Este link foi aberto em um navegador diferente do que pediu a troca de senha. Peça um novo link — ele funciona em qualquer aparelho.'
+            : 'Sessão não encontrada. Por favor, solicite um novo link de recuperação.'
+        )
         setStatus('error')
       }
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[ResetPassword] Auth state changed:', event, !!session)
-
-      if (!isMounted) return
-
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
-        if (session) {
-          setStatus('ready')
-        }
-      }
-    })
-
-    checkSession()
+    validarLink()
 
     return () => {
       isMounted = false
-      subscription.unsubscribe()
     }
   }, [supabase.auth])
 
@@ -80,10 +114,10 @@ export function ResetPasswordForm() {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000)
       return () => clearTimeout(timer)
     } else if (status === 'success' && countdown === 0) {
-      router.push('/login?message=Senha redefinida com sucesso! Faça login com sua nova senha.')
+      router.push(`/login?message=${ehConvite ? 'Senha criada! Faça login para acessar o sistema.' : 'Senha redefinida com sucesso! Faça login com sua nova senha.'}`)
       router.refresh()
     }
-  }, [status, countdown, router])
+  }, [status, countdown, router, ehConvite])
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
@@ -190,7 +224,7 @@ export function ResetPasswordForm() {
             <ShieldCheck className="h-8 w-8 text-emerald-600" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Senha redefinida com sucesso!</h3>
+            <h3 className="text-lg font-semibold text-foreground">{ehConvite ? 'Senha criada com sucesso!' : 'Senha redefinida com sucesso!'}</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Sua nova senha foi configurada.
             </p>
@@ -205,7 +239,7 @@ export function ResetPasswordForm() {
         </Alert>
 
         <Button
-          onClick={() => { router.push('/login?message=Senha redefinida com sucesso! Faça login com sua nova senha.'); router.refresh() }}
+          onClick={() => { router.push(`/login?message=${ehConvite ? 'Senha criada! Faça login para acessar o sistema.' : 'Senha redefinida com sucesso! Faça login com sua nova senha.'}`); router.refresh() }}
           className="w-full"
         >
           Ir para o login
@@ -318,7 +352,7 @@ export function ResetPasswordForm() {
                   Redefinindo...
                 </span>
               ) : (
-                'Redefinir senha'
+                ehConvite ? 'Criar senha' : 'Redefinir senha'
               )}
             </Button>
           </Field>

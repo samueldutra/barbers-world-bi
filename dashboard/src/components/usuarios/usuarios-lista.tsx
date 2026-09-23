@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Pencil, Trash2 } from 'lucide-react'
+import { KeyRound, Link2, Loader2, Mail, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,7 +23,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { moduleLabel } from '@/types/modules'
+import { formatarDataHora } from '@/lib/formatters'
 import type { Usuario } from '@/hooks/use-usuarios'
 
 interface Props {
@@ -32,9 +40,22 @@ interface Props {
   usuarioAtualId: string | undefined
   onEditar: (usuario: Usuario) => void
   onExcluir: (id: string) => Promise<void>
+  /** Novo acesso: link pra copiar/WhatsApp (enviarEmail=false) ou email do Supabase. */
+  onGerarAcesso: (usuario: Usuario, enviarEmail: boolean) => Promise<void>
 }
 
-export function UsuariosLista({ usuarios, loading, usuarioAtualId, onEditar, onExcluir }: Props) {
+export function UsuariosLista({ usuarios, loading, usuarioAtualId, onEditar, onExcluir, onGerarAcesso }: Props) {
+  const [gerandoId, setGerandoId] = useState<string | null>(null)
+
+  const handleGerarAcesso = async (u: Usuario, enviarEmail: boolean) => {
+    setGerandoId(u.id)
+    try {
+      await onGerarAcesso(u, enviarEmail)
+    } finally {
+      setGerandoId(null)
+    }
+  }
+
   const [excluindoId, setExcluindoId] = useState<string | null>(null)
   const [confirmando, setConfirmando] = useState(false)
 
@@ -69,9 +90,9 @@ export function UsuariosLista({ usuarios, loading, usuarioAtualId, onEditar, onE
         <TableHeader>
           <TableRow>
             <TableHead>Nome</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Acesso</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead className="hidden md:table-cell">Email</TableHead>
+            <TableHead>Módulos</TableHead>
+            <TableHead>Situação</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
@@ -81,8 +102,9 @@ export function UsuariosLista({ usuarios, loading, usuarioAtualId, onEditar, onE
               <TableCell className="font-medium">
                 {u.full_name || '—'}
                 {u.id === usuarioAtualId && <span className="ml-2 text-xs text-muted-foreground">(você)</span>}
+                <p className="text-xs font-normal text-muted-foreground md:hidden">{u.email}</p>
               </TableCell>
-              <TableCell className="text-muted-foreground">{u.email}</TableCell>
+              <TableCell className="hidden text-muted-foreground md:table-cell">{u.email}</TableCell>
               <TableCell>
                 {u.is_superadmin ? (
                   <Badge>Super admin</Badge>
@@ -99,13 +121,44 @@ export function UsuariosLista({ usuarios, loading, usuarioAtualId, onEditar, onE
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={u.is_active ? 'secondary' : 'destructive'}>
-                  {u.is_active ? 'Ativo' : 'Inativo'}
-                </Badge>
+                <div className="flex flex-col items-start gap-1">
+                  {!u.is_active ? (
+                    <Badge variant="destructive">Inativo</Badge>
+                  ) : u.convite_pendente ? (
+                    <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">
+                      Aguardando 1º acesso
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Ativo</Badge>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {u.ultimo_acesso ? `Último acesso ${formatarDataHora(u.ultimo_acesso)}` : 'Nunca acessou'}
+                  </span>
+                </div>
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
-                  <Button size="icon" variant="ghost" onClick={() => onEditar(u)}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" disabled={gerandoId === u.id} aria-label={`Acesso de ${u.full_name || u.email}`}>
+                        {gerandoId === u.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">
+                        {u.convite_pendente ? 'Novo convite' : 'Redefinir senha'}
+                      </DropdownMenuLabel>
+                      <DropdownMenuItem onSelect={() => handleGerarAcesso(u, false)}>
+                        <Link2 className="h-4 w-4" />
+                        Gerar link (WhatsApp)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => handleGerarAcesso(u, true)}>
+                        <Mail className="h-4 w-4" />
+                        Enviar por email
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button size="icon" variant="ghost" onClick={() => onEditar(u)} aria-label="Editar">
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button

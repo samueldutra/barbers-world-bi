@@ -1,19 +1,43 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { UserPlus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { useUsuarios, type Usuario } from '@/hooks/use-usuarios'
+import { useUsuarios, type Usuario, type ResultadoCriacao } from '@/hooks/use-usuarios'
 import { useUser } from '@/hooks/use-user'
 import { UsuariosLista } from '@/components/usuarios/usuarios-lista'
 import { UsuarioFormDialog } from '@/components/usuarios/usuario-form-dialog'
+import { LinkAcessoDialog, type AcessoGerado } from '@/components/usuarios/link-acesso-dialog'
 
 export default function UsuariosPage() {
-  const { usuarios, loading, criar, atualizar, excluir } = useUsuarios()
+  const { usuarios, loading, criar, atualizar, excluir, gerarAcesso } = useUsuarios()
   const { user } = useUser()
   const [dialogAberto, setDialogAberto] = useState(false)
   const [usuarioEditando, setUsuarioEditando] = useState<Usuario | null>(null)
+  const [acessoGerado, setAcessoGerado] = useState<AcessoGerado | null>(null)
+
+  const handleCriado = (resultado: ResultadoCriacao, nome: string) => {
+    setAcessoGerado({
+      nome,
+      email: resultado.email,
+      emailEnviado: resultado.emailEnviado,
+      erroEmail: resultado.erroEmail,
+      link: resultado.linkAcesso,
+    })
+  }
+
+  const handleGerarAcesso = async (usuario: Usuario, enviarEmail: boolean) => {
+    const nome = usuario.full_name || usuario.email
+    try {
+      const { emailEnviado, link } = await gerarAcesso(usuario.id, enviarEmail)
+      setAcessoGerado({ nome, email: usuario.email, emailEnviado, link })
+    } catch (err) {
+      console.error('Erro ao gerar acesso:', err)
+      toast.error(err instanceof Error ? err.message : 'Não foi possível gerar o acesso.')
+    }
+  }
 
   const handleNovo = () => {
     setUsuarioEditando(null)
@@ -52,6 +76,7 @@ export default function UsuariosPage() {
             usuarioAtualId={user?.id}
             onEditar={handleEditar}
             onExcluir={excluir}
+            onGerarAcesso={handleGerarAcesso}
           />
         </CardContent>
       </Card>
@@ -62,7 +87,10 @@ export default function UsuariosPage() {
         usuario={usuarioEditando}
         onCriar={criar}
         onAtualizar={atualizar}
+        onCriado={handleCriado}
       />
+
+      <LinkAcessoDialog acesso={acessoGerado} onOpenChange={(v) => !v && setAcessoGerado(null)} />
     </div>
   )
 }
