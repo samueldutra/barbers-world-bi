@@ -1,4 +1,4 @@
-name: ETL Bling — Vendas e Clientes (a cada hora)
+name: ETL Bling — Vendas, Clientes e Produtos (a cada hora)
 
 # Roda a cada hora, cheia (UTC). Também pode ser disparado manualmente pela aba
 # "Actions" do GitHub (botão "Run workflow") pra testar sem esperar o cron.
@@ -53,3 +53,8 @@ jobs:
 
       - name: Clientes (contatos pendentes de sincronizar)
         run: python sync-clientes-bling.py
+
+      - name: Produtos (listagem de ativos — preço atual; detalhe roda local)
+        env:
+          SYNC_PRODUTOS_SO_LISTAGEM: 'true'
+        run: python sync-produtos-bling.py

@@ -1,10 +1,15 @@
 """
-Sincroniza a dimensão de produtos (Bling) a partir dos pedidos de venda já carregados —
-só os `id_produto` que aparecem em `pedidos_vendas` e ainda não têm linha em `produtos`
-(ou estão desatualizados há mais de N dias). Habilita ranking por marca/categoria e curva
-ABC no BI.
+Sincroniza a dimensão de produtos (Bling): catálogo completo de ativos + detalhe
+(marca/categoria) dos produtos que aparecem em `pedidos_vendas` ou que ainda não tiveram
+o detalhe buscado. Habilita ranking por marca/categoria, curva ABC e a lista de preços
+(preço atual x preço da última venda) no BI.
 
 Fluxo:
+  0. Listagem de ativos: pagina GET /produtos?criterio=2 (100 por página, barato) e faz
+     upsert de código/nome/preço/situação via RPC `processar_carga_produtos_listagem`.
+     Ao fim de uma varredura completa, `inativar_produtos_fora_listagem` marca 'I' quem
+     sumiu da listagem. Com SYNC_PRODUTOS_SO_LISTAGEM=true, para aqui (modo do cron de
+     hora em hora — mantém o preço atual em dia sem 1 request por produto).
   1. Busca o catálogo de categorias de produto uma vez (`/categorias/produtos`, poucas
      dezenas/centenas de linhas) pra resolver `categoria_id` -> descrição sem 1 chamada
      extra por produto.
@@ -54,6 +59,8 @@ BLING_MAX_REQ_POR_SEGUNDO = 2.0
 DIAS_REVALIDAR_PRODUTO = 30       # não rebusca produto sincronizado há menos de N dias
 LOTE_PENDENTES_POR_RODADA = 2000  # limite de produtos buscados numa execução
 TAMANHO_LOTE_GRAVACAO = 100       # grava no Supabase a cada N produtos buscados (não espera a rodada toda)
+BLING_CRITERIO_ATIVOS = 2         # GET /produtos: 1 últimos incluídos, 2 ativos, 3 inativos, 4 excluídos, 5 todos
+SO_LISTAGEM = os.getenv('SYNC_PRODUTOS_SO_LISTAGEM', 'false').lower() == 'true'
 
 
 class RateLimiter:
@@ -372,6 +379,47 @@ def buscar_categorias_produtos(cliente_id: str, conta: str) -> Dict[int, str]:
     return categorias
 
 
+def sincronizar_listagem_ativos(cliente_id: str, conta: str, schema: str) -> int:
+    """Pagina a listagem de produtos ativos e grava página a página. Só inativa quem sumiu
+    da listagem se a varredura foi até o fim sem erro (uma exceção no meio sobe antes)."""
+    inicio_varredura = datetime.now(timezone.utc).isoformat()
+    total = 0
+    pagina = 1
+    while True:
+        data = _bling_get(cliente_id, conta, "/produtos", {
+            "pagina": pagina, "limite": 100, "criterio": BLING_CRITERIO_ATIVOS,
+        })
+        registros = data.get("data", [])
+        if not registros:
+            break
+        agora = datetime.now(timezone.utc).isoformat()
+        lote = {p["id"]: {
+            "id_produto": p["id"],
+            "id_produto_pai": p.get("idProdutoPai"),
+            "codigo": p.get("codigo"),
+            "nome": p.get("nome"),
+            "formato": p.get("formato"),
+            "situacao": p.get("situacao"),
+            "imagem_url": p.get("imagemURL"),
+            "preco": p.get("preco"),
+            "data_sincronizacao_listagem": agora,
+        } for p in registros}  # dict dedup pela PK
+        enviar_em_lotes(list(lote.values()), "processar_carga_produtos_listagem", schema)
+        total += len(lote)
+        if pagina % 10 == 0:
+            log(f"  ... listagem: {pagina} página(s), {total} produto(s) ativo(s) gravado(s).")
+        if len(registros) < 100:
+            break
+        pagina += 1
+
+    # rpc_supabase_com_retry usa return=minimal (sem corpo) — aqui precisamos da contagem.
+    inativados = rpc_supabase_leitura("inativar_produtos_fora_listagem", {
+        "p_schema_name": schema, "p_inicio_varredura": inicio_varredura,
+    })
+    log(f"Listagem concluída: {total} produto(s) ativo(s); {inativados or 0} marcado(s) como inativo(s) por não aparecerem mais.")
+    return total
+
+
 def buscar_produto(cliente_id: str, conta: str, id_produto: int) -> Optional[dict]:
     try:
         data = _bling_get(cliente_id, conta, f"/produtos/{id_produto}")
@@ -424,6 +472,12 @@ def executar_sync(cliente_id: str) -> int:
     schema = config_cliente["schema"]
     conta_bling = config_cliente.get("conta_bling", cliente_id)
 
+    log("Sincronizando listagem de produtos ativos...")
+    total_listagem = sincronizar_listagem_ativos(cliente_id, conta_bling, schema)
+    if SO_LISTAGEM:
+        log("SYNC_PRODUTOS_SO_LISTAGEM=true — pulando a busca de detalhe (marca/categoria).")
+        return total_listagem
+
     log("Buscando catálogo de categorias de produto...")
     categorias = buscar_categorias_produtos(cliente_id, conta_bling)
     log(f"{len(categorias)} categoria(s) encontrada(s).")
@@ -438,7 +492,7 @@ def executar_sync(cliente_id: str) -> int:
         ids_pendentes = [i for i in _buscar_uma_rodada_pendentes(schema) if i not in ja_falhou_nesta_execucao]
         if not ids_pendentes:
             break
-        log(f"Rodada {rodada}: {len(ids_pendentes)} produto(s) distinto(s) pendente(s) (só quem ainda não tem registro ou está desatualizado há +{DIAS_REVALIDAR_PRODUTO} dias — vendas repetidas do mesmo produto não geram nova busca).")
+        log(f"Rodada {rodada}: {len(ids_pendentes)} produto(s) distinto(s) pendente(s) (vendidos sem detalhe ou desatualizados há +{DIAS_REVALIDAR_PRODUTO} dias, e ativos do catálogo que ainda não tiveram o detalhe buscado).")
 
         data_sincronizacao = datetime.now(timezone.utc).isoformat()
         buffer: List[dict] = []
