@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { MapPin, Route, Save, Trash2 } from 'lucide-react'
+import { ChevronRight, MapPin, Route, Save, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -41,6 +41,11 @@ interface Props {
   onToggleSelecionado?: (id: number) => void
   onLimparSelecao?: () => void
   onAbrirSalvarRota?: () => void
+  /** Classificar: tocar no lead abre o detalhe (no celular substitui o select/lixeira). */
+  onAbrirLead?: (lead: LeadMapeado) => void
+  /** Filtro de status controlado de fora (ex.: atalho "A classificar" da página). */
+  filtroStatus?: StatusLead | 'todos'
+  onFiltroStatusChange?: (v: StatusLead | 'todos') => void
 }
 
 const SEM_SELECAO = new Set<number>()
@@ -90,9 +95,14 @@ export function LeadsSalvosLista({
   onAtualizarStatus,
   onExcluir,
   onAbrirSalvarRota,
+  onAbrirLead,
+  filtroStatus: filtroControlado,
+  onFiltroStatusChange,
 }: Props) {
   const modoRota = modo === 'rota'
-  const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
+  const [filtroInterno, setFiltroInterno] = useState<StatusLead | 'todos'>('todos')
+  const filtroStatus = filtroControlado ?? filtroInterno
+  const setFiltroStatus = onFiltroStatusChange ?? setFiltroInterno
 
   const leadsFiltrados = useMemo(
     () => (filtroStatus === 'todos' ? leads : leads.filter((l) => l.status === filtroStatus)),
@@ -197,11 +207,29 @@ export function LeadsSalvosLista({
               }
 
               return (
-                <li key={lead.id} className="flex items-center gap-3 py-3">
-                  <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <InfoLead lead={lead} />
+                <li key={lead.id} className="flex items-center gap-3 py-1 sm:py-2">
+                  {onAbrirLead ? (
+                    <button
+                      type="button"
+                      onClick={() => onAbrirLead(lead)}
+                      className="-mx-2 flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/50 active:bg-muted"
+                    >
+                      <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <InfoLead lead={lead} />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground sm:hidden" />
+                    </button>
+                  ) : (
+                    <>
+                      <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <InfoLead lead={lead} />
+                    </>
+                  )}
                   <Select value={lead.status} onValueChange={(v) => onAtualizarStatus?.(lead.id, v as StatusLead)}>
-                    <SelectTrigger className="w-28 shrink-0 sm:w-32" size="sm" aria-label="Status">
+                    <SelectTrigger
+                      className={cn('w-32 shrink-0', onAbrirLead && 'hidden sm:flex')}
+                      size="sm"
+                      aria-label="Status"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -214,7 +242,7 @@ export function LeadsSalvosLista({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="shrink-0 text-destructive hover:text-destructive"
+                    className={cn('shrink-0 text-destructive hover:text-destructive', onAbrirLead && 'hidden sm:inline-flex')}
                     onClick={() => onExcluir?.(lead.id)}
                     aria-label={`Remover ${lead.nome}`}
                   >

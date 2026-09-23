@@ -84,7 +84,10 @@ export function useLeadsMapeados() {
     await carregar()
   }
 
+  // Status e exclusão são otimistas (sem recarregar a lista inteira): no celular, classificar
+  // vários leads em sequência precisa responder no toque. Em caso de erro, recarrega.
   const atualizarStatus = async (id: number, status: StatusLead) => {
+    setLeads((atual) => atual.map((l) => (l.id === id ? { ...l, status } : l)))
     const supabase = createClient()
     const { error } = await Promise.resolve(
       supabase.rpc('atualizar_status_lead_mapeado', {
@@ -93,17 +96,22 @@ export function useLeadsMapeados() {
         p_status: status,
       })
     )
-    if (error) throw error
-    await carregar()
+    if (error) {
+      await carregar()
+      throw error
+    }
   }
 
   const excluir = async (id: number) => {
+    setLeads((atual) => atual.filter((l) => l.id !== id))
     const supabase = createClient()
     const { error } = await Promise.resolve(
       supabase.rpc('excluir_lead_mapeado', { p_schema_name: TENANT_SCHEMA, p_id: id })
     )
-    if (error) throw error
-    await carregar()
+    if (error) {
+      await carregar()
+      throw error
+    }
   }
 
   return { leads, loading, error, recarregar: carregar, salvar, atualizarStatus, excluir }
