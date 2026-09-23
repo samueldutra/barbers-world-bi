@@ -1,72 +1,88 @@
 'use client'
 
-import { useState } from 'react'
-import dynamic from 'next/dynamic'
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { MousePointerClick, X } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Building2, MousePointerClick, Plus, Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LeadsSalvosLista } from '@/components/prospeccao/leads-salvos-lista'
-import { RotasSalvasLista } from '@/components/prospeccao/rotas-salvas-lista'
-import { PontoPartidaCampo } from '@/components/prospeccao/ponto-partida-campo'
-import { useLeadsMapeados, type StatusLead } from '@/hooks/use-leads-mapeados'
-import { useRotasVisita } from '@/hooks/use-rotas-visita'
-import { usePontoPartida } from '@/hooks/use-ponto-partida'
-import { MAX_PARADAS_ROTA } from '@/lib/prospeccao'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { RotaCard } from '@/components/prospeccao/rotas/rota-card'
+import { CriarRotaCidadeDialog } from '@/components/prospeccao/criar-rota-cidade-dialog'
+import { useRotasVisita, type StatusRota } from '@/hooks/use-rotas-visita'
+import { useLeadsMapeados } from '@/hooks/use-leads-mapeados'
 
-const MapaProspeccao = dynamic(
-  () => import('@/components/prospeccao/mapa-prospeccao').then((m) => m.MapaProspeccao),
-  { ssr: false, loading: () => <Skeleton className="h-full w-full" /> }
-)
+type FiltroRotas = 'ativas' | 'concluida' | 'cancelada' | 'todas'
 
-/** Rotas: montar rotas de visita a partir dos leads já mapeados e acompanhar a execução.
- * Encontrar e classificar leads fica em /prospeccao/mapeamento. */
+const FILTROS: { value: FiltroRotas; label: string; status: StatusRota[] | null }[] = [
+  { value: 'ativas', label: 'Ativas', status: ['planejada', 'em_andamento'] },
+  { value: 'concluida', label: 'Concluídas', status: ['concluida'] },
+  { value: 'cancelada', label: 'Canceladas', status: ['cancelada'] },
+  { value: 'todas', label: 'Todas', status: null },
+]
+
+/** Listagem de rotas de visita. Cada rota abre em /prospeccao/rotas/[id]; montar uma rota
+ * nova escolhendo paradas fica em /prospeccao/rotas/nova. */
 export default function RotasPage() {
-  const ponto = usePontoPartida()
-  const { centro, nomeCentro } = ponto
-  // Nesta tela o clique no lead do mapa escolhe a parada; desligado, abre os detalhes.
-  const [modoSelecionarRota, setModoSelecionarRota] = useState(true)
-  const [leadsSelecionados, setLeadsSelecionados] = useState<Set<number>>(new Set())
+  const router = useRouter()
+  const [filtro, setFiltro] = useState<FiltroRotas>('ativas')
+  const [dialogCidadeAberto, setDialogCidadeAberto] = useState(false)
 
-  const { leads, loading: carregandoLeads, atualizarStatus, excluir } = useLeadsMapeados()
-  const {
-    rotas,
-    loading: carregandoRotas,
-    salvar: salvarRota,
-    carregarParadas,
-    atualizarStatus: atualizarStatusRota,
-    atualizarParada,
-    excluir: excluirRota,
-  } = useRotasVisita()
+  const { rotas, loading, error, salvar, atualizarStatus, excluir } = useRotasVisita()
+  const { leads } = useLeadsMapeados()
 
-  const handleToggleLead = (id: number) => {
-    setLeadsSelecionados((atual) => {
-      const novo = new Set(atual)
-      if (novo.has(id)) {
-        novo.delete(id)
-      } else {
-        if (novo.size >= MAX_PARADAS_ROTA) {
-          toast.error(`Máximo de ${MAX_PARADAS_ROTA} paradas por rota.`)
-          return atual
-        }
-        novo.add(id)
-      }
-      return novo
-    })
+  const contagem = useMemo(() => {
+    const c: Record<FiltroRotas, number> = { ativas: 0, concluida: 0, cancelada: 0, todas: rotas.length }
+    for (const r of rotas) {
+      if (r.status === 'planejada' || r.status === 'em_andamento') c.ativas++
+      else c[r.status]++
+    }
+    return c
+  }, [rotas])
+
+  const rotasFiltradas = useMemo(() => {
+    const status = FILTROS.find((f) => f.value === filtro)?.status
+    return status ? rotas.filter((r) => status.includes(r.status)) : rotas
+  }, [rotas, filtro])
+
+  const handleAlterarStatus = async (id: number, status: StatusRota) => {
+    try {
+      await atualizarStatus(id, status)
+    } catch (err) {
+      console.error('Erro ao atualizar status da rota:', err)
+      toast.error('Não foi possível atualizar o status da rota.')
+    }
   }
 
-  const handleLimparSelecao = () => setLeadsSelecionados(new Set())
+  const handleExcluir = async (id: number) => {
+    try {
+      await excluir(id)
+      toast.success('Rota removida.')
+    } catch (err) {
+      console.error('Erro ao excluir rota:', err)
+      toast.error('Não foi possível remover essa rota.')
+      throw err
+    }
+  }
 
-  const handleSalvarRota = async (
+  const handleCriarPorCidade = async (
     nome: string,
     descricao: string | null,
     leadIds: number[],
-    pontoPartidaEndereco?: string | null
+    pontoPartidaEndereco: string | null
   ) => {
     try {
-      await salvarRota(nome, leadIds, descricao, pontoPartidaEndereco)
-      toast.success(`Rota "${nome}" salva com ${leadIds.length} parada(s).`)
+      const id = await salvar(nome, leadIds, descricao, pontoPartidaEndereco)
+      toast.success(`Rota "${nome}" criada com ${leadIds.length} parada(s).`)
+      router.push(`/prospeccao/rotas/${id}`)
     } catch (err) {
       console.error('Erro ao salvar rota:', err)
       toast.error('Não foi possível salvar essa rota.')
@@ -74,110 +90,100 @@ export default function RotasPage() {
     }
   }
 
-  const handleAtualizarStatusRota = async (id: number, status: Parameters<typeof atualizarStatusRota>[1]) => {
-    try {
-      await atualizarStatusRota(id, status)
-    } catch (err) {
-      console.error('Erro ao atualizar status da rota:', err)
-      toast.error('Não foi possível atualizar o status da rota.')
-    }
-  }
-
-  // O mapa ainda permite ajustar o status/remover um lead pelo balão (com a seleção desligada).
-  const handleAtualizarStatusLead = async (id: number, status: StatusLead) => {
-    try {
-      await atualizarStatus(id, status)
-    } catch (err) {
-      console.error('Erro ao atualizar status:', err)
-      toast.error('Não foi possível atualizar o status.')
-    }
-  }
-
-  const handleExcluirLead = async (id: number) => {
-    try {
-      await excluir(id)
-      setLeadsSelecionados((atual) => {
-        const novo = new Set(atual)
-        novo.delete(id)
-        return novo
-      })
-      toast.success('Lead removido.')
-    } catch (err) {
-      console.error('Erro ao excluir lead:', err)
-      toast.error('Não foi possível remover esse lead.')
-    }
-  }
-
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Rotas de visita</h1>
-        <p className="text-sm text-muted-foreground">
-          Monte rotas com os leads mapeados, exporte para o Google Maps/PDF e acompanhe as visitas
-        </p>
-      </div>
-
-      <RotasSalvasLista
-        rotas={rotas}
-        loading={carregandoRotas}
-        centro={centro}
-        leads={leads}
-        onCarregarParadas={carregarParadas}
-        onAtualizarStatusRota={handleAtualizarStatusRota}
-        onAtualizarParada={atualizarParada}
-        onExcluirRota={excluirRota}
-        onCriarRota={handleSalvarRota}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Montar nova rota</CardTitle>
-          <CardDescription>
-            Clique nos leads do mapa (ou marque na lista abaixo) na ordem em que quer visitar — até {MAX_PARADAS_ROTA} paradas
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <PontoPartidaCampo ponto={ponto} />
-          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-            <Button variant={modoSelecionarRota ? 'default' : 'outline'} onClick={() => setModoSelecionarRota((v) => !v)}>
-              <MousePointerClick className="h-4 w-4" />
-              {modoSelecionarRota ? 'Clique no mapa escolhe a parada' : 'Clique no mapa mostra detalhes'}
+    <div className="flex flex-col gap-5 p-4 md:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">Rotas de visita</h1>
+          <p className="text-sm text-muted-foreground">Abra uma rota para acompanhar as paradas e navegar até cada lead</p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="w-full sm:w-auto">
+              <Plus className="h-4 w-4" />
+              Nova rota
             </Button>
-            {leadsSelecionados.size > 0 && (
-              <>
-                <p className="text-xs text-muted-foreground">{leadsSelecionados.size} parada(s) selecionada(s).</p>
-                <Button variant="ghost" size="sm" onClick={handleLimparSelecao}>
-                  <X className="h-4 w-4" />
-                  Limpar seleção
-                </Button>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="h-[500px] overflow-hidden rounded-lg border">
-        <MapaProspeccao
-          centro={centro}
-          nomeCentro={nomeCentro}
-          leadsSalvos={leads}
-          onAtualizarStatus={handleAtualizarStatusLead}
-          onExcluir={handleExcluirLead}
-          modoSelecionarRota={modoSelecionarRota}
-          leadsSelecionadosRota={leadsSelecionados}
-          onToggleLeadRota={handleToggleLead}
-        />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuItem asChild>
+              <Link href="/prospeccao/rotas/nova" className="flex flex-col items-start gap-0.5">
+                <span className="flex items-center gap-2 font-medium">
+                  <MousePointerClick className="h-4 w-4" />
+                  Escolher paradas no mapa
+                </span>
+                <span className="pl-6 text-xs text-muted-foreground">Você define os leads e a ordem</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setDialogCidadeAberto(true)} className="flex flex-col items-start gap-0.5">
+              <span className="flex items-center gap-2 font-medium">
+                <Building2 className="h-4 w-4" />
+                Gerar por cidade
+              </span>
+              <span className="pl-6 text-xs text-muted-foreground">Todos os leads da cidade, na melhor ordem</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <LeadsSalvosLista
-        modo="rota"
+      {/* Filtro rolável na horizontal no celular, sem quebrar linha. */}
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={filtro}
+          onValueChange={(v) => v && setFiltro(v as FiltroRotas)}
+          className="w-max"
+        >
+          {FILTROS.map((f) => (
+            <ToggleGroupItem key={f.value} value={f.value} className="px-3">
+              {f.label}
+              <span className="ml-1 text-xs tabular-nums text-muted-foreground">{contagem[f.value]}</span>
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>
+      )}
+
+      {loading ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : rotasFiltradas.length === 0 ? (
+        <Card className="items-center gap-3 px-6 py-12 text-center">
+          <Route className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            {rotas.length === 0 ? 'Nenhuma rota criada ainda.' : 'Nenhuma rota neste filtro.'}
+          </p>
+          {rotas.length === 0 && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/prospeccao/rotas/nova">Montar a primeira rota</Link>
+            </Button>
+          )}
+        </Card>
+      ) : (
+        <div className="grid gap-3 animate-in fade-in-0 duration-300 sm:grid-cols-2 xl:grid-cols-3">
+          {rotasFiltradas.map((rota) => (
+            <RotaCard
+              key={rota.id}
+              rota={rota}
+              onAlterarStatus={(s) => handleAlterarStatus(rota.id, s)}
+              onExcluir={() => handleExcluir(rota.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      <CriarRotaCidadeDialog
+        open={dialogCidadeAberto}
+        onOpenChange={setDialogCidadeAberto}
         leads={leads}
-        loading={carregandoLeads}
-        centro={centro}
-        selecionados={leadsSelecionados}
-        onToggleSelecionado={handleToggleLead}
-        onLimparSelecao={handleLimparSelecao}
-        onSalvarRota={handleSalvarRota}
+        onCriar={handleCriarPorCidade}
       />
     </div>
   )

@@ -106,7 +106,7 @@ export function CriarRotaCidadeDialog({ open, onOpenChange, leads, onCriar }: Pr
             </Select>
             {cidades.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Nenhum lead com cidade gravada ainda — busque no mapa acima primeiro.
+                Nenhum lead com cidade gravada ainda — mapeie leads no Mapeamento de Leads primeiro.
               </p>
             )}
           </div>

@@ -19,3 +19,10 @@ export function montarUrlRota(
   if (paradas) params.set('waypoints', paradas)
   return `https://www.google.com/maps/dir/?${params.toString()}`
 }
+
+/** Navegação até um único ponto (a partir da localização atual do celular) — o botão
+ * "Navegar" de cada parada na tela da rota. */
+export function montarUrlNavegacao(lat: number, lon: number): string {
+  const params = new URLSearchParams({ api: '1', destination: `${lat},${lon}`, travelmode: 'driving' })
+  return `https://www.google.com/maps/dir/?${params.toString()}`
+}
