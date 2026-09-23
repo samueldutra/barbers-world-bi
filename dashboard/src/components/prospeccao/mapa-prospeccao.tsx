@@ -105,6 +105,9 @@ interface Props {
   leadsSalvos: LeadMapeado[]
   onAtualizarStatus: (id: number, status: StatusLead) => void
   onExcluir: (id: number) => void
+  /** Se informado, tocar num lead chama isto em vez de abrir o balão do mapa (no celular o
+   * balão do Google fica pequeno demais pra classificar). */
+  onAbrirLead?: (lead: LeadMapeado) => void
   // Mapeamento
   raioMetros?: number
   resultados?: ResultadoBusca[]
@@ -134,6 +137,7 @@ export function MapaProspeccao({
   onSalvar,
   onAtualizarStatus,
   onExcluir,
+  onAbrirLead,
   modoSelecionarRota = false,
   leadsSelecionadosRota = SEM_SELECAO,
   onToggleLeadRota,
@@ -212,6 +216,10 @@ export function MapaProspeccao({
             onClick={() => {
               if (modoSelecionarRota && onToggleLeadRota) {
                 onToggleLeadRota(lead.id)
+                return
+              }
+              if (onAbrirLead) {
+                onAbrirLead(lead)
                 return
               }
               setSelecionado({ tipo: 'lead', item: lead })

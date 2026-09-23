@@ -32,7 +32,34 @@ export function usePontoPartida() {
     }
   }
 
-  return { endereco, setEndereco, centro, nomeCentro, geocodificando, recentralizar }
+  // Em campo, pelo celular: parte de onde a pessoa está (GPS do aparelho, pede permissão).
+  const usarMinhaLocalizacao = () => {
+    if (!('geolocation' in navigator)) {
+      toast.error('Este navegador não informa a localização.')
+      return
+    }
+    setGeocodificando(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCentro({ lat: pos.coords.latitude, lon: pos.coords.longitude })
+        setNomeCentro('Minha localização atual')
+        setEndereco('')
+        setGeocodificando(false)
+        toast.success('Ponto de partida: sua localização.')
+      },
+      (err) => {
+        setGeocodificando(false)
+        toast.error(
+          err.code === err.PERMISSION_DENIED
+            ? 'Permissão de localização negada — libere nas configurações do navegador.'
+            : 'Não foi possível obter sua localização.'
+        )
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    )
+  }
+
+  return { endereco, setEndereco, centro, nomeCentro, geocodificando, recentralizar, usarMinhaLocalizacao }
 }
 
 export type PontoPartida = ReturnType<typeof usePontoPartida>
