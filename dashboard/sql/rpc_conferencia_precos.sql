@@ -45,7 +45,7 @@ CREATE OR REPLACE FUNCTION obter_conferencia_precos(
     p_sku TEXT DEFAULT NULL,          -- busca no código (SKU)
     p_marca TEXT DEFAULT NULL,        -- NULL = "Todos"; valor deve bater com obter_marcas_produtos()
     p_categoria TEXT DEFAULT NULL,    -- NULL = "Todos"; valor deve bater com obter_categorias_produtos()
-    p_status TEXT DEFAULT 'todos',    -- 'todos' | 'divergentes' | 'alterados'
+    p_status TEXT DEFAULT 'todos',    -- 'todos' | 'divergentes' | 'ultima_venda_menor' | 'alterados'
     p_ordenar_por TEXT DEFAULT 'nome', -- 'nome' | 'preco_atual' | 'preco_ultima_venda' | 'diferenca_percentual' | 'data_ultima_venda' | 'data_alteracao_preco'
     p_ordenar_direcao TEXT DEFAULT 'asc',
     p_pagina INTEGER DEFAULT 1,
@@ -150,6 +150,9 @@ BEGIN
         WHERE CASE %L
                 WHEN ''divergentes'' THEN preco_ultima_venda IS NOT NULL
                                       AND abs(preco_ultima_venda - COALESCE(preco_atual, 0)) >= 0.01
+                -- Vendeu abaixo do cadastro (preço cheio, já sem o desconto do item).
+                WHEN ''ultima_venda_menor'' THEN preco_ultima_venda IS NOT NULL
+                                             AND preco_ultima_venda <= COALESCE(preco_atual, 0) - 0.01
                 WHEN ''alterados'' THEN data_alteracao_preco IS NOT NULL
                 ELSE TRUE
               END
