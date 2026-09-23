@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { RefreshCw, History, X } from 'lucide-react'
+import { RefreshCw, ArrowUpDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -30,11 +30,22 @@ import type { ResultadoAlteracao } from '@/app/api/conferencia-precos/alterar/ro
  * comparação — dá pra incluí-los pelo filtro. IDs = id_loja em barbers.canais_venda. */
 const CANAIS_REFERENCIA_PADRAO = [204968632, 205291049]
 
+// Ordenação pelo seletor (os cabeçalhos da tabela também ordenam). Cada opção já traz a
+// direção que faz sentido — data e diferença mais relevantes primeiro.
+const OPCOES_ORDENACAO: { value: string; label: string; coluna: OrdenarConferenciaPor; direcao: 'asc' | 'desc' }[] = [
+  { value: 'nome', label: 'Nome (A–Z)', coluna: 'nome', direcao: 'asc' },
+  { value: 'data_ultima_venda', label: 'Última venda mais recente', coluna: 'data_ultima_venda', direcao: 'desc' },
+  { value: 'data_ultima_venda_antiga', label: 'Última venda mais antiga', coluna: 'data_ultima_venda', direcao: 'asc' },
+  { value: 'diferenca_percentual', label: 'Maior queda na última venda', coluna: 'diferenca_percentual', direcao: 'asc' },
+  { value: 'data_alteracao_preco', label: 'Preço alterado recentemente', coluna: 'data_alteracao_preco', direcao: 'desc' },
+]
+
 const TAMANHO_PAGINA = 50
 const ITENS_POR_LOTE = 20 // mesmo limite da rota /api/conferencia-precos/alterar
 
 const OPCOES_STATUS: { value: StatusConferencia; label: string }[] = [
   { value: 'divergentes', label: 'Diferentes da última venda' },
+  { value: 'ultima_venda_menor', label: 'Última venda menor que o preço atual' },
   { value: 'alterados', label: 'Preço alterado' },
   { value: 'todos', label: 'Todos os ativos' },
 ]
@@ -86,6 +97,19 @@ export default function ConferenciaPrecosPage() {
       setOrdenarPor(coluna)
       setOrdenarDirecao(coluna === 'nome' ? 'asc' : 'desc')
     }
+  }
+
+  // Opção do seletor que corresponde à ordenação atual; '' quando veio de um cabeçalho da
+  // tabela sem equivalente no seletor (ex.: preço atual).
+  const ordenacaoAtual =
+    OPCOES_ORDENACAO.find((op) => op.coluna === ordenarPor && op.direcao === ordenarDirecao)?.value ?? ''
+
+  const handleOrdenacaoSelect = (valor: string) => {
+    const op = OPCOES_ORDENACAO.find((o) => o.value === valor)
+    if (!op) return
+    setPagina(1)
+    setOrdenarPor(op.coluna)
+    setOrdenarDirecao(op.direcao)
   }
 
   const atualizarAlteracoes = (fn: (m: Map<number, AlteracaoPendente>) => void) => {
@@ -239,7 +263,7 @@ export default function ConferenciaPrecosPage() {
             className="w-60"
           />
           <Select value={status} onValueChange={(v) => comReset(setStatus)(v as StatusConferencia)}>
-            <SelectTrigger className="w-56" size="sm">
+            <SelectTrigger className="w-72" size="sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -250,12 +274,19 @@ export default function ConferenciaPrecosPage() {
               ))}
             </SelectContent>
           </Select>
-          {status === 'alterados' && ordenarPor !== 'data_alteracao_preco' && (
-            <Button variant="ghost" size="sm" onClick={() => handleOrdenarChange('data_alteracao_preco')}>
-              <History className="h-4 w-4" />
-              Mais recentes primeiro
-            </Button>
-          )}
+          <Select value={ordenacaoAtual} onValueChange={handleOrdenacaoSelect}>
+            <SelectTrigger className="w-60" size="sm">
+              <ArrowUpDown className="h-4 w-4 opacity-50" />
+              <SelectValue placeholder="Ordenação personalizada" />
+            </SelectTrigger>
+            <SelectContent>
+              {OPCOES_ORDENACAO.map((op) => (
+                <SelectItem key={op.value} value={op.value}>
+                  {op.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

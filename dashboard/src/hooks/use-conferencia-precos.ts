@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 
-export type StatusConferencia = 'todos' | 'divergentes' | 'alterados'
+export type StatusConferencia = 'todos' | 'divergentes' | 'ultima_venda_menor' | 'alterados'
 export type OrdenarConferenciaPor =
   | 'nome'
   | 'preco_atual'
