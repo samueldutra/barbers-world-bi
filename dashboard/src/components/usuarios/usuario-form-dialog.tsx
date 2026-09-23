@@ -16,18 +16,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SYSTEM_MODULES } from '@/types/modules'
-import { createClient } from '@/lib/supabase/client'
-import type { Usuario, CriarUsuarioInput, AtualizarUsuarioInput } from '@/hooks/use-usuarios'
+import type { Usuario, CriarUsuarioInput, AtualizarUsuarioInput, ResultadoCriacao } from '@/hooks/use-usuarios'
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   usuario: Usuario | null
-  onCriar: (input: CriarUsuarioInput) => Promise<{ id: string; email: string }>
+  onCriar: (input: CriarUsuarioInput) => Promise<ResultadoCriacao>
   onAtualizar: (id: string, input: AtualizarUsuarioInput) => Promise<void>
+  /** Depois de criar: a página mostra se o convite saiu por email ou o link pra enviar. */
+  onCriado: (resultado: ResultadoCriacao, nome: string) => void
 }
 
-export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtualizar }: Props) {
+export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtualizar, onCriado }: Props) {
   const editando = usuario !== null
 
   const [fullName, setFullName] = useState('')
@@ -80,23 +81,15 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
         })
         toast.success('Usuário atualizado.')
       } else {
+        // O convite (email ou link) sai do servidor — ver /api/usuarios (POST).
         const criado = await onCriar({
           email: email.trim().toLowerCase(),
           full_name: fullName.trim(),
           is_superadmin: isSuperAdmin,
           modules: Array.from(modules),
         })
-
-        // Dispara o email de "definir senha" — mesmo fluxo de "Esqueci minha senha".
-        const supabase = createClient()
-        const { error } = await supabase.auth.resetPasswordForEmail(criado.email, {
-          redirectTo: `${window.location.origin}/redefinir-senha`,
-        })
-        if (error) {
-          toast.warning('Usuário criado, mas não consegui enviar o email de acesso. Peça pra ele usar "Esqueci minha senha" no login.')
-        } else {
-          toast.success('Usuário criado! Enviamos um email pra ele definir a senha.')
-        }
+        toast.success('Usuário criado.')
+        onCriado(criado, fullName.trim())
       }
       onOpenChange(false)
     } catch (err) {
@@ -115,7 +108,7 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
           <DialogDescription>
             {editando
               ? 'Ajuste o acesso desse usuário aos módulos do sistema.'
-              : 'A pessoa recebe um email pra definir a própria senha — não precisa te passar credencial nenhuma.'}
+              : 'A pessoa recebe um convite por email para criar a própria senha. Se o email não sair, você recebe um link para enviar por WhatsApp.'}
           </DialogDescription>
         </DialogHeader>
 

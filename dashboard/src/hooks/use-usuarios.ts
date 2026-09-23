@@ -10,6 +10,18 @@ export interface Usuario {
   is_active: boolean
   created_at: string
   modules: string[]
+  ultimo_acesso: string | null
+  /** Ainda não aceitou o convite / nunca entrou. */
+  convite_pendente: boolean
+}
+
+export interface ResultadoCriacao {
+  id: string
+  email: string
+  emailEnviado: boolean
+  erroEmail: string | null
+  /** Só quando o email não saiu — o admin manda o link por outro canal. */
+  linkAcesso: string | null
 }
 
 export interface CriarUsuarioInput {
@@ -60,7 +72,7 @@ export function useUsuarios() {
     const dados = await resposta.json()
     if (!resposta.ok) throw new Error(dados.error || 'Erro ao criar usuário')
     await carregar()
-    return dados as { id: string; email: string }
+    return dados as ResultadoCriacao
   }
 
   const atualizar = async (id: string, input: AtualizarUsuarioInput) => {
@@ -81,5 +93,17 @@ export function useUsuarios() {
     await carregar()
   }
 
-  return { usuarios, loading, error, recarregar: carregar, criar, atualizar, excluir }
+  /** Novo acesso pra um usuário existente: link pra copiar (enviarEmail=false) ou email. */
+  const gerarAcesso = async (id: string, enviarEmail: boolean) => {
+    const resposta = await fetch(`/api/usuarios/${id}/acesso`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enviar_email: enviarEmail }),
+    })
+    const dados = await resposta.json().catch(() => ({}))
+    if (!resposta.ok) throw new Error(dados.error || 'Erro ao gerar acesso')
+    return dados as { emailEnviado: boolean; link: string | null }
+  }
+
+  return { usuarios, loading, error, recarregar: carregar, criar, atualizar, excluir, gerarAcesso }
 }

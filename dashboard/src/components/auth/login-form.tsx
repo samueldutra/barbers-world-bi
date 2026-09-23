@@ -27,6 +27,16 @@ export function LoginForm() {
 
   const [urlMessage, setUrlMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
 
+  // Link de convite/recuperação que caiu no login: acontece quando a URL de /redefinir-senha
+  // não está na lista de Redirect URLs do Supabase — ele volta pra Site URL (raiz), que
+  // redireciona pra cá mantendo o #fragmento. Encaminha pra tela certa com o token.
+  useEffect(() => {
+    const hash = window.location.hash
+    if (/[#&](access_token|error_code)=/.test(hash)) {
+      window.location.replace(`/redefinir-senha${hash}`)
+    }
+  }, [])
+
   useEffect(() => {
     const message = searchParams.get('message')
     const errorParam = searchParams.get('error')
