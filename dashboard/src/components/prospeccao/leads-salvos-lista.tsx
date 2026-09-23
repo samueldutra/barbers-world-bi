@@ -31,29 +31,38 @@ const VARIANTE_STATUS: Record<StatusLead, 'default' | 'secondary' | 'outline'> =
 
 const CLASSE_BADGE_PENDENTE = 'border-sky-400 text-sky-600 dark:border-sky-500 dark:text-sky-400'
 
+/** 'classificar' (Mapeamento): muda status e remove leads.
+ * 'rota' (Rotas): marca leads como paradas e gera/salva a rota — status só pra consulta. */
+type Modo = 'classificar' | 'rota'
+
 interface Props {
+  modo: Modo
   leads: LeadMapeado[]
   loading: boolean
   centro: { lat: number; lon: number }
-  selecionados: Set<number>
-  onToggleSelecionado: (id: number) => void
-  onLimparSelecao: () => void
-  onAtualizarStatus: (id: number, status: StatusLead) => void
-  onExcluir: (id: number) => void
-  onSalvarRota: (nome: string, descricao: string | null, leadIds: number[]) => Promise<void>
+  onAtualizarStatus?: (id: number, status: StatusLead) => void
+  onExcluir?: (id: number) => void
+  selecionados?: Set<number>
+  onToggleSelecionado?: (id: number) => void
+  onLimparSelecao?: () => void
+  onSalvarRota?: (nome: string, descricao: string | null, leadIds: number[]) => Promise<void>
 }
 
+const SEM_SELECAO = new Set<number>()
+
 export function LeadsSalvosLista({
+  modo,
   leads,
   loading,
   centro,
-  selecionados,
+  selecionados = SEM_SELECAO,
   onToggleSelecionado,
   onLimparSelecao,
   onAtualizarStatus,
   onExcluir,
   onSalvarRota,
 }: Props) {
+  const modoRota = modo === 'rota'
   const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
   const [dialogAberto, setDialogAberto] = useState(false)
   const [nomeRota, setNomeRota] = useState('')
@@ -73,7 +82,7 @@ export function LeadsSalvosLista({
     .filter((l): l is LeadMapeado => l != null)
 
   const handleSalvarRota = async () => {
-    if (!nomeRota.trim()) return
+    if (!nomeRota.trim() || !onSalvarRota) return
     setSalvandoRota(true)
     try {
       const leadsFinal = ordenarPorDistancia ? ordenarPorProximidade(centro, leadsSelecionados) : leadsSelecionados
@@ -81,7 +90,7 @@ export function LeadsSalvosLista({
       setDialogAberto(false)
       setNomeRota('')
       setDescricaoRota('')
-      onLimparSelecao()
+      onLimparSelecao?.()
     } finally {
       setSalvandoRota(false)
     }
@@ -91,9 +100,11 @@ export function LeadsSalvosLista({
     <Card>
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <CardTitle>Leads mapeados</CardTitle>
+          <CardTitle>{modoRota ? 'Escolher paradas' : 'Leads mapeados'}</CardTitle>
           <CardDescription>
-            {leads.length} salvos no total — marque (ou selecione no mapa acima) pra gerar ou salvar uma rota de visita
+            {modoRota
+              ? `${leads.length} leads mapeados — marque aqui ou clique no mapa pra montar a rota`
+              : `${leads.length} salvos no total — classifique como cliente, concorrente ou lead`}
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -109,24 +120,28 @@ export function LeadsSalvosLista({
               <SelectItem value="lead">Lead</SelectItem>
             </SelectContent>
           </Select>
-          {selecionados.size > 0 && (
-            <Button size="sm" variant="ghost" onClick={onLimparSelecao}>
-              Limpar seleção
-            </Button>
+          {modoRota && (
+            <>
+              {selecionados.size > 0 && (
+                <Button size="sm" variant="ghost" onClick={onLimparSelecao}>
+                  Limpar seleção
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={leadsSelecionados.length === 0}
+                onClick={() => window.open(montarUrlRota(centro, leadsSelecionados), '_blank')}
+              >
+                <Route className="h-4 w-4" />
+                Gerar rota ({leadsSelecionados.length})
+              </Button>
+              <Button size="sm" disabled={leadsSelecionados.length === 0} onClick={() => setDialogAberto(true)}>
+                <Save className="h-4 w-4" />
+                Salvar rota
+              </Button>
+            </>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={leadsSelecionados.length === 0}
-            onClick={() => window.open(montarUrlRota(centro, leadsSelecionados), '_blank')}
-          >
-            <Route className="h-4 w-4" />
-            Gerar rota ({leadsSelecionados.length})
-          </Button>
-          <Button size="sm" disabled={leadsSelecionados.length === 0} onClick={() => setDialogAberto(true)}>
-            <Save className="h-4 w-4" />
-            Salvar rota
-          </Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -135,13 +150,17 @@ export function LeadsSalvosLista({
         ) : leadsFiltrados.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             Nenhum lead {filtroStatus !== 'todos' ? `com status "${LABEL_STATUS[filtroStatus]}"` : 'salvo ainda'}.
-            Busque no mapa acima — os resultados são salvos automaticamente pra você classificar.
+            {modoRota
+              ? 'Mapeie leads no Mapeamento de Leads pra montar rotas com eles.'
+              : 'Busque no mapa acima — os resultados são salvos automaticamente pra você classificar.'}
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-border">
             {leadsFiltrados.map((lead) => (
               <li key={lead.id} className="flex items-center gap-3 py-3">
-                <Checkbox checked={selecionados.has(lead.id)} onCheckedChange={() => onToggleSelecionado(lead.id)} />
+                {modoRota && (
+                  <Checkbox checked={selecionados.has(lead.id)} onCheckedChange={() => onToggleSelecionado?.(lead.id)} />
+                )}
                 <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{lead.nome}</p>
@@ -160,20 +179,29 @@ export function LeadsSalvosLista({
                 >
                   {LABEL_STATUS[lead.status]}
                 </Badge>
-                <Select value={lead.status} onValueChange={(v) => onAtualizarStatus(lead.id, v as StatusLead)}>
-                  <SelectTrigger className="w-32" size="sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">A classificar</SelectItem>
-                    <SelectItem value="cliente">Cliente</SelectItem>
-                    <SelectItem value="concorrente">Concorrente</SelectItem>
-                    <SelectItem value="lead">Lead</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => onExcluir(lead.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {!modoRota && (
+                  <>
+                    <Select value={lead.status} onValueChange={(v) => onAtualizarStatus?.(lead.id, v as StatusLead)}>
+                      <SelectTrigger className="w-32" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pendente">A classificar</SelectItem>
+                        <SelectItem value="cliente">Cliente</SelectItem>
+                        <SelectItem value="concorrente">Concorrente</SelectItem>
+                        <SelectItem value="lead">Lead</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => onExcluir?.(lead.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
               </li>
             ))}
           </ul>

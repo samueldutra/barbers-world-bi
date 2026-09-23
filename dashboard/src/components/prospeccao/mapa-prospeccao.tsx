@@ -96,39 +96,46 @@ type SelecaoAberta =
   | { tipo: 'ponto-extra'; index: number; lat: number; lon: number }
   | null
 
+/** Usado nas duas telas da Prospecção: no Mapeamento (busca, raio, pontos extras,
+ * resultados) e nas Rotas (só leads salvos, com seleção de paradas). As props de cada modo
+ * são opcionais — sem elas o recurso correspondente simplesmente não aparece. */
 interface Props {
   centro: { lat: number; lon: number }
   nomeCentro: string
-  raioMetros: number
-  resultados: ResultadoBusca[]
   leadsSalvos: LeadMapeado[]
-  pontosExtras: { lat: number; lon: number }[]
-  modoAdicionarPonto: boolean
-  onAdicionarPonto: (lat: number, lon: number) => void
-  onRemoverPonto: (index: number) => void
-  onSalvar: (resultado: ResultadoBusca, status: StatusLead) => void
   onAtualizarStatus: (id: number, status: StatusLead) => void
   onExcluir: (id: number) => void
-  modoSelecionarRota: boolean
-  leadsSelecionadosRota: Set<number>
-  onToggleLeadRota: (id: number) => void
+  // Mapeamento
+  raioMetros?: number
+  resultados?: ResultadoBusca[]
+  pontosExtras?: { lat: number; lon: number }[]
+  modoAdicionarPonto?: boolean
+  onAdicionarPonto?: (lat: number, lon: number) => void
+  onRemoverPonto?: (index: number) => void
+  onSalvar?: (resultado: ResultadoBusca, status: StatusLead) => void
+  // Rotas
+  modoSelecionarRota?: boolean
+  leadsSelecionadosRota?: Set<number>
+  onToggleLeadRota?: (id: number) => void
 }
+
+const SEM_SELECAO = new Set<number>()
 
 export function MapaProspeccao({
   centro,
   nomeCentro,
-  raioMetros,
-  resultados,
+  raioMetros = 0,
+  resultados = [],
   leadsSalvos,
-  pontosExtras,
-  modoAdicionarPonto,
+  pontosExtras = [],
+  modoAdicionarPonto = false,
   onAdicionarPonto,
   onRemoverPonto,
   onSalvar,
   onAtualizarStatus,
   onExcluir,
-  modoSelecionarRota,
-  leadsSelecionadosRota,
+  modoSelecionarRota = false,
+  leadsSelecionadosRota = SEM_SELECAO,
   onToggleLeadRota,
 }: Props) {
   const [selecionado, setSelecionado] = useState<SelecaoAberta>(null)
@@ -149,7 +156,7 @@ export function MapaProspeccao({
 
   const handleClickMapa = (evento: MapMouseEvent) => {
     const latLng = evento.detail.latLng
-    if (modoAdicionarPonto && latLng) {
+    if (modoAdicionarPonto && latLng && onAdicionarPonto) {
       onAdicionarPonto(latLng.lat, latLng.lng)
       return
     }
@@ -168,8 +175,8 @@ export function MapaProspeccao({
       >
         <RecentrarMapa centro={centro} />
 
-        <CirculoRaio lat={centro.lat} lng={centro.lon} raioMetros={raioMetros} cor={CORES.centro} />
-        {pontosExtras.map((p, i) => (
+        {raioMetros > 0 && <CirculoRaio lat={centro.lat} lng={centro.lon} raioMetros={raioMetros} cor={CORES.centro} />}
+        {raioMetros > 0 && pontosExtras.map((p, i) => (
           <CirculoRaio key={`raio-${i}`} lat={p.lat} lng={p.lon} raioMetros={raioMetros} cor={CORES.pontoExtra} />
         ))}
 
@@ -203,7 +210,7 @@ export function MapaProspeccao({
             position={{ lat: lead.latitude, lng: lead.longitude }}
             icon={leadsSelecionadosRota.has(lead.id) ? ICONES_STATUS_SELECIONADO[lead.status] : ICONES_STATUS[lead.status]}
             onClick={() => {
-              if (modoSelecionarRota) {
+              if (modoSelecionarRota && onToggleLeadRota) {
                 onToggleLeadRota(lead.id)
                 return
               }
@@ -233,7 +240,7 @@ export function MapaProspeccao({
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
                 onClick={() => {
-                  if (selecionado.tipo === 'ponto-extra') onRemoverPonto(selecionado.index)
+                  if (selecionado.tipo === 'ponto-extra') onRemoverPonto?.(selecionado.index)
                   setSelecionado(null)
                 }}
               >
@@ -259,7 +266,7 @@ export function MapaProspeccao({
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      if (selecionado.tipo === 'resultado') onSalvar(selecionado.item, status)
+                      if (selecionado.tipo === 'resultado') onSalvar?.(selecionado.item, status)
                       setSelecionado(null)
                     }}
                   >

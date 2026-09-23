@@ -1,0 +1,221 @@
+'use client'
+
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
+import { toast } from 'sonner'
+import { Search, Loader2, MapPinPlus, X } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { LeadsSalvosLista } from '@/components/prospeccao/leads-salvos-lista'
+import { PontoPartidaCampo } from '@/components/prospeccao/ponto-partida-campo'
+import { useBuscaNicho, type ResultadoBusca, type PontoBusca } from '@/hooks/use-busca-nicho'
+import { useLeadsMapeados, type StatusLead } from '@/hooks/use-leads-mapeados'
+import { usePontoPartida } from '@/hooks/use-ponto-partida'
+
+const MapaProspeccao = dynamic(
+  () => import('@/components/prospeccao/mapa-prospeccao').then((m) => m.MapaProspeccao),
+  { ssr: false, loading: () => <Skeleton className="h-full w-full" /> }
+)
+
+const OPCOES_RAIO = [
+  { valor: 1000, label: '1 km' },
+  { valor: 2000, label: '2 km' },
+  { valor: 5000, label: '5 km' },
+  { valor: 10000, label: '10 km' },
+  { valor: 20000, label: '20 km' },
+]
+
+// O Google Places limita a 20 resultados por busca, então acima desse raio o retorno tende
+// a se repetir. Pra cobrir mais área, some pontos de busca em vez de só aumentar o raio.
+const MAX_PONTOS_EXTRAS = 8
+
+/** Mapeamento de Leads: encontrar estabelecimentos por nicho no mapa e classificá-los.
+ * Montar e acompanhar rotas de visita fica em /prospeccao/rotas. */
+export default function MapeamentoLeadsPage() {
+  const [nicho, setNicho] = useState('barbearia')
+  const [raioMetros, setRaioMetros] = useState(5000)
+  const ponto = usePontoPartida()
+  const { centro, nomeCentro } = ponto
+  const [pontosExtras, setPontosExtras] = useState<PontoBusca[]>([])
+  const [modoAdicionarPonto, setModoAdicionarPonto] = useState(false)
+
+  const { resultados, loading: buscando, error: erroBusca, buscar } = useBuscaNicho()
+  const { leads, loading: carregandoLeads, salvar, atualizarStatus, excluir, recarregar: recarregarLeads } = useLeadsMapeados()
+
+  const handleBuscar = async () => {
+    if (!nicho.trim()) {
+      toast.error('Informe um nicho pra buscar (ex.: barbearia).')
+      return
+    }
+    const { novosSalvos } = await buscar(nicho, [{ lat: centro.lat, lon: centro.lon }, ...pontosExtras], raioMetros)
+    if (novosSalvos > 0) {
+      toast.success(`${novosSalvos} novo(s) lead(s) salvo(s) automaticamente — falta só classificar.`)
+      recarregarLeads()
+    }
+  }
+
+  const handleAdicionarPonto = (lat: number, lon: number) => {
+    setPontosExtras((atual) => {
+      if (atual.length >= MAX_PONTOS_EXTRAS) {
+        toast.error(`Máximo de ${MAX_PONTOS_EXTRAS} pontos extras por busca.`)
+        return atual
+      }
+      return [...atual, { lat, lon }]
+    })
+  }
+
+  const handleRemoverPonto = (index: number) => {
+    setPontosExtras((atual) => atual.filter((_, i) => i !== index))
+  }
+
+  const handleSalvar = async (resultado: ResultadoBusca, status: StatusLead) => {
+    try {
+      await salvar({
+        nome: resultado.nome,
+        latitude: resultado.latitude,
+        longitude: resultado.longitude,
+        origemTipo: resultado.origemTipo,
+        origemId: resultado.origemId,
+        nicho,
+        endereco: resultado.endereco,
+        cidade: resultado.cidade,
+        telefone: resultado.telefone,
+        status,
+      })
+      toast.success(`"${resultado.nome}" salvo como ${status}.`)
+    } catch (err) {
+      console.error('Erro ao salvar lead:', err)
+      toast.error('Não foi possível salvar esse lead.')
+    }
+  }
+
+  const handleAtualizarStatus = async (id: number, status: StatusLead) => {
+    try {
+      await atualizarStatus(id, status)
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err)
+      toast.error('Não foi possível atualizar o status.')
+    }
+  }
+
+  const handleExcluir = async (id: number) => {
+    try {
+      await excluir(id)
+      toast.success('Lead removido.')
+    } catch (err) {
+      console.error('Erro ao excluir lead:', err)
+      toast.error('Não foi possível remover esse lead.')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6 p-4 md:p-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Mapeamento de leads</h1>
+        <p className="text-sm text-muted-foreground">
+          Busque estabelecimentos por nicho perto da Barbers World e classifique como cliente, concorrente ou lead
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Buscar no mapa</CardTitle>
+          <CardDescription>Dados do Google Places</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Nicho</label>
+              <Input
+                placeholder="ex.: barbearia, salão de beleza, academia..."
+                value={nicho}
+                onChange={(e) => setNicho(e.target.value)}
+                className="w-64"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-muted-foreground">Raio</label>
+              <Select value={String(raioMetros)} onValueChange={(v) => setRaioMetros(Number(v))}>
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OPCOES_RAIO.map((op) => (
+                    <SelectItem key={op.valor} value={String(op.valor)}>
+                      {op.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleBuscar} disabled={buscando}>
+              {buscando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              Buscar
+            </Button>
+          </div>
+
+          <div className="border-t pt-3">
+            <PontoPartidaCampo ponto={ponto} />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              variant={modoAdicionarPonto ? 'default' : 'outline'}
+              onClick={() => setModoAdicionarPonto((v) => !v)}
+            >
+              <MapPinPlus className="h-4 w-4" />
+              {modoAdicionarPonto ? 'Clique no mapa pra adicionar...' : 'Adicionar ponto de busca'}
+            </Button>
+            {pontosExtras.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {pontosExtras.length} ponto(s) extra(s) — cada um busca até 20 resultados no raio escolhido.
+                </p>
+                <Button variant="ghost" size="sm" onClick={() => setPontosExtras([])}>
+                  <X className="h-4 w-4" />
+                  Limpar pontos
+                </Button>
+              </>
+            )}
+          </div>
+
+          {erroBusca && <p className="text-sm text-destructive">{erroBusca}</p>}
+          {!buscando && resultados.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {resultados.length} resultado(s) encontrado(s) — os novos já foram salvos como &quot;A classificar&quot;, é só marcar o status na lista abaixo.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="h-[500px] overflow-hidden rounded-lg border">
+        <MapaProspeccao
+          centro={centro}
+          nomeCentro={nomeCentro}
+          raioMetros={raioMetros}
+          resultados={resultados}
+          leadsSalvos={leads}
+          pontosExtras={pontosExtras}
+          modoAdicionarPonto={modoAdicionarPonto}
+          onAdicionarPonto={handleAdicionarPonto}
+          onRemoverPonto={handleRemoverPonto}
+          onSalvar={handleSalvar}
+          onAtualizarStatus={handleAtualizarStatus}
+          onExcluir={handleExcluir}
+        />
+      </div>
+
+      <LeadsSalvosLista
+        modo="classificar"
+        leads={leads}
+        loading={carregandoLeads}
+        centro={centro}
+        onAtualizarStatus={handleAtualizarStatus}
+        onExcluir={handleExcluir}
+      />
+    </div>
+  )
+}

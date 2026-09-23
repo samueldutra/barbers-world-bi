@@ -50,6 +50,10 @@ const navMain = [
     title: "Prospecção de Leads",
     url: "/prospeccao",
     icon: IconMapPin,
+    items: [
+      { title: "Mapeamento de Leads", url: "/prospeccao/mapeamento" },
+      { title: "Rotas", url: "/prospeccao/rotas" },
+    ],
   },
 ]
 
