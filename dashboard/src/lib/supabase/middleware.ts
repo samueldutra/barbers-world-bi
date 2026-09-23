@@ -38,6 +38,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // Rotas de API de autenticação (callback, recovery, "esqueci minha senha") são chamadas
+  // justamente por quem ainda não tem sessão — nunca redirecionar pra /login nem pro
+  // /dashboard (o POST do "esqueci minha senha" recebia um 307 pro login e falhava).
+  if (request.nextUrl.pathname.startsWith('/api/auth/')) {
+    return supabaseResponse
+  }
+
   // Sem cadastro público — contas só nascem pela tela de Usuários (super admin).
   const publicRoutes = ['/login', '/recuperar-senha', '/redefinir-senha']
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname.startsWith(route))
