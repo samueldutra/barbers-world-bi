@@ -11,6 +11,7 @@ export const SYSTEM_MODULES: SystemModule[] = [
   { id: 'dashboard', label: 'Dashboard', url: '/dashboard' },
   { id: 'relatorio-produtos', label: 'Relatório de Vendas por Produto', url: '/relatorio-produtos' },
   { id: 'relatorio-clientes', label: 'Relatório de Vendas por Cliente', url: '/relatorio-clientes' },
+  { id: 'conferencia-precos', label: 'Conferência de Preços', url: '/conferencia-precos' },
   { id: 'prospeccao', label: 'Prospecção de Leads', url: '/prospeccao' },
 ]
 
