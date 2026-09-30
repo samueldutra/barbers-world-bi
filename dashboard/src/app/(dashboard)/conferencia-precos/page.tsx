@@ -27,8 +27,10 @@ import type { ResultadoAlteracao } from '@/app/api/conferencia-precos/alterar/ro
 
 /** Canais cuja última venda vale como referência por padrão: loja física (BARBERS WORLD) e
  * site (Nuvem Shop). Marketplaces (Shopee/TikTok/ML) vendem com acréscimo e distorcem a
- * comparação — dá pra incluí-los pelo filtro. IDs = id_loja em barbers.canais_venda. */
-const CANAIS_REFERENCIA_PADRAO = [204968632, 205291049]
+ * comparação — dá pra incluí-los pelo filtro. IDs = id_loja em barbers.canais_venda.
+ * Nuvem Shop = 206304549 (integração recriada em 21/09/2026; o id antigo 205291049 é
+ * remapeado pra esse via barbers.canais_venda_de_para). */
+const CANAIS_REFERENCIA_PADRAO = [204968632, 206304549]
 
 // Ordenação pelo seletor (os cabeçalhos da tabela também ordenam). Cada opção já traz a
 // direção que faz sentido — data e diferença mais relevantes primeiro.

@@ -9,6 +9,7 @@ Reaproveita a mesma infraestrutura de sessão/OAuth/retry do
 """
 
 import os
+import sys
 import json
 import re
 import boto3
@@ -351,7 +352,7 @@ def main():
     cliente_id = os.getenv('ETL_CLIENTE')
     if not cliente_id:
         log("[ERRO] ETL_CLIENTE não definido no .env")
-        return
+        sys.exit(1)
 
     try:
         executar_sync(cliente_id)
@@ -359,6 +360,8 @@ def main():
     except Exception as e:
         log(f"Execução falhou: {e}")
         traceback.print_exc()
+        # Exit code != 0 pra falha aparecer no GitHub Actions (etl-hourly.yml).
+        sys.exit(1)
 
 
 if __name__ == "__main__":
