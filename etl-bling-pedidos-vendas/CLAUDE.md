@@ -40,6 +40,11 @@ principais em relação ao template original (que foi feito pro ERP SG Sistemas)
    cabeçalho resumido, sem itens/parcelas) → `buscar_detalhe_pedido()` busca
    `GET /pedidos/vendas/{id}` para cada id (com. `ThreadPoolExecutor` +
    `BLING_MAX_WORKERS_DETALHE=3` workers, respeitando `RateLimiter` global).
+   Se `alterados_horas` (evento) / `ETL_ALTERADOS_HORAS` (env) for informado, também lista
+   `GET /pedidos/vendas?dataAlteracaoInicial=…&dataAlteracaoFinal=…` (horário de Brasília)
+   e recarrega os pedidos **alterados** nas últimas N horas que ficaram fora do período —
+   sem isso, mudança de situação em pedido antigo nunca chega ao BI. O workflow horário usa
+   24h; pra forçar atualização maior, Actions → Run workflow com `alterados_horas` (ex.: 720).
 4. `transformar_pedido()` denormaliza cada pedido em N linhas de item + N linhas de parcela.
 5. `enviar_em_lotes()` chama as RPCs de upsert em lotes de 500.
 6. `DiscordLogger` notifica o resultado.
