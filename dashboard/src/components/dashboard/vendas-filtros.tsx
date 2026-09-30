@@ -12,6 +12,8 @@ import { formatarData } from '@/lib/formatters'
 import type { PeriodoPreset, RangeData } from '@/lib/date-ranges'
 import type { CanalVenda } from '@/hooks/use-canais-venda'
 import { FiltroCanais } from '@/components/filtros/filtro-canais'
+import { FiltroSituacoes } from '@/components/filtros/filtro-situacoes'
+import type { SituacaoPedido } from '@/hooks/use-situacoes-pedido'
 
 const OPCOES_PERIODO: { value: PeriodoPreset; label: string }[] = [
   { value: 'hoje', label: 'Hoje' },
@@ -32,6 +34,10 @@ interface Props {
   canais: CanalVenda[]
   canaisSelecionados: number[] | null
   onCanaisChange: (ids: number[] | null) => void
+  /** Filtro de situações — opcional; só aparece quando a página passa onSituacoesChange. */
+  situacoes?: SituacaoPedido[]
+  situacoesSelecionadas?: number[] | null
+  onSituacoesChange?: (ids: number[] | null) => void
   onAtualizar: () => void
   atualizando: boolean
 }
@@ -44,6 +50,9 @@ export function VendasFiltros({
   canais,
   canaisSelecionados,
   onCanaisChange,
+  situacoes,
+  situacoesSelecionadas,
+  onSituacoesChange,
   onAtualizar,
   atualizando,
 }: Props) {
@@ -116,6 +125,14 @@ export function VendasFiltros({
       )}
 
       <FiltroCanais canais={canais} canaisSelecionados={canaisSelecionados} onCanaisChange={onCanaisChange} />
+
+      {onSituacoesChange && (
+        <FiltroSituacoes
+          situacoes={situacoes ?? []}
+          situacoesSelecionadas={situacoesSelecionadas ?? null}
+          onSituacoesChange={onSituacoesChange}
+        />
+      )}
 
       <Button variant="outline" size="sm" onClick={onAtualizar} disabled={atualizando}>
         <RefreshCw className={cn('h-4 w-4', atualizando && 'animate-spin')} />

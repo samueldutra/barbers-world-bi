@@ -56,9 +56,11 @@ interface UseVendasDashboardArgs {
   atual: RangeData
   comparacao: RangeData | null
   canais: number[] | null
+  /** null = filtro padrão de situações (definido no banco). */
+  situacoes: number[] | null
 }
 
-export function useVendasDashboard({ atual, comparacao, canais }: UseVendasDashboardArgs) {
+export function useVendasDashboard({ atual, comparacao, canais, situacoes }: UseVendasDashboardArgs) {
   const [kpisAtual, setKpisAtual] = useState<KpisVendas>(KPIS_VAZIO)
   const [kpisComparacao, setKpisComparacao] = useState<KpisVendas>(KPIS_VAZIO)
   const [evolucao, setEvolucao] = useState<EvolucaoComparada[]>([])
@@ -82,6 +84,7 @@ export function useVendasDashboard({ atual, comparacao, canais }: UseVendasDashb
           p_data_inicial: data_inicial,
           p_data_final: data_final,
           p_canais: canais,
+          p_situacoes: situacoes,
         }),
         comp
           ? supabase.rpc('obter_kpis_vendas', {
@@ -89,6 +92,7 @@ export function useVendasDashboard({ atual, comparacao, canais }: UseVendasDashb
               p_data_inicial: comp.data_inicial,
               p_data_final: comp.data_final,
               p_canais: canais,
+              p_situacoes: situacoes,
             })
           : Promise.resolve({ data: [KPIS_VAZIO], error: null }),
         supabase.rpc('obter_evolucao_vendas', {
@@ -96,6 +100,7 @@ export function useVendasDashboard({ atual, comparacao, canais }: UseVendasDashb
           p_data_inicial: data_inicial,
           p_data_final: data_final,
           p_canais: canais,
+          p_situacoes: situacoes,
         }),
         comp
           ? supabase.rpc('obter_evolucao_vendas', {
@@ -103,12 +108,14 @@ export function useVendasDashboard({ atual, comparacao, canais }: UseVendasDashb
               p_data_inicial: comp.data_inicial,
               p_data_final: comp.data_final,
               p_canais: canais,
+              p_situacoes: situacoes,
             })
           : Promise.resolve({ data: [], error: null }),
         supabase.rpc('obter_vendas_por_canal', {
           p_schema_name: TENANT_SCHEMA,
           p_data_inicial: data_inicial,
           p_data_final: data_final,
+          p_situacoes: situacoes,
         }),
       ])
 
@@ -161,7 +168,7 @@ export function useVendasDashboard({ atual, comparacao, canais }: UseVendasDashb
     } finally {
       setLoading(false)
     }
-  }, [atual, comparacao, canais])
+  }, [atual, comparacao, canais, situacoes])
 
   useEffect(() => {
     carregar()

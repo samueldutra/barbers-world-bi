@@ -46,45 +46,5 @@ $$;
 GRANT EXECUTE ON FUNCTION processar_carga_canais_venda(JSONB, TEXT) TO service_role;
 
 
--- Agregado de vendas por canal — pensado pra alimentar o frontend do BI diretamente
--- (padrão do datapro-findash: RPC com p_schema, não leitura direta de tabela).
-CREATE OR REPLACE FUNCTION obter_vendas_por_canal(
-    p_schema_name TEXT,
-    p_data_inicial DATE,
-    p_data_final DATE
-)
-RETURNS TABLE(
-    id_loja BIGINT,
-    canal_descricao TEXT,
-    canal_grupo TEXT,
-    total_pedidos BIGINT,
-    total_itens BIGINT,
-    valor_total NUMERIC
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_sql TEXT;
-BEGIN
-    v_sql := format('
-        SELECT
-            pv.id_loja,
-            cv.descricao::TEXT AS canal_descricao,
-            cv.grupo::TEXT AS canal_grupo,
-            count(DISTINCT pv.id_pedido)::BIGINT AS total_pedidos,
-            count(*)::BIGINT AS total_itens,
-            sum(pv.valor_unitario_item * pv.quantidade_item)::NUMERIC AS valor_total
-        FROM %I.pedidos_vendas pv
-        LEFT JOIN %I.canais_venda cv ON cv.id_loja = pv.id_loja
-        WHERE pv.data BETWEEN %L AND %L
-        GROUP BY pv.id_loja, cv.descricao, cv.grupo
-        ORDER BY valor_total DESC NULLS LAST
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final);
-
-    RETURN QUERY EXECUTE v_sql;
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION obter_vendas_por_canal(TEXT, DATE, DATE) TO service_role;
+-- obter_vendas_por_canal (agregado pro frontend) mora em dashboard/sql/rpc_dashboard_vendas.sql
+-- — a versão antiga que ficava aqui foi removida para não recriar uma sobrecarga ambígua.
