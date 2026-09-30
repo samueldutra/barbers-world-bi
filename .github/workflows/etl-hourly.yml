@@ -58,3 +58,8 @@ jobs:
         env:
           SYNC_PRODUTOS_SO_LISTAGEM: 'true'
         run: python sync-produtos-bling.py
+
+      # Nomes das situações de pedido (inclui as personalizadas, ex.: "CARRO RODRIGO") —
+      # 1 request ao Bling. Por último pra uma falha aqui não atrasar os passos acima.
+      - name: Situações de pedido (nomes do catálogo do Bling)
+        run: python sync-situacoes-bling.py
