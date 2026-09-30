@@ -39,6 +39,14 @@ export default function DashboardPage() {
     canais: canaisSelecionados,
     situacoes: situacoesSelecionadas,
   })
+  // Filtro de canais lista só canais com venda > 0 no período (mesma regra de situações do
+  // obter_vendas_por_canal, que ignora o filtro de canal — então a lista não encolhe ao
+  // selecionar um). Canais já selecionados continuam visíveis mesmo zerados, senão não daria
+  // pra ver/desmarcar um canal que está zerando o dashboard inteiro.
+  const canaisComVenda = useMemo(() => {
+    const comVenda = new Set(porCanal.filter((c) => Number(c.faturamento) > 0).map((c) => c.id_loja))
+    return canais.filter((c) => comVenda.has(c.id_loja) || canaisSelecionados?.includes(c.id_loja))
+  }, [canais, porCanal, canaisSelecionados])
   const { ranking, porCategoria, porMarca } = useRankingProdutos({
     atual,
     canais: canaisSelecionados,
@@ -60,7 +68,7 @@ export default function DashboardPage() {
           onPeriodoChange={setPeriodo}
           rangePersonalizado={rangePersonalizado}
           onRangePersonalizadoChange={setRangePersonalizado}
-          canais={canais}
+          canais={canaisComVenda}
           canaisSelecionados={canaisSelecionados}
           onCanaisChange={setCanaisSelecionados}
           situacoes={situacoes}
