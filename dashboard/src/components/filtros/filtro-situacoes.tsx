@@ -29,13 +29,26 @@ function mesmoConjunto(a: number[], b: number[]) {
   return a.length === b.length && a.every((id) => b.includes(id))
 }
 
+/** Só entram na lista as situações com valor no período/canais carregados — as zeradas
+ * não mudam nenhum número do dashboard e só poluíam o filtro. */
+function situacoesComValor(situacoes: SituacaoPedido[]) {
+  return situacoes.filter((s) => s.valor_periodo > 0)
+}
+
+/** "Todas" = todas as situações com valor no período estão selecionadas (a seleção pode
+ * ter ids extras, de um período anterior, sem valor neste). */
+function selecionouTodas(situacoes: SituacaoPedido[], selecionadas: number[]) {
+  const visiveis = situacoesComValor(situacoes)
+  return visiveis.length > 0 && visiveis.every((s) => selecionadas.includes(s.id_situacao))
+}
+
 /** Rótulo curto da seleção atual — também usado fora do filtro (linha de contexto). */
 export function descreverSelecaoSituacoes(situacoes: SituacaoPedido[], selecionadas: number[] | null): string {
   const padrao = situacoes.filter((s) => s.padrao)
   if (!selecionadas) {
     return padrao.length === 1 ? `${padrao[0].nome} (padrão)` : 'Padrão'
   }
-  if (situacoes.length > 0 && mesmoConjunto(selecionadas, situacoes.map((s) => s.id_situacao))) {
+  if (selecionouTodas(situacoes, selecionadas)) {
     return 'Todas as situações'
   }
   if (selecionadas.length === 1) {
@@ -45,16 +58,17 @@ export function descreverSelecaoSituacoes(situacoes: SituacaoPedido[], seleciona
 }
 
 /** Seleção múltipla de situações de pedido. Começa no padrão (null); "Todas" seleciona
- * todas as situações conhecidas. Mostra o volume de cada situação no período filtrado
- * pra deixar claro o que está entrando (ou ficando de fora) do faturamento. */
+ * todas as situações com valor no período. Mostra o volume de cada situação no período
+ * filtrado pra deixar claro o que está entrando (ou ficando de fora) do faturamento. */
 export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesChange, className }: Props) {
   const [aberto, setAberto] = useState(false)
 
   const idsPadrao = situacoes.filter((s) => s.padrao).map((s) => s.id_situacao)
-  const idsTodas = situacoes.map((s) => s.id_situacao)
+  const visiveis = situacoesComValor(situacoes)
+  const idsTodas = visiveis.map((s) => s.id_situacao)
   const efetivas = situacoesSelecionadas ?? idsPadrao
   const ehPadrao = situacoesSelecionadas === null
-  const ehTodas = !ehPadrao && idsTodas.length > 0 && mesmoConjunto(efetivas, idsTodas)
+  const ehTodas = !ehPadrao && selecionouTodas(situacoes, efetivas)
 
   const aplicar = (ids: number[]) => {
     // Voltar exatamente ao conjunto padrão = modo padrão (null), pra não "congelar" uma
@@ -100,8 +114,11 @@ export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesC
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />
-            <CommandGroup heading="Situações (volume no período)">
-              {situacoes.map((s) => (
+            <CommandGroup heading="Situações com vendas no período">
+              {visiveis.length === 0 && (
+                <p className="px-2 py-3 text-xs text-muted-foreground">Nenhuma situação com valor no período.</p>
+              )}
+              {visiveis.map((s) => (
                 <CommandItem
                   key={s.id_situacao}
                   value={`${s.nome} ${s.nome_herdado ?? ''} ${s.id_situacao}`}
