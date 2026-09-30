@@ -76,6 +76,12 @@ jobs:
           SYNC_PRODUTOS_SO_LISTAGEM: 'true'
         run: python sync-produtos-bling.py
 
+      # Canais de venda (1 request ao Bling) — integração criada/recriada no Bling (novo
+      # loja.id) ganha nome no BI sozinha. Integração recriada que precisa juntar com a
+      # antiga: ver etl-bling-pedidos-vendas/sql/create_table_canais_venda_de_para.sql.
+      - name: Canais de venda (catálogo do Bling)
+        run: python sync-canais-venda-bling.py
+
       # Nomes das situações de pedido (inclui as personalizadas, ex.: "CARRO RODRIGO") —
       # 1 request ao Bling. Por último pra uma falha aqui não atrasar os passos acima.
       - name: Situações de pedido (nomes do catálogo do Bling)

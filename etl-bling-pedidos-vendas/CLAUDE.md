@@ -82,6 +82,12 @@ pra sincronização incremental (últimos N dias).
 - `{schema}.pedidos_vendas` — PK `(id_pedido, id_item)`. RPC `processar_carga_pedidos_vendas`.
 - `{schema}.pedidos_vendas_parcelas` — PK `(id_pedido, id_parcela)`. RPC
   `processar_carga_pedidos_vendas_parcelas`.
+- `{schema}.canais_venda_de_para` — PK `id_loja_origem`. Junta num canal só os pedidos de
+  uma integração do Bling excluída e recriada (novo `loja.id`). Aplicado por trigger
+  (`trg_pedidos_vendas_de_para_canal`) em `pedidos_vendas`, então vale pra toda carga.
+  Hoje: Nuvemshop `205291049 → 206304549` (recriada em 21/09/2026). Nova junção = inserir
+  a linha + rodar o UPDATE de backfill de `sql/create_table_canais_venda_de_para.sql`.
+  `sync-canais-venda-bling.py` roda no workflow horário.
 - `{schema}.situacoes_pedido` — PK `id_situacao`. RPC `processar_carga_situacoes_pedido`.
   Sync sob demanda: `python sync-situacoes-bling.py` (GET `/situacoes/modulos/{idModulo}`;
   módulo de vendas via `BLING_ID_MODULO_VENDAS`, padrão `98310`). Rodar de novo sempre
