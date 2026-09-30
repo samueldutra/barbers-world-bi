@@ -77,6 +77,10 @@ pra sincronização incremental (últimos N dias).
 - `{schema}.pedidos_vendas` — PK `(id_pedido, id_item)`. RPC `processar_carga_pedidos_vendas`.
 - `{schema}.pedidos_vendas_parcelas` — PK `(id_pedido, id_parcela)`. RPC
   `processar_carga_pedidos_vendas_parcelas`.
+- `{schema}.situacoes_pedido` — PK `id_situacao`. RPC `processar_carga_situacoes_pedido`.
+  Sync sob demanda: `python sync-situacoes-bling.py` (GET `/situacoes/modulos/{idModulo}`;
+  módulo de vendas via `BLING_ID_MODULO_VENDAS`, padrão `98310`). Rodar de novo sempre
+  que uma situação for criada/renomeada no Bling.
 - `public.bling_oauth` — PK `conta`. Sem RPC; upsert direto via REST
   (`Prefer: resolution=merge-duplicates`).
 

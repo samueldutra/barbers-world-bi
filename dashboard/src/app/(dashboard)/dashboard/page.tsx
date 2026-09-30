@@ -10,6 +10,8 @@ import { RankingProdutos } from '@/components/dashboard/ranking-produtos'
 import { RankingBarChart } from '@/components/dashboard/ranking-bar-chart'
 import { useVendasDashboard } from '@/hooks/use-vendas-dashboard'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
+import { useSituacoesPedido } from '@/hooks/use-situacoes-pedido'
+import { descreverSelecaoSituacoes } from '@/components/filtros/filtro-situacoes'
 import { useRankingProdutos, type OrdenarRankingPor } from '@/hooks/use-ranking-produtos'
 import { obterRangePreset, obterRangeComparacao, rangePadrao, type PeriodoPreset, type RangeData } from '@/lib/date-ranges'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
@@ -18,6 +20,8 @@ export default function DashboardPage() {
   const [periodo, setPeriodo] = useState<PeriodoPreset>('mes_atual')
   const [rangePersonalizado, setRangePersonalizado] = useState<RangeData | null>(null)
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
+  // null = filtro padrão de situações (situacoes_validas_faturamento() no banco).
+  const [situacoesSelecionadas, setSituacoesSelecionadas] = useState<number[] | null>(null)
   const [ordenarRankingPor, setOrdenarRankingPor] = useState<OrdenarRankingPor>('faturamento')
 
   const { atual, comparacao } = useMemo(() => {
@@ -28,14 +32,17 @@ export default function DashboardPage() {
   }, [periodo, rangePersonalizado])
 
   const { canais } = useCanaisVenda()
+  const { situacoes } = useSituacoesPedido({ atual, canais: canaisSelecionados })
   const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm, recarregar } = useVendasDashboard({
     atual,
     comparacao,
     canais: canaisSelecionados,
+    situacoes: situacoesSelecionadas,
   })
   const { ranking, porCategoria, porMarca } = useRankingProdutos({
     atual,
     canais: canaisSelecionados,
+    situacoes: situacoesSelecionadas,
     ordenarPor: ordenarRankingPor,
   })
 
@@ -56,6 +63,9 @@ export default function DashboardPage() {
           canais={canais}
           canaisSelecionados={canaisSelecionados}
           onCanaisChange={setCanaisSelecionados}
+          situacoes={situacoes}
+          situacoesSelecionadas={situacoesSelecionadas}
+          onSituacoesChange={setSituacoesSelecionadas}
           onAtualizar={recarregar}
           atualizando={loading}
         />
@@ -64,6 +74,7 @@ export default function DashboardPage() {
       {atualizadoEm && (
         <p className="-mt-4 text-xs text-muted-foreground">
           Dados atualizados às {atualizadoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          {' · '}Situações consideradas: {descreverSelecaoSituacoes(situacoes, situacoesSelecionadas)}
         </p>
       )}
 
@@ -84,7 +95,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               titulo="Faturamento bruto"
-              tooltip="Valor total das vendas realizadas antes de descontos, taxas e cancelamentos."
+              tooltip="Valor total dos pedidos nas situações selecionadas no filtro (padrão: só pedidos Atendidos), antes de descontos e taxas."
               valorFormatado={formatarMoeda(kpisAtual.faturamento_bruto)}
               atual={kpisAtual.faturamento_bruto}
               anterior={kpisComparacao.faturamento_bruto}
@@ -93,7 +104,7 @@ export default function DashboardPage() {
             />
             <KpiCard
               titulo="Pedidos"
-              tooltip="Número de pedidos válidos no período (exclui cancelados e devoluções)."
+              tooltip="Número de pedidos no período nas situações selecionadas no filtro (padrão: só pedidos Atendidos)."
               valorFormatado={formatarNumero(kpisAtual.total_pedidos)}
               atual={kpisAtual.total_pedidos}
               anterior={kpisComparacao.total_pedidos}
@@ -141,7 +152,7 @@ export default function DashboardPage() {
             />
             <KpiCard
               titulo="Descontos concedidos"
-              tooltip="Soma dos descontos em valor (R$) aplicados nos pedidos válidos do período."
+              tooltip="Soma dos descontos em valor (R$) aplicados nos pedidos das situações selecionadas no filtro."
               valorFormatado={formatarMoeda(kpisAtual.desconto_total)}
               atual={kpisAtual.desconto_total}
               anterior={kpisComparacao.desconto_total}
@@ -150,7 +161,7 @@ export default function DashboardPage() {
             />
             <KpiCard
               titulo="Cancelamentos"
-              tooltip="Valor e quantidade de pedidos marcados como Cancelado ou Devolução no Bling."
+              tooltip="Valor e quantidade de pedidos marcados como Cancelado ou Devolução no Bling. Não depende do filtro de situações."
               valorFormatado={formatarMoeda(kpisAtual.valor_cancelado)}
               atual={kpisAtual.valor_cancelado}
               anterior={kpisComparacao.valor_cancelado}

@@ -36,10 +36,12 @@ export interface VendaPorMarca extends VendaPorAgrupador {
 interface Args {
   atual: RangeData
   canais: number[] | null
+  /** null = filtro padrão de situações (definido no banco). */
+  situacoes: number[] | null
   ordenarPor: OrdenarRankingPor
 }
 
-export function useRankingProdutos({ atual, canais, ordenarPor }: Args) {
+export function useRankingProdutos({ atual, canais, situacoes, ordenarPor }: Args) {
   const [ranking, setRanking] = useState<ProdutoRanking[]>([])
   const [porCategoria, setPorCategoria] = useState<VendaPorCategoria[]>([])
   const [porMarca, setPorMarca] = useState<VendaPorMarca[]>([])
@@ -61,18 +63,21 @@ export function useRankingProdutos({ atual, canais, ordenarPor }: Args) {
         p_canais: canais,
         p_ordenar_por: ordenarPor,
         p_limite: 10,
+        p_situacoes: situacoes,
       }),
       supabase.rpc('obter_vendas_por_categoria', {
         p_schema_name: TENANT_SCHEMA,
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,
+        p_situacoes: situacoes,
       }),
       supabase.rpc('obter_vendas_por_marca', {
         p_schema_name: TENANT_SCHEMA,
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,
+        p_situacoes: situacoes,
       }),
     ])
       .then(([rankingRes, categoriaRes, marcaRes]) => {
@@ -95,7 +100,7 @@ export function useRankingProdutos({ atual, canais, ordenarPor }: Args) {
     return () => {
       ativo = false
     }
-  }, [atual, canais, ordenarPor])
+  }, [atual, canais, situacoes, ordenarPor])
 
   return { ranking, porCategoria, porMarca, loading, error }
 }

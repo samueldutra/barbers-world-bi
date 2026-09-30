@@ -5,14 +5,19 @@
 -- diferente dos KPIs gerais (que usam pedido.total) — é a única forma de atribuir
 -- faturamento a um produto específico. Pequenas diferenças de centavos vs. o total do
 -- pedido são esperadas (desconto costuma ser lançado no cabeçalho, não por item).
+--
+-- p_situacoes: situações que contam como venda (NULL = situacoes_validas_faturamento()),
+-- mesmo filtro do dashboard de vendas.
 
+DROP FUNCTION IF EXISTS obter_ranking_produtos(TEXT, DATE, DATE, BIGINT[], TEXT, INTEGER);
 CREATE OR REPLACE FUNCTION obter_ranking_produtos(
     p_schema_name TEXT,
     p_data_inicial DATE,
     p_data_final DATE,
     p_canais BIGINT[] DEFAULT NULL,
     p_ordenar_por TEXT DEFAULT 'faturamento', -- 'faturamento' | 'unidades' | 'pedidos'
-    p_limite INTEGER DEFAULT 20
+    p_limite INTEGER DEFAULT 20,
+    p_situacoes BIGINT[] DEFAULT NULL
 )
 RETURNS TABLE(
     id_produto BIGINT,
@@ -54,26 +59,28 @@ BEGIN
         LEFT JOIN %I.produtos p ON p.id_produto = pv.id_produto
         WHERE pv.data BETWEEN %L AND %L
           AND (%L::BIGINT[] IS NULL OR pv.id_loja = ANY(%L::BIGINT[]))
-          AND pv.id_situacao = ANY(situacoes_validas_faturamento())
+          AND pv.id_situacao = ANY(COALESCE(%L::BIGINT[], situacoes_validas_faturamento()))
         GROUP BY pv.id_produto, p.codigo, p.nome, p.marca, p.categoria_descricao, p.imagem_url,
                  (CASE WHEN pv.id_produto IS NULL THEN pv.descricao_item END)
         ORDER BY %I DESC
         LIMIT %L
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, v_ordenar_coluna, p_limite);
+    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, v_ordenar_coluna, p_limite);
 
     RETURN QUERY EXECUTE v_sql;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION obter_ranking_produtos(TEXT, DATE, DATE, BIGINT[], TEXT, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_ranking_produtos(TEXT, DATE, DATE, BIGINT[], TEXT, INTEGER, BIGINT[]) TO authenticated;
 
 
+DROP FUNCTION IF EXISTS obter_vendas_por_categoria(TEXT, DATE, DATE, BIGINT[], INTEGER);
 CREATE OR REPLACE FUNCTION obter_vendas_por_categoria(
     p_schema_name TEXT,
     p_data_inicial DATE,
     p_data_final DATE,
     p_canais BIGINT[] DEFAULT NULL,
-    p_limite INTEGER DEFAULT 15
+    p_limite INTEGER DEFAULT 15,
+    p_situacoes BIGINT[] DEFAULT NULL
 )
 RETURNS TABLE(
     categoria_descricao TEXT,
@@ -98,25 +105,27 @@ BEGIN
         LEFT JOIN %I.produtos p ON p.id_produto = pv.id_produto
         WHERE pv.data BETWEEN %L AND %L
           AND (%L::BIGINT[] IS NULL OR pv.id_loja = ANY(%L::BIGINT[]))
-          AND pv.id_situacao = ANY(situacoes_validas_faturamento())
+          AND pv.id_situacao = ANY(COALESCE(%L::BIGINT[], situacoes_validas_faturamento()))
         GROUP BY COALESCE(NULLIF(TRIM(p.categoria_descricao), ''''), ''Sem categoria'')
         ORDER BY faturamento DESC
         LIMIT %L
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_limite);
+    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, p_limite);
 
     RETURN QUERY EXECUTE v_sql;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION obter_vendas_por_categoria(TEXT, DATE, DATE, BIGINT[], INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_vendas_por_categoria(TEXT, DATE, DATE, BIGINT[], INTEGER, BIGINT[]) TO authenticated;
 
 
+DROP FUNCTION IF EXISTS obter_vendas_por_marca(TEXT, DATE, DATE, BIGINT[], INTEGER);
 CREATE OR REPLACE FUNCTION obter_vendas_por_marca(
     p_schema_name TEXT,
     p_data_inicial DATE,
     p_data_final DATE,
     p_canais BIGINT[] DEFAULT NULL,
-    p_limite INTEGER DEFAULT 15
+    p_limite INTEGER DEFAULT 15,
+    p_situacoes BIGINT[] DEFAULT NULL
 )
 RETURNS TABLE(
     marca TEXT,
@@ -141,14 +150,14 @@ BEGIN
         LEFT JOIN %I.produtos p ON p.id_produto = pv.id_produto
         WHERE pv.data BETWEEN %L AND %L
           AND (%L::BIGINT[] IS NULL OR pv.id_loja = ANY(%L::BIGINT[]))
-          AND pv.id_situacao = ANY(situacoes_validas_faturamento())
+          AND pv.id_situacao = ANY(COALESCE(%L::BIGINT[], situacoes_validas_faturamento()))
         GROUP BY COALESCE(NULLIF(TRIM(p.marca), ''''), ''Sem marca'')
         ORDER BY faturamento DESC
         LIMIT %L
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_limite);
+    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, p_limite);
 
     RETURN QUERY EXECUTE v_sql;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION obter_vendas_por_marca(TEXT, DATE, DATE, BIGINT[], INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_vendas_por_marca(TEXT, DATE, DATE, BIGINT[], INTEGER, BIGINT[]) TO authenticated;

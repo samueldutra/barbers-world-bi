@@ -14,6 +14,12 @@ Objetivo: BI da **Barbers World**. Em andamento:
   (`etl-bling-pedidos-vendas/`). Backfill histórico ainda incompleto (rodar em blocos).
 - ✅ Dimensões `barbers.canais_venda` e `barbers.contatos`, sincronizadas sob demanda
   (`etl-bling-pedidos-vendas/sync-canais-venda-bling.py` e `sync-clientes-bling.py`).
+- ✅ Dimensão `barbers.situacoes_pedido` (nomes das situações de pedido do Bling),
+  sincronizada sob demanda por `etl-bling-pedidos-vendas/sync-situacoes-bling.py`.
+  Alimenta o filtro de situações do dashboard. **Filtro padrão de situações** (o que conta
+  como venda em todo o BI) = `situacoes_validas_faturamento()` em
+  `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`); as RPCs do dashboard
+  recebem `p_situacoes BIGINT[]` e caem nesse padrão quando é `NULL`.
 - ✅ Frontend (`dashboard/`) com login/logout/cadastro/recuperação de senha funcionando
   (reaproveitado do `datapro-findash`). Dashboards de vendas por canal ainda não construídos.
 
