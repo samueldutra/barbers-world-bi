@@ -5,7 +5,18 @@ name: ETL Bling — Vendas, Clientes e Produtos (a cada hora)
 on:
   schedule:
     - cron: '0 * * * *'
-  workflow_dispatch: {}
+  # Execução manual aceita parâmetros pra forçar atualização (ex.: status alterados no
+  # Bling em pedidos antigos). Vazios = mesmo comportamento do agendamento.
+  workflow_dispatch:
+    inputs:
+      alterados_horas:
+        description: 'Recarregar pedidos ALTERADOS no Bling nas últimas N horas, qualquer data do pedido (padrão 24; ex.: 720 = 30 dias)'
+        required: false
+        default: '24'
+      data_inicial:
+        description: 'Recarregar pedidos EMITIDOS desde esta data (AAAA-MM-DD). Vazio = últimos 5 dias'
+        required: false
+        default: ''
 
 jobs:
   etl:
@@ -46,9 +57,15 @@ jobs:
       - name: Instala dependências
         run: pip install -r requirements.txt
 
-      - name: Vendas (últimos 5 dias — upsert cuida de duplicata)
+      # Pedidos emitidos nos últimos 5 dias + pedidos ALTERADOS nas últimas 24h (qualquer
+      # data de emissão). Sem o segundo, mudança de situação em pedido antigo (ex.: Em
+      # aberto → Atendido depois de uma semana) nunca chega ao BI. Upsert cuida de duplicata.
+      - name: Vendas (emitidos nos últimos 5 dias + alterados recentemente)
+        env:
+          INPUT_DATA_INICIAL: ${{ inputs.data_inicial }}
+          ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
         run: |
-          export ETL_DATA_INICIAL=$(date -u -d '5 days ago' +%F)
+          export ETL_DATA_INICIAL="${INPUT_DATA_INICIAL:-$(date -u -d '5 days ago' +%F)}"
           python etl-bling-pedidos-vendas.py
 
       - name: Clientes (contatos pendentes de sincronizar)

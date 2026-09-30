@@ -27,6 +27,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from calendar import monthrange
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from zoneinfo import ZoneInfo
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -53,6 +54,8 @@ BLING_TOKEN_URL = "https://bling.com.br/Api/v3/oauth/token"
 # paralelizamos as buscas de detalhe com poucos workers via um limitador de taxa global.
 BLING_ITENS_POR_PAGINA = 100
 BLING_MAX_WORKERS_DETALHE = 3
+# dataAlteracaoInicial/Final do Bling são no horário local da conta (não UTC).
+BLING_FUSO = ZoneInfo("America/Sao_Paulo")
 BLING_MAX_REQ_POR_SEGUNDO = 2.0
 
 
@@ -432,6 +435,29 @@ def listar_ids_pedidos(cliente_id: str, conta: str, data_inicial: date, data_fin
     return ids
 
 
+def listar_ids_pedidos_alterados(cliente_id: str, conta: str, desde: datetime, ate: datetime) -> List[int]:
+    """Pedidos ALTERADOS no intervalo (qualquer data de emissão) — pega mudança de situação
+    em pedido antigo, que a listagem por data do pedido (janela curta) nunca revisita."""
+    formato = "%Y-%m-%d %H:%M:%S"
+    ids = []
+    pagina = 1
+    while True:
+        data = _bling_get(cliente_id, conta, "/pedidos/vendas", {
+            "pagina": pagina,
+            "limite": BLING_ITENS_POR_PAGINA,
+            "dataAlteracaoInicial": desde.astimezone(BLING_FUSO).strftime(formato),
+            "dataAlteracaoFinal": ate.astimezone(BLING_FUSO).strftime(formato),
+        })
+        registros = data.get("data", [])
+        if not registros:
+            break
+        ids.extend(r["id"] for r in registros)
+        if len(registros) < BLING_ITENS_POR_PAGINA:
+            break
+        pagina += 1
+    return ids
+
+
 def buscar_detalhe_pedido(cliente_id: str, conta: str, id_pedido: int) -> Optional[dict]:
     try:
         data = _bling_get(cliente_id, conta, f"/pedidos/vendas/{id_pedido}")
@@ -540,7 +566,47 @@ def enviar_em_lotes(registros: List[dict], rpc_name: str, schema: str, tamanho_l
 
 # --- ORQUESTRAÇÃO ---
 
-def executar_etl(cliente_id: str, data_inicial_str: str, data_final_str: str) -> int:
+def processar_pedidos(cliente_id: str, conta_bling: str, schema: str, ids_pedidos: List[int],
+                      contexto: str) -> tuple:
+    """Busca o detalhe de cada pedido, transforma e faz upsert. Retorna (itens, parcelas)."""
+    data_extracao = date.today().isoformat()
+    itens_bloco: List[dict] = []
+    parcelas_bloco: List[dict] = []
+    falhas_bloco = 0
+
+    with ThreadPoolExecutor(max_workers=BLING_MAX_WORKERS_DETALHE) as executor:
+        futures = {
+            executor.submit(buscar_detalhe_pedido, cliente_id, conta_bling, id_pedido): id_pedido
+            for id_pedido in ids_pedidos
+        }
+        for future in as_completed(futures):
+            pedido = future.result()
+            if not pedido:
+                falhas_bloco += 1
+                continue
+            linhas_itens, linhas_parcelas = transformar_pedido(pedido, data_extracao)
+            itens_bloco.extend(linhas_itens)
+            parcelas_bloco.extend(linhas_parcelas)
+
+    if falhas_bloco:
+        log(f"  [AVISO] {falhas_bloco} pedido(s) falharam e ficaram de fora (ver logs de ERRO acima).")
+
+    itens_bloco = remover_duplicatas(itens_bloco, ("id_pedido", "id_item"))
+    parcelas_bloco = remover_duplicatas(parcelas_bloco, ("id_pedido", "id_parcela"))
+
+    if itens_bloco:
+        enviar_em_lotes(itens_bloco, "processar_carga_pedidos_vendas", schema, context=contexto)
+    if parcelas_bloco:
+        enviar_em_lotes(parcelas_bloco, "processar_carga_pedidos_vendas_parcelas", schema, context=contexto)
+
+    return len(itens_bloco), len(parcelas_bloco)
+
+
+def executar_etl(cliente_id: str, data_inicial_str: str, data_final_str: str,
+                 alterados_horas: Optional[int] = None) -> int:
+    """Carrega os pedidos EMITIDOS no período e, se alterados_horas for informado, também os
+    pedidos ALTERADOS nas últimas N horas (qualquer data de emissão) — é o que faz uma
+    mudança de situação em pedido antigo chegar ao BI."""
     configs = obter_configuracoes_clientes()
     config_cliente = configs.get(cliente_id)
     if not config_cliente:
@@ -554,6 +620,7 @@ def executar_etl(cliente_id: str, data_inicial_str: str, data_final_str: str) ->
 
     total_itens = 0
     total_parcelas = 0
+    ids_processados: set = set()
 
     for bloco_inicio, bloco_fim in blocos:
         log(f"Processando bloco {bloco_inicio} a {bloco_fim}...")
@@ -563,40 +630,27 @@ def executar_etl(cliente_id: str, data_inicial_str: str, data_final_str: str) ->
         if not ids_pedidos:
             continue
 
-        data_extracao = date.today().isoformat()
-        itens_bloco: List[dict] = []
-        parcelas_bloco: List[dict] = []
-        falhas_bloco = 0
+        itens, parcelas = processar_pedidos(cliente_id, conta_bling, schema, ids_pedidos,
+                                            contexto=f"{bloco_inicio} a {bloco_fim}")
+        ids_processados.update(ids_pedidos)
+        total_itens += itens
+        total_parcelas += parcelas
+        log(f"  Bloco concluído: {itens} itens, {parcelas} parcelas.")
 
-        with ThreadPoolExecutor(max_workers=BLING_MAX_WORKERS_DETALHE) as executor:
-            futures = {
-                executor.submit(buscar_detalhe_pedido, cliente_id, conta_bling, id_pedido): id_pedido
-                for id_pedido in ids_pedidos
-            }
-            for future in as_completed(futures):
-                pedido = future.result()
-                if not pedido:
-                    falhas_bloco += 1
-                    continue
-                linhas_itens, linhas_parcelas = transformar_pedido(pedido, data_extracao)
-                itens_bloco.extend(linhas_itens)
-                parcelas_bloco.extend(linhas_parcelas)
-
-        if falhas_bloco:
-            log(f"  [AVISO] {falhas_bloco} pedido(s) do bloco falharam e ficaram de fora (ver logs de ERRO acima).")
-
-        itens_bloco = remover_duplicatas(itens_bloco, ("id_pedido", "id_item"))
-        parcelas_bloco = remover_duplicatas(parcelas_bloco, ("id_pedido", "id_parcela"))
-
-        contexto = f"{bloco_inicio} a {bloco_fim}"
-        if itens_bloco:
-            enviar_em_lotes(itens_bloco, "processar_carga_pedidos_vendas", schema, context=contexto)
-        if parcelas_bloco:
-            enviar_em_lotes(parcelas_bloco, "processar_carga_pedidos_vendas_parcelas", schema, context=contexto)
-
-        total_itens += len(itens_bloco)
-        total_parcelas += len(parcelas_bloco)
-        log(f"  Bloco concluído: {len(itens_bloco)} itens, {len(parcelas_bloco)} parcelas.")
+    if alterados_horas:
+        ate = datetime.now(timezone.utc)
+        desde = ate - timedelta(hours=alterados_horas)
+        log(f"Processando pedidos alterados nas últimas {alterados_horas}h "
+            f"({desde.astimezone(BLING_FUSO):%Y-%m-%d %H:%M} a {ate.astimezone(BLING_FUSO):%Y-%m-%d %H:%M}, horário de Brasília)...")
+        ids_alterados = listar_ids_pedidos_alterados(cliente_id, conta_bling, desde, ate)
+        pendentes = [i for i in dict.fromkeys(ids_alterados) if i not in ids_processados]
+        log(f"  {len(ids_alterados)} pedido(s) alterado(s); {len(pendentes)} fora do período já processado.")
+        if pendentes:
+            itens, parcelas = processar_pedidos(cliente_id, conta_bling, schema, pendentes,
+                                                contexto=f"alterados últimas {alterados_horas}h")
+            total_itens += itens
+            total_parcelas += parcelas
+            log(f"  Alterados concluído: {itens} itens, {parcelas} parcelas.")
 
     log(f"ETL concluído: {total_itens} itens de pedido, {total_parcelas} parcelas.")
     return total_itens
@@ -609,6 +663,7 @@ def lambda_handler(event, context):
     cliente_id = event.get('cliente')
     data_inicial_str = event.get('data_inicial')
     data_final_str = event.get('data_final')
+    alterados_horas = int(event['alterados_horas']) if event.get('alterados_horas') else None
 
     if cliente_id and not any([data_inicial_str, data_final_str]):
         hoje = date.today()
@@ -618,6 +673,8 @@ def lambda_handler(event, context):
 
     if data_inicial_str and data_final_str:
         periodo = f"De {data_inicial_str} a {data_final_str}"
+        if alterados_horas:
+            periodo += f" + alterados nas últimas {alterados_horas}h"
     else:
         periodo = f"Dia Anterior ({(date.today() - timedelta(days=1)).isoformat()})"
 
@@ -630,6 +687,7 @@ def lambda_handler(event, context):
             cliente_id=cliente_id,
             data_inicial_str=data_inicial_str,
             data_final_str=data_final_str,
+            alterados_horas=alterados_horas,
         )
     except Exception as e:
         status = "Falha"
@@ -657,6 +715,9 @@ def main():
     cliente_id = os.getenv('ETL_CLIENTE')
     data_inicial = os.getenv('ETL_DATA_INICIAL')
     data_final = os.getenv('ETL_DATA_FINAL') or date.today().isoformat()
+    # Opcional: também recarrega pedidos ALTERADOS nas últimas N horas (qualquer data de
+    # emissão) — pega mudança de situação em pedido antigo.
+    alterados_horas = os.getenv('ETL_ALTERADOS_HORAS')
 
     if not cliente_id:
         log("[ERRO] ETL_CLIENTE não definido no .env")
@@ -667,9 +728,12 @@ def main():
 
     log(f"Cliente: {cliente_id}")
     log(f"Período: {data_inicial} a {data_final}")
+    if alterados_horas:
+        log(f"Também pedidos alterados nas últimas {alterados_horas}h")
     log("=" * 60)
 
-    event = {'cliente': cliente_id, 'data_inicial': data_inicial, 'data_final': data_final}
+    event = {'cliente': cliente_id, 'data_inicial': data_inicial, 'data_final': data_final,
+             'alterados_horas': alterados_horas}
 
     class LocalContext:
         function_name = "etl-bling-pedidos-vendas-local"
