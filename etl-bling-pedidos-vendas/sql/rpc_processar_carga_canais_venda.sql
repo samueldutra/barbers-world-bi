@@ -18,12 +18,16 @@ BEGIN
         RAISE EXCEPTION 'Schema name é obrigatório';
     END IF;
 
+    -- descricao = nome exibido no BI: nome_exibicao (renome feito só no BI) ou, se vazio,
+    -- o nome do Bling. descricao_bling guarda sempre o nome do Bling.
+    -- Ver canais_venda_nome_exibicao.sql.
     v_sql := format('
-        INSERT INTO %I.canais_venda (
-            id_loja, descricao, tipo, grupo, situacao, data_sincronizacao
+        INSERT INTO %I.canais_venda AS cv (
+            id_loja, descricao, descricao_bling, tipo, grupo, situacao, data_sincronizacao
         )
         SELECT
             (item->>''id_loja'')::BIGINT,
+            item->>''descricao'',
             item->>''descricao'',
             item->>''tipo'',
             item->>''grupo'',
@@ -32,7 +36,8 @@ BEGIN
         FROM jsonb_array_elements($1) AS item
         ON CONFLICT (id_loja)
         DO UPDATE SET
-            descricao = EXCLUDED.descricao,
+            descricao = COALESCE(cv.nome_exibicao, EXCLUDED.descricao),
+            descricao_bling = EXCLUDED.descricao_bling,
             tipo = EXCLUDED.tipo,
             grupo = EXCLUDED.grupo,
             situacao = EXCLUDED.situacao,
