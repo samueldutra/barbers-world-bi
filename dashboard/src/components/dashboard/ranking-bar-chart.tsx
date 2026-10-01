@@ -1,9 +1,11 @@
 'use client'
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, type YAxisTickContentProps } from 'recharts'
+import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis, type YAxisTickContentProps } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { formatarMoeda, formatarMoedaAbreviada } from '@/lib/formatters'
+import { RotuloValorBarra } from '@/components/dashboard/rotulo-valor-barra'
+import { CLASSE_LOGO_CANAL } from '@/lib/canais'
 
 const chartConfig = {
   faturamento: { label: 'Faturamento', color: 'var(--primary)' },
@@ -17,6 +19,8 @@ interface Props<T extends { faturamento: number }> {
   onSelecionar?: (item: T) => void
   /** URL de um ícone exibido à esquerda do rótulo de cada barra (ex.: logo do canal). */
   iconeDoItem?: (item: T) => string | null
+  /** Mostra "R$ valor (x,xx%)" em cada barra — % sobre a soma de todas as barras. */
+  mostrarValorEPercentual?: boolean
 }
 
 const LARGURA_EIXO_ROTULOS = 130
@@ -29,10 +33,12 @@ export function RankingBarChart<T extends { faturamento: number }>({
   chaveLabel,
   onSelecionar,
   iconeDoItem,
+  mostrarValorEPercentual,
 }: Props<T>) {
   const dadosGrafico = [...dados]
     .sort((a, b) => Number(b.faturamento) - Number(a.faturamento))
     .map((d) => ({ ...d, label: String(d[chaveLabel] ?? '—'), icone: iconeDoItem?.(d) ?? null }))
+  const totalFaturamento = dadosGrafico.reduce((soma, d) => soma + Number(d.faturamento || 0), 0)
 
   // Rótulo do eixo com ícone: foreignObject pra usar layout HTML (ícone + texto truncado,
   // alinhados à direita como o tick padrão). Sem iconeDoItem, mantém o tick padrão.
@@ -51,7 +57,7 @@ export function RankingBarChart<T extends { faturamento: number }>({
                   width={TAMANHO_ICONE}
                   height={TAMANHO_ICONE}
                   style={{ width: TAMANHO_ICONE, height: TAMANHO_ICONE }}
-                  className="shrink-0 object-contain"
+                  className={CLASSE_LOGO_CANAL}
                 />
               )}
               <span className="truncate">{item?.label}</span>
@@ -97,7 +103,11 @@ export function RankingBarChart<T extends { faturamento: number }>({
                 onClick={(data) => {
                   if (onSelecionar) onSelecionar(data as unknown as T)
                 }}
-              />
+              >
+                {mostrarValorEPercentual && (
+                  <LabelList dataKey="faturamento" content={<RotuloValorBarra total={totalFaturamento} />} />
+                )}
+              </Bar>
             </BarChart>
           </ChartContainer>
         )}

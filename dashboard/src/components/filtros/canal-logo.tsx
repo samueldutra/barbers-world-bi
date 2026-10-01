@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import { cn } from 'cn'
-import { logoDoCanal } from '@/lib/canais'
+import { CLASSE_LOGO_CANAL, logoDoCanal } from '@/lib/canais'
 
 interface Props {
   grupo: string | null | undefined
@@ -23,7 +23,7 @@ export function CanalLogo({ grupo, tamanho = 16, className }: Props) {
       // Fixa as duas dimensões: o preflight do Tailwind põe height:auto em <img>, o que
       // distorce (e gera warning do next/image) em logos não quadradas, como a do TikTok.
       style={{ width: tamanho, height: tamanho }}
-      className={cn('shrink-0 object-contain', className)}
+      className={cn(CLASSE_LOGO_CANAL, className)}
     />
   )
 }

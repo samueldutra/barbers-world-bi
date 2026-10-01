@@ -11,6 +11,11 @@ const LOGO_POR_GRUPO: Record<string, string> = {
   Nuvemshop: '/canais/nuvemshop.svg',
 }
 
+/** Classes pra logo dos canais: no tema escuro ganha um fundo claro arredondado — algumas
+ * logos (Nuvemshop, TikTok) são pretas e sumiriam no fundo escuro; inverter as cores
+ * distorceria as marcas. */
+export const CLASSE_LOGO_CANAL = 'shrink-0 object-contain dark:rounded-[3px] dark:bg-white dark:p-px'
+
 export function logoDoCanal(grupo: string | null | undefined): string | null {
   return grupo ? LOGO_POR_GRUPO[grupo] ?? null : null
 }
