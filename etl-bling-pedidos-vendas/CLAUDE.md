@@ -82,6 +82,10 @@ pra sincronização incremental (últimos N dias).
 - `{schema}.pedidos_vendas` — PK `(id_pedido, id_item)`. RPC `processar_carga_pedidos_vendas`.
 - `{schema}.pedidos_vendas_parcelas` — PK `(id_pedido, id_parcela)`. RPC
   `processar_carga_pedidos_vendas_parcelas`.
+- `{schema}.canais_venda` — `descricao` é o nome exibido no BI = `nome_exibicao` (renome
+  feito só no BI, não no Bling) ou, se vazio, o nome do Bling (`descricao_bling`).
+  `processar_carga_canais_venda` mantém essa regra a cada sync. Renomes atuais e como
+  renomear outro canal: `sql/canais_venda_nome_exibicao.sql`.
 - `{schema}.canais_venda_de_para` — PK `id_loja_origem`. Junta num canal só os pedidos de
   uma integração do Bling excluída e recriada (novo `loja.id`). Aplicado por trigger
   (`trg_pedidos_vendas_de_para_canal`) em `pedidos_vendas`, então vale pra toda carga.
