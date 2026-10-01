@@ -19,6 +19,7 @@ export function VendasPorCanalChart({ dados, onSelecionarCanal }: Props) {
       dados={dadosComLabel}
       chaveLabel="canal"
       iconeDoItem={(item) => logoDoCanal(item.canal_grupo)}
+      mostrarValorEPercentual
       onSelecionar={onSelecionarCanal ? (item) => onSelecionarCanal(item.id_loja) : undefined}
     />
   )
