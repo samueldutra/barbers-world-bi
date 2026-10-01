@@ -19,6 +19,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '*.bling.com.br' },
+      // Imagens dos produtos copiadas pro Supabase Storage (bucket produtos-imagens).
+      { protocol: 'https', hostname: 'ajxmbhfmitehmxvjkcdk.supabase.co', pathname: '/storage/v1/object/public/**' },
     ],
   },
   async headers() {

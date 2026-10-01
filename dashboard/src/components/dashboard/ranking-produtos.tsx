@@ -1,7 +1,6 @@
 'use client'
 
-import Image from 'next/image'
-import { Package } from 'lucide-react'
+import { ProdutoImagem } from '@/components/produto-imagem'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
@@ -47,13 +46,7 @@ export function RankingProdutos({ produtos, ordenarPor, onOrdenarPorChange }: Pr
               return (
                 <li key={`${produto.id_produto ?? produto.codigo ?? 'produto'}-${index}`} className="flex items-center gap-3 py-3">
                   <span className="w-5 shrink-0 text-sm font-medium text-muted-foreground">{index + 1}</span>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                    {produto.imagem_url ? (
-                      <Image src={produto.imagem_url} alt={produto.nome || ''} width={40} height={40} className="h-full w-full object-cover" unoptimized />
-                    ) : (
-                      <Package className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </div>
+                  <ProdutoImagem src={produto.imagem_url} alt={produto.nome || ''} tamanho={40} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{produto.nome || 'Produto sem nome'}</p>
                     <p className="truncate text-xs text-muted-foreground">

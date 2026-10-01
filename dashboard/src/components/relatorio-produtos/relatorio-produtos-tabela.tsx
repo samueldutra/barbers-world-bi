@@ -1,7 +1,7 @@
 'use client'
 
-import Image from 'next/image'
-import { Package, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Download, Loader2 } from 'lucide-react'
+import { ProdutoImagem } from '@/components/produto-imagem'
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Download, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -123,13 +123,7 @@ export function RelatorioProdutosTabela({
                   <TableRow key={`${linha.id_produto ?? linha.codigo ?? 'produto'}-${index}`}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                          {linha.imagem_url ? (
-                            <Image src={linha.imagem_url} alt={linha.nome || ''} width={36} height={36} className="h-full w-full object-cover" unoptimized />
-                          ) : (
-                            <Package className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
+                        <ProdutoImagem src={linha.imagem_url} alt={linha.nome || ''} tamanho={36} />
                         <div className="min-w-0">
                           <p className="max-w-64 truncate text-sm font-medium">{linha.nome || 'Produto sem nome'}</p>
                           <p className="text-xs text-muted-foreground">{linha.codigo || 'Sem SKU'}</p>
