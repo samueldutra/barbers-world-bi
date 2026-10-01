@@ -481,6 +481,22 @@ def _listar_imagens_existentes() -> set:
         offset += 1000
 
 
+def _detectar_tipo_imagem(conteudo: bytes) -> Optional[str]:
+    """Tipo da imagem pelos primeiros bytes. O S3 do Bling serve as imagens como
+    application/octet-stream, então o Content-Type da resposta não serve."""
+    if conteudo.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if conteudo.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if conteudo[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if conteudo[:4] == b"RIFF" and conteudo[8:12] == b"WEBP":
+        return "image/webp"
+    if conteudo[4:12] in (b"ftypavif", b"ftypavis"):
+        return "image/avif"
+    return None  # SVG fica de fora de propósito (pode carregar script)
+
+
 def _espelhar_imagem(id_produto: int, url: str) -> tuple:
     """Copia a imagem do link assinado do Bling pro Storage. Retorna (link público, copiou?).
     (None, False) = não é link assinado do Bling (fica como veio)."""
@@ -495,9 +511,10 @@ def _espelhar_imagem(id_produto: int, url: str) -> tuple:
     session = get_http_session()
     resp = session.get(url, timeout=30)
     resp.raise_for_status()
-    content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
-    if not content_type.startswith("image/"):
-        raise RuntimeError(f"conteúdo não é imagem ({content_type})")
+    content_type = _detectar_tipo_imagem(resp.content)
+    if not content_type:
+        recebido = resp.headers.get("Content-Type", "?").split(";")[0].strip()
+        raise RuntimeError(f"conteúdo não é imagem reconhecida (Content-Type {recebido}, {len(resp.content)} bytes)")
     headers = _supabase_headers()
     headers.update({"Content-Type": content_type, "x-upsert": "true", "cache-control": "max-age=31536000"})
     up = session.post(f"{SUPABASE_URL}/storage/v1/object/{BUCKET_IMAGENS}/{nome}",
