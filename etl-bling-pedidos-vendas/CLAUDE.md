@@ -82,6 +82,12 @@ pra sincronização incremental (últimos N dias).
 - `{schema}.pedidos_vendas` — PK `(id_pedido, id_item)`. RPC `processar_carga_pedidos_vendas`.
 - `{schema}.pedidos_vendas_parcelas` — PK `(id_pedido, id_parcela)`. RPC
   `processar_carga_pedidos_vendas_parcelas`.
+- `{schema}.produtos.imagem_url` — link **permanente** do Supabase Storage (bucket público
+  `produtos-imagens`, `sql/create_bucket_produtos_imagens.sql`). O Bling devolve `imagemURL`
+  como link assinado do S3 que vence em ~30 min; `sync-produtos-bling.py` copia cada imagem
+  pro bucket (uma vez — nome `{id_produto}-{id da imagem no S3}`, só recopia se mudar) e
+  grava o link público. Se o Storage falhar, grava o link do Bling e o dashboard mostra o
+  ícone de "sem imagem" quando ele vencer.
 - `{schema}.canais_venda` — `descricao` é o nome exibido no BI = `nome_exibicao` (renome
   feito só no BI, não no Bling) ou, se vazio, o nome do Bling (`descricao_bling`).
   `processar_carga_canais_venda` mantém essa regra a cada sync. Renomes atuais e como

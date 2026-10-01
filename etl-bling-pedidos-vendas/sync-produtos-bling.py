@@ -62,6 +62,17 @@ TAMANHO_LOTE_GRAVACAO = 100       # grava no Supabase a cada N produtos buscados
 BLING_CRITERIO_ATIVOS = 2         # GET /produtos: 1 últimos incluídos, 2 ativos, 3 inativos, 4 excluídos, 5 todos
 SO_LISTAGEM = os.getenv('SYNC_PRODUTOS_SO_LISTAGEM', 'false').lower() == 'true'
 
+# Imagens: o Bling devolve imagemURL como link ASSINADO do S3 que vence em ~30 min — gravar
+# esse link deixava as imagens quebradas no BI quase o tempo todo. Cada imagem é copiada
+# (uma vez) pro Supabase Storage enquanto o link ainda vale, e o BI grava/usa o link público
+# permanente. Nome do arquivo = {id_produto}-{id da imagem no S3}: só recopia se a imagem
+# mudar no Bling. Bucket: sql/create_bucket_produtos_imagens.sql.
+BUCKET_IMAGENS = "produtos-imagens"
+MAX_WORKERS_IMAGENS = 8  # download do S3 + upload no Storage (não passa pela API do Bling)
+_RE_IMAGEM_ASSINADA_BLING = re.compile(r'^https://orgbling\.s3\.amazonaws\.com/(?P<chave>[^?]+)\?.*Expires=')
+_imagens_existentes: Optional[set] = None
+_imagens_lock = threading.Lock()
+
 
 class RateLimiter:
     def __init__(self, max_por_segundo: float):
@@ -404,7 +415,7 @@ def sincronizar_listagem_ativos(cliente_id: str, conta: str, schema: str) -> int
             "preco": p.get("preco"),
             "data_sincronizacao_listagem": agora,
         } for p in registros}  # dict dedup pela PK
-        enviar_em_lotes(list(lote.values()), "processar_carga_produtos_listagem", schema)
+        gravar_produtos(list(lote.values()), "processar_carga_produtos_listagem", schema)
         total += len(lote)
         if pagina % 10 == 0:
             log(f"  ... listagem: {pagina} página(s), {total} produto(s) ativo(s) gravado(s).")
@@ -444,6 +455,97 @@ def transformar_produto(produto: dict, categorias: Dict[int, str], data_sincroni
         "preco": produto.get("preco"),
         "data_sincronizacao": data_sincronizacao,
     }
+
+
+def _url_publica_imagem(nome: str) -> str:
+    return f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_IMAGENS}/{nome}"
+
+
+def _listar_imagens_existentes() -> set:
+    """Nomes já gravados no bucket (lista paginada da raiz) — evita recopiar a cada execução."""
+    nomes = set()
+    offset = 0
+    session = get_http_session()
+    while True:
+        resp = session.post(
+            f"{SUPABASE_URL}/storage/v1/object/list/{BUCKET_IMAGENS}",
+            headers=_supabase_headers(),
+            json={"prefix": "", "limit": 1000, "offset": offset, "sortBy": {"column": "name", "order": "asc"}},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        itens = resp.json()
+        nomes.update(i["name"] for i in itens if i.get("id"))  # id nulo = "pasta"
+        if len(itens) < 1000:
+            return nomes
+        offset += 1000
+
+
+def _espelhar_imagem(id_produto: int, url: str) -> tuple:
+    """Copia a imagem do link assinado do Bling pro Storage. Retorna (link público, copiou?).
+    (None, False) = não é link assinado do Bling (fica como veio)."""
+    m = _RE_IMAGEM_ASSINADA_BLING.match(url or "")
+    if not m:
+        return None, False
+    nome = f"{id_produto}-{m.group('chave').rsplit('/', 1)[-1]}"
+    with _imagens_lock:
+        if nome in _imagens_existentes:
+            return _url_publica_imagem(nome), False
+
+    session = get_http_session()
+    resp = session.get(url, timeout=30)
+    resp.raise_for_status()
+    content_type = resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+    if not content_type.startswith("image/"):
+        raise RuntimeError(f"conteúdo não é imagem ({content_type})")
+    headers = _supabase_headers()
+    headers.update({"Content-Type": content_type, "x-upsert": "true", "cache-control": "max-age=31536000"})
+    up = session.post(f"{SUPABASE_URL}/storage/v1/object/{BUCKET_IMAGENS}/{nome}",
+                      headers=headers, data=resp.content, timeout=60)
+    if up.status_code >= 400:
+        raise RuntimeError(f"upload no Storage falhou ({up.status_code}): {up.text[:200]}")
+    with _imagens_lock:
+        _imagens_existentes.add(nome)
+    return _url_publica_imagem(nome), True
+
+
+def espelhar_imagens(registros: List[dict]):
+    """Troca imagem_url (link assinado do Bling) pelo link permanente do Storage, in place.
+    Nunca derruba o sync: se o Storage falhar, o registro segue com o link do Bling."""
+    global _imagens_existentes
+    com_imagem = [r for r in registros if r.get("imagem_url")]
+    if not com_imagem:
+        return
+    try:
+        if _imagens_existentes is None:
+            _imagens_existentes = _listar_imagens_existentes()
+            log(f"[IMAGENS] {len(_imagens_existentes)} imagem(ns) já no Storage.")
+    except Exception as e:
+        log(f"[IMAGENS][AVISO] Não foi possível listar o bucket '{BUCKET_IMAGENS}' ({e}) — gravando o link do Bling.")
+        return
+
+    copiadas = falhas = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_IMAGENS) as executor:
+        futures = {executor.submit(_espelhar_imagem, r["id_produto"], r["imagem_url"]): r for r in com_imagem}
+        for future in as_completed(futures):
+            registro = futures[future]
+            try:
+                url_publica, copiou = future.result()
+            except Exception as e:
+                falhas += 1
+                if falhas <= 5:
+                    log(f"[IMAGENS][AVISO] Produto {registro['id_produto']}: {e}")
+                continue
+            if url_publica:
+                registro["imagem_url"] = url_publica
+                copiadas += copiou
+    if copiadas or falhas:
+        log(f"[IMAGENS] {copiadas} copiada(s) pro Storage, {falhas} falha(s) (mantêm o link do Bling).")
+
+
+def gravar_produtos(registros: List[dict], rpc_name: str, schema: str):
+    espelhar_imagens(registros)
+    enviar_em_lotes(registros, rpc_name, schema)
 
 
 def enviar_em_lotes(registros: List[dict], rpc_name: str, schema: str, tamanho_lote: int = 500):
@@ -519,13 +621,13 @@ def executar_sync(cliente_id: str) -> int:
                 # Grava incrementalmente (não espera a rodada toda) — dá visibilidade e
                 # não perde o que já foi buscado se o processo cair no meio da rodada.
                 if len(buffer) >= TAMANHO_LOTE_GRAVACAO:
-                    enviar_em_lotes(buffer, "processar_carga_produtos", schema)
+                    gravar_produtos(buffer, "processar_carga_produtos", schema)
                     gravados_rodada += len(buffer)
                     log(f"  ... {processados}/{len(ids_pendentes)} buscados, {gravados_rodada} já gravados nesta rodada.")
                     buffer = []
 
         if buffer:
-            enviar_em_lotes(buffer, "processar_carga_produtos", schema)
+            gravar_produtos(buffer, "processar_carga_produtos", schema)
             gravados_rodada += len(buffer)
 
         if falhas:
