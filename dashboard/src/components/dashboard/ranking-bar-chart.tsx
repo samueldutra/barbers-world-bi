@@ -1,6 +1,6 @@
 'use client'
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, type YAxisTickContentProps } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { formatarMoeda, formatarMoedaAbreviada } from '@/lib/formatters'
@@ -15,7 +15,12 @@ interface Props<T extends { faturamento: number }> {
   dados: T[]
   chaveLabel: keyof T
   onSelecionar?: (item: T) => void
+  /** URL de um ícone exibido à esquerda do rótulo de cada barra (ex.: logo do canal). */
+  iconeDoItem?: (item: T) => string | null
 }
+
+const LARGURA_EIXO_ROTULOS = 130
+const TAMANHO_ICONE = 16
 
 export function RankingBarChart<T extends { faturamento: number }>({
   titulo,
@@ -23,10 +28,38 @@ export function RankingBarChart<T extends { faturamento: number }>({
   dados,
   chaveLabel,
   onSelecionar,
+  iconeDoItem,
 }: Props<T>) {
   const dadosGrafico = [...dados]
     .sort((a, b) => Number(b.faturamento) - Number(a.faturamento))
-    .map((d) => ({ ...d, label: String(d[chaveLabel] ?? '—') }))
+    .map((d) => ({ ...d, label: String(d[chaveLabel] ?? '—'), icone: iconeDoItem?.(d) ?? null }))
+
+  // Rótulo do eixo com ícone: foreignObject pra usar layout HTML (ícone + texto truncado,
+  // alinhados à direita como o tick padrão). Sem iconeDoItem, mantém o tick padrão.
+  const tickComIcone = iconeDoItem
+    ? ({ x, y, index }: YAxisTickContentProps) => {
+        const item = dadosGrafico[index]
+        return (
+          <foreignObject x={Number(x) - LARGURA_EIXO_ROTULOS} y={Number(y) - 10} width={LARGURA_EIXO_ROTULOS - 4} height={20}>
+            <div className="flex h-5 items-center justify-end gap-1.5 text-xs text-muted-foreground">
+              {item?.icone && (
+                // eslint-disable-next-line @next/next/no-img-element -- dentro de <svg>; ícone local pequeno
+                <img
+                  src={item.icone}
+                  alt=""
+                  aria-hidden
+                  width={TAMANHO_ICONE}
+                  height={TAMANHO_ICONE}
+                  style={{ width: TAMANHO_ICONE, height: TAMANHO_ICONE }}
+                  className="shrink-0 object-contain"
+                />
+              )}
+              <span className="truncate">{item?.label}</span>
+            </div>
+          </foreignObject>
+        )
+      }
+    : undefined
 
   return (
     <Card>
@@ -44,7 +77,14 @@ export function RankingBarChart<T extends { faturamento: number }>({
             <BarChart data={dadosGrafico} layout="vertical" margin={{ left: 12 }}>
               <CartesianGrid horizontal={false} />
               <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => formatarMoedaAbreviada(v)} />
-              <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} width={110} />
+              <YAxis
+                dataKey="label"
+                type="category"
+                tickLine={false}
+                axisLine={false}
+                width={iconeDoItem ? LARGURA_EIXO_ROTULOS : 110}
+                tick={tickComIcone}
+              />
               <ChartTooltip
                 cursor={{ fill: 'var(--muted)' }}
                 content={<ChartTooltipContent formatter={(value) => formatarMoeda(Number(value))} />}

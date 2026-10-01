@@ -2,6 +2,7 @@
 
 import { RankingBarChart } from '@/components/dashboard/ranking-bar-chart'
 import type { VendaPorCanal } from '@/hooks/use-vendas-dashboard'
+import { logoDoCanal } from '@/lib/canais'
 
 interface Props {
   dados: VendaPorCanal[]
@@ -17,6 +18,7 @@ export function VendasPorCanalChart({ dados, onSelecionarCanal }: Props) {
       descricao="Participação de cada canal no faturamento do período"
       dados={dadosComLabel}
       chaveLabel="canal"
+      iconeDoItem={(item) => logoDoCanal(item.canal_grupo)}
       onSelecionar={onSelecionarCanal ? (item) => onSelecionarCanal(item.id_loja) : undefined}
     />
   )
