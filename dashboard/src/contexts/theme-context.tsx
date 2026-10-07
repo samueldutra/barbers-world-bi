@@ -87,8 +87,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user && (newTheme === 'light' || newTheme === 'dark')) {
-        await supabase.from('user_profiles').update({ theme_preference: newTheme }).eq('id', user.id)
+      if (user) {
+        // 'system' limpa a preferência (a coluna aceita NULL); senão outro dispositivo
+        // continuaria usando o claro/escuro antigo em vez de seguir o aparelho.
+        await supabase
+          .from('user_profiles')
+          .update({ theme_preference: newTheme === 'system' ? null : newTheme })
+          .eq('id', user.id)
       }
     } catch (error) {
       console.error('Erro ao salvar preferência de tema:', error)
