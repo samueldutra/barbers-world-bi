@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { IconLogout } from "@tabler/icons-react"
+import { IconDeviceDesktop, IconLogout, IconMoon, IconSun } from "@tabler/icons-react"
 
 import {
   AlertDialog,
@@ -22,9 +22,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useTheme } from "@/contexts/theme-context"
 import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { useUser } from "@/hooks/use-user"
@@ -39,6 +42,7 @@ function initials(name: string) {
 }
 
 export function NavUser() {
+  const { theme, setTheme } = useTheme()
   const { profile } = useProfile()
   const { user } = useUser()
   const router = useRouter()
@@ -82,6 +86,22 @@ export function NavUser() {
                 <span className="truncate text-xs text-muted-foreground">{userEmail}</span>
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Tema</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={theme}
+              onValueChange={(valor) => setTheme(valor as "light" | "dark" | "system")}
+            >
+              <DropdownMenuRadioItem value="light" onSelect={(e) => e.preventDefault()}>
+                <IconSun /> Claro
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark" onSelect={(e) => e.preventDefault()}>
+                <IconMoon /> Escuro
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system" onSelect={(e) => e.preventDefault()}>
+                <IconDeviceDesktop /> Automático (aparelho)
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={(event) => {
