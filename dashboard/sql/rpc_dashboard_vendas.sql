@@ -24,6 +24,42 @@ AS $$
     SELECT ARRAY[9]::BIGINT[];
 $$;
 
+-- FILTRO PADRÃO DO DASHBOARD (só as telas do dashboard — os relatórios continuam em
+-- situacoes_validas_faturamento()): todas as situações já vistas, MENOS Cancelado (12),
+-- Em aberto (6) e as situações personalizadas que herdam de Em aberto (Fornecedor,
+-- Eventos/Workshop, CARRO MATHEUS, Devolução...). Calculada no banco, então uma situação
+-- nova criada no Bling entra sozinha, a menos que herde de Em aberto.
+CREATE OR REPLACE FUNCTION situacoes_padrao_dashboard(p_schema_name TEXT)
+RETURNS BIGINT[]
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_ids BIGINT[];
+BEGIN
+    EXECUTE format('
+        SELECT COALESCE(array_agg(ids.id_situacao ORDER BY ids.id_situacao), ARRAY[]::BIGINT[])
+        FROM (
+            SELECT DISTINCT id_situacao::BIGINT AS id_situacao
+            FROM %I.pedidos_vendas
+            WHERE id_situacao IS NOT NULL
+            UNION
+            SELECT id_situacao::BIGINT FROM %I.situacoes_pedido
+        ) ids
+        LEFT JOIN %I.situacoes_pedido s ON s.id_situacao = ids.id_situacao
+        WHERE ids.id_situacao NOT IN (12, 6)
+          AND COALESCE(s.id_herdado, 0) <> 6
+    ', p_schema_name, p_schema_name, p_schema_name)
+    INTO v_ids;
+
+    RETURN v_ids;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION situacoes_padrao_dashboard(TEXT) TO authenticated;
+
 -- Situações que contam como cancelamento (métrica separada — seção 5.8).
 --   12      = Cancelado
 --   453477  = Devolução
@@ -39,7 +75,7 @@ $$;
 -- KPIs consolidados do período (faturamento, pedidos, itens, ticket médio, itens/pedido,
 -- desconto, cancelamentos). Uma linha por chamada — o frontend chama 2x (período atual e
 -- período de comparação) e calcula a variação percentual no cliente.
--- p_situacoes: situações que contam como venda (NULL = situacoes_validas_faturamento()).
+-- p_situacoes: situações que contam como venda (NULL = situacoes_padrao_dashboard()).
 -- Cancelamentos são sempre medidos pelas situacoes_canceladas_faturamento(), independente
 -- do filtro.
 DROP FUNCTION IF EXISTS obter_kpis_vendas(TEXT, DATE, DATE, BIGINT[]);
@@ -106,7 +142,7 @@ BEGIN
             (SELECT count(*) FROM cancelados)::BIGINT
     ', p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais,
        p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais,
-       p_situacoes);
+       COALESCE(p_situacoes, situacoes_padrao_dashboard(p_schema_name)));
 
     RETURN QUERY EXECUTE v_sql;
 END;
@@ -164,7 +200,7 @@ BEGIN
         LEFT JOIN itens_por_pedido ipp ON ipp.id_pedido = pp.id_pedido
         GROUP BY pp.data
         ORDER BY pp.data
-    ', p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, p_schema_name);
+    ', p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, COALESCE(p_situacoes, situacoes_padrao_dashboard(p_schema_name)), p_schema_name);
 
     RETURN QUERY EXECUTE v_sql;
 END;
@@ -174,7 +210,7 @@ GRANT EXECUTE ON FUNCTION obter_evolucao_vendas(TEXT, DATE, DATE, BIGINT[], BIGI
 
 
 -- Vendas por canal — usa pedido.total (não recomputa por item) e considera as situações de
--- p_situacoes (NULL = situacoes_validas_faturamento()).
+-- p_situacoes (NULL = situacoes_padrao_dashboard()).
 DROP FUNCTION IF EXISTS obter_vendas_por_canal(TEXT, DATE, DATE);
 CREATE OR REPLACE FUNCTION obter_vendas_por_canal(
     p_schema_name TEXT,
@@ -222,7 +258,7 @@ BEGIN
         LEFT JOIN %I.canais_venda cv ON cv.id_loja = pp.id_loja
         GROUP BY pp.id_loja, cv.descricao, cv.grupo
         ORDER BY faturamento DESC NULLS LAST
-    ', p_schema_name, p_data_inicial, p_data_final, p_situacoes, p_schema_name, p_schema_name);
+    ', p_schema_name, p_data_inicial, p_data_final, COALESCE(p_situacoes, situacoes_padrao_dashboard(p_schema_name)), p_schema_name, p_schema_name);
 
     RETURN QUERY EXECUTE v_sql;
 END;
@@ -309,7 +345,7 @@ BEGIN
             COALESCE(s.nome, ''Situação '' || ids.id_situacao)::TEXT,
             s.cor::TEXT,
             h.nome::TEXT,
-            ids.id_situacao = ANY(situacoes_validas_faturamento()),
+            ids.id_situacao = ANY(situacoes_padrao_dashboard(%L)),
             ids.id_situacao = ANY(situacoes_canceladas_faturamento()),
             COALESCE(v.pedidos, 0)::BIGINT,
             COALESCE(v.valor, 0)::NUMERIC
@@ -320,7 +356,7 @@ BEGIN
         ORDER BY COALESCE(v.pedidos, 0) DESC, 2
     ', p_schema_name, p_schema_name,
        p_data_inicial, p_data_inicial, p_data_final, p_data_final, p_canais, p_canais,
-       p_schema_name, p_schema_name);
+       p_schema_name, p_schema_name, p_schema_name);
 
     RETURN QUERY EXECUTE v_sql;
 END;

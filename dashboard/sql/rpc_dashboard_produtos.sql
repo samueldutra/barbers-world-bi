@@ -6,7 +6,7 @@
 -- faturamento a um produto específico. Pequenas diferenças de centavos vs. o total do
 -- pedido são esperadas (desconto costuma ser lançado no cabeçalho, não por item).
 --
--- p_situacoes: situações que contam como venda (NULL = situacoes_validas_faturamento()),
+-- p_situacoes: situações que contam como venda (NULL = situacoes_padrao_dashboard()),
 -- mesmo filtro do dashboard de vendas.
 
 DROP FUNCTION IF EXISTS obter_ranking_produtos(TEXT, DATE, DATE, BIGINT[], TEXT, INTEGER);
@@ -64,7 +64,7 @@ BEGIN
                  (CASE WHEN pv.id_produto IS NULL THEN pv.descricao_item END)
         ORDER BY %I DESC
         LIMIT %L
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, v_ordenar_coluna, p_limite);
+    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, COALESCE(p_situacoes, situacoes_padrao_dashboard(p_schema_name)), v_ordenar_coluna, p_limite);
 
     RETURN QUERY EXECUTE v_sql;
 END;
@@ -109,7 +109,7 @@ BEGIN
         GROUP BY COALESCE(NULLIF(TRIM(p.categoria_descricao), ''''), ''Sem categoria'')
         ORDER BY faturamento DESC
         LIMIT %L
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, p_limite);
+    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, COALESCE(p_situacoes, situacoes_padrao_dashboard(p_schema_name)), p_limite);
 
     RETURN QUERY EXECUTE v_sql;
 END;
@@ -154,7 +154,7 @@ BEGIN
         GROUP BY COALESCE(NULLIF(TRIM(p.marca), ''''), ''Sem marca'')
         ORDER BY faturamento DESC
         LIMIT %L
-    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, p_situacoes, p_limite);
+    ', p_schema_name, p_schema_name, p_data_inicial, p_data_final, p_canais, p_canais, COALESCE(p_situacoes, situacoes_padrao_dashboard(p_schema_name)), p_limite);
 
     RETURN QUERY EXECUTE v_sql;
 END;
