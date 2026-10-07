@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { IconDotsVertical, IconLogout } from "@tabler/icons-react"
+import { IconLogout } from "@tabler/icons-react"
 
 import {
   AlertDialog,
@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
@@ -24,12 +25,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar"
 import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { useUser } from "@/hooks/use-user"
@@ -44,7 +39,6 @@ function initials(name: string) {
 }
 
 export function NavUser() {
-  const { isMobile } = useSidebar()
   const { profile } = useProfile()
   const { user } = useUser()
   const router = useRouter()
@@ -61,27 +55,19 @@ export function NavUser() {
   }
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
+    <>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
+            <Button variant="ghost" className="h-auto gap-2 px-2 py-1" aria-label="Menu do usuário">
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarFallback className="rounded-lg">{initials(displayName)}</AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{displayName}</span>
-                <span className="truncate text-xs text-muted-foreground">{userEmail}</span>
-              </div>
-              <IconDotsVertical className="ml-auto size-4" />
-            </SidebarMenuButton>
+              <span className="hidden max-w-40 truncate text-sm font-medium lg:inline">{displayName}</span>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
+            className="min-w-56 rounded-lg"
+            side="bottom"
             align="end"
             sideOffset={4}
           >
@@ -108,7 +94,6 @@ export function NavUser() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </SidebarMenuItem>
 
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
         <AlertDialogContent>
@@ -124,6 +109,6 @@ export function NavUser() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </SidebarMenu>
+    </>
   )
 }
