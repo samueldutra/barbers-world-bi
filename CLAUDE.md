@@ -18,8 +18,11 @@ Objetivo: BI da **Barbers World**. Em andamento:
   sincronizada sob demanda por `etl-bling-pedidos-vendas/sync-situacoes-bling.py`.
   Alimenta o filtro de situações do dashboard. **Filtro padrão de situações** (o que conta
   como venda em todo o BI) = `situacoes_validas_faturamento()` em
-  `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`); as RPCs do dashboard
-  recebem `p_situacoes BIGINT[]` e caem nesse padrão quando é `NULL`.
+  `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`); os relatórios
+  (produtos/clientes, conferência de preços) usam esse padrão. **Exceção — Dashboard:** as RPCs
+  do dashboard recebem `p_situacoes BIGINT[]` e, quando é `NULL`, caem em
+  `situacoes_padrao_dashboard(schema)` = todas as situações menos Cancelado (12), Em aberto (6) e
+  as que herdam de Em aberto (inclui Devolução).
 - ✅ Frontend (`dashboard/`) com login/logout/cadastro/recuperação de senha funcionando
   (reaproveitado do `datapro-findash`). Dashboards de vendas por canal ainda não construídos.
 

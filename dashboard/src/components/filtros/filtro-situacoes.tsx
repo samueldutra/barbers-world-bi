@@ -19,7 +19,7 @@ import type { SituacaoPedido } from '@/hooks/use-situacoes-pedido'
 
 interface Props {
   situacoes: SituacaoPedido[]
-  /** null = filtro padrão (definido no banco — situacoes_validas_faturamento()). */
+  /** null = filtro padrão (definido no banco — situacoes_padrao_dashboard()). */
   situacoesSelecionadas: number[] | null
   onSituacoesChange: (ids: number[] | null) => void
   className?: string
@@ -44,10 +44,7 @@ function selecionouTodas(situacoes: SituacaoPedido[], selecionadas: number[]) {
 
 /** Rótulo curto da seleção atual — também usado fora do filtro (linha de contexto). */
 export function descreverSelecaoSituacoes(situacoes: SituacaoPedido[], selecionadas: number[] | null): string {
-  const padrao = situacoes.filter((s) => s.padrao)
-  if (!selecionadas) {
-    return padrao.length === 1 ? `${padrao[0].nome} (padrão)` : 'Padrão'
-  }
+  if (!selecionadas) return 'Padrão'
   if (selecionouTodas(situacoes, selecionadas)) {
     return 'Todas as situações'
   }
@@ -102,9 +99,7 @@ export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesC
                 <div className="flex flex-col">
                   <span>Padrão</span>
                   <span className="text-xs text-muted-foreground">
-                    {idsPadrao.length > 0
-                      ? situacoes.filter((s) => s.padrao).map((s) => s.nome).join(', ')
-                      : 'Situações que contam como venda'}
+                    Todas, exceto Cancelado, Em aberto e as que herdam de Em aberto
                   </span>
                 </div>
               </CommandItem>

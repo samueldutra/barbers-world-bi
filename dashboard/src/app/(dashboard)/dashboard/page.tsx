@@ -20,7 +20,7 @@ export default function DashboardPage() {
   const [periodo, setPeriodo] = useState<PeriodoPreset>('mes_atual')
   const [rangePersonalizado, setRangePersonalizado] = useState<RangeData | null>(null)
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
-  // null = filtro padrão de situações (situacoes_validas_faturamento() no banco).
+  // null = filtro padrão de situações do dashboard (situacoes_padrao_dashboard() no banco).
   const [situacoesSelecionadas, setSituacoesSelecionadas] = useState<number[] | null>(null)
   const [ordenarRankingPor, setOrdenarRankingPor] = useState<OrdenarRankingPor>('faturamento')
 

@@ -10,7 +10,7 @@ export interface SituacaoPedido {
   nome: string
   cor: string | null
   nome_herdado: string | null
-  /** Faz parte do filtro padrão (situacoes_validas_faturamento() no banco). */
+  /** Faz parte do filtro padrão do dashboard (situacoes_padrao_dashboard() no banco). */
   padrao: boolean
   /** Conta como cancelamento (KPI "Cancelamentos"). */
   cancelamento: boolean
