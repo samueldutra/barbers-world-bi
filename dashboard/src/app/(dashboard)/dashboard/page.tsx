@@ -1,6 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { IconDeviceTv, IconX } from '@tabler/icons-react'
+import { Button } from '@/components/ui/button'
+import { useTvMode } from '@/contexts/tv-mode-context'
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { EvolucaoVendasChart } from '@/components/dashboard/evolucao-vendas-chart'
@@ -16,7 +19,32 @@ import { useRankingProdutos, type OrdenarRankingPor } from '@/hooks/use-ranking-
 import { obterRangePreset, obterRangeComparacao, rangePadrao, type PeriodoPreset, type RangeData } from '@/lib/date-ranges'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
 
+/** Modo TV: atualiza todos os dados a cada 30 minutos. */
+const INTERVALO_ATUALIZACAO_TV_MS = 30 * 60 * 1000
+
 export default function DashboardPage() {
+  const { tvMode, entrar: entrarModoTv, sair: sairModoTv } = useTvMode()
+  // Muda a cada atualização automática: recalcula os períodos ("hoje", "mês atual"...) e
+  // recarrega os dados sem piscar o esqueleto.
+  const [refreshToken, setRefreshToken] = useState(0)
+  const [proximaAtualizacao, setProximaAtualizacao] = useState<Date | null>(null)
+
+  useEffect(() => {
+    if (!tvMode) {
+      setProximaAtualizacao(null)
+      return
+    }
+    setProximaAtualizacao(new Date(Date.now() + INTERVALO_ATUALIZACAO_TV_MS))
+    const id = setInterval(() => {
+      setRefreshToken((t) => t + 1)
+      setProximaAtualizacao(new Date(Date.now() + INTERVALO_ATUALIZACAO_TV_MS))
+    }, INTERVALO_ATUALIZACAO_TV_MS)
+    return () => clearInterval(id)
+  }, [tvMode])
+
+  // O modo TV é só do Dashboard: sai (tela cheia, menu escondido) ao navegar pra outra página.
+  useEffect(() => sairModoTv, [sairModoTv])
+
   const [periodo, setPeriodo] = useState<PeriodoPreset>('mes_atual')
   const [rangePersonalizado, setRangePersonalizado] = useState<RangeData | null>(null)
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
@@ -29,15 +57,17 @@ export default function DashboardPage() {
     const range = periodo === 'personalizado' ? (rangePersonalizado ?? obterRangePreset(periodo)) : obterRangePreset(periodo)
     const comp = obterRangeComparacao(range, 'periodo_anterior')
     return { atual: range, comparacao: comp }
-  }, [periodo, rangePersonalizado])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshToken força recalcular datas relativas (hoje, mês atual) na atualização automática do modo TV
+  }, [periodo, rangePersonalizado, refreshToken])
 
   const { canais } = useCanaisVenda()
-  const { situacoes } = useSituacoesPedido({ atual, canais: canaisSelecionados })
+  const { situacoes } = useSituacoesPedido({ atual, canais: canaisSelecionados, refreshToken })
   const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm, recarregar } = useVendasDashboard({
     atual,
     comparacao,
     canais: canaisSelecionados,
     situacoes: situacoesSelecionadas,
+    refreshToken,
   })
   // Filtro de canais lista só canais com venda > 0 no período (mesma regra de situações do
   // obter_vendas_por_canal, que ignora o filtro de canal — então a lista não encolhe ao
@@ -52,6 +82,7 @@ export default function DashboardPage() {
     canais: canaisSelecionados,
     situacoes: situacoesSelecionadas,
     ordenarPor: ordenarRankingPor,
+    refreshToken,
   })
 
   const comComparacao = comparacao !== null
@@ -63,6 +94,16 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold">Visão geral</h1>
           <p className="text-sm text-muted-foreground">Vendas consolidadas de todos os canais da Barbers World</p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={tvMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={tvMode ? sairModoTv : entrarModoTv}
+            aria-pressed={tvMode}
+          >
+            {tvMode ? <IconX className="size-4" /> : <IconDeviceTv className="size-4" />}
+            {tvMode ? 'Sair do modo TV' : 'Modo TV'}
+          </Button>
         <VendasFiltros
           periodo={periodo}
           onPeriodoChange={setPeriodo}
@@ -77,12 +118,19 @@ export default function DashboardPage() {
           onAtualizar={recarregar}
           atualizando={loading}
         />
+        </div>
       </div>
 
       {atualizadoEm && (
         <p className="-mt-4 text-xs text-muted-foreground">
           Dados atualizados às {atualizadoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           {' · '}Situações consideradas: {descreverSelecaoSituacoes(situacoes, situacoesSelecionadas)}
+          {tvMode && proximaAtualizacao && (
+            <>
+              {' · '}Modo TV: atualiza sozinho a cada 30 min (próxima às{' '}
+              {proximaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})
+            </>
+          )}
         </p>
       )}
 

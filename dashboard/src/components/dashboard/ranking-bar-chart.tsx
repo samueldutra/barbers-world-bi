@@ -6,6 +6,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { formatarMoeda, formatarMoedaAbreviada } from '@/lib/formatters'
 import { RotuloValorBarra } from '@/components/dashboard/rotulo-valor-barra'
 import { CLASSE_LOGO_CANAL } from '@/lib/canais'
+import { useEscalaRem } from '@/hooks/use-escala-rem'
 
 const chartConfig = {
   faturamento: { label: 'Faturamento', color: 'var(--primary)' },
@@ -35,6 +36,10 @@ export function RankingBarChart<T extends { faturamento: number }>({
   iconeDoItem,
   mostrarValorEPercentual,
 }: Props<T>) {
+  // Medidas em px dentro do SVG não acompanham o rem; a escala mantém tudo proporcional no modo TV.
+  const escala = useEscalaRem()
+  const larguraEixoRotulos = LARGURA_EIXO_ROTULOS * escala
+  const tamanhoIcone = TAMANHO_ICONE * escala
   const dadosGrafico = [...dados]
     .sort((a, b) => Number(b.faturamento) - Number(a.faturamento))
     .map((d) => ({ ...d, label: String(d[chaveLabel] ?? '—'), icone: iconeDoItem?.(d) ?? null }))
@@ -46,7 +51,7 @@ export function RankingBarChart<T extends { faturamento: number }>({
     ? ({ x, y, index }: YAxisTickContentProps) => {
         const item = dadosGrafico[index]
         return (
-          <foreignObject x={Number(x) - LARGURA_EIXO_ROTULOS} y={Number(y) - 10} width={LARGURA_EIXO_ROTULOS - 4} height={20}>
+          <foreignObject x={Number(x) - larguraEixoRotulos} y={Number(y) - 10 * escala} width={larguraEixoRotulos - 4} height={20 * escala}>
             <div className="flex h-5 items-center justify-end gap-1.5 text-xs text-muted-foreground">
               {item?.icone && (
                 // eslint-disable-next-line @next/next/no-img-element -- dentro de <svg>; ícone local pequeno
@@ -54,9 +59,9 @@ export function RankingBarChart<T extends { faturamento: number }>({
                   src={item.icone}
                   alt=""
                   aria-hidden
-                  width={TAMANHO_ICONE}
-                  height={TAMANHO_ICONE}
-                  style={{ width: TAMANHO_ICONE, height: TAMANHO_ICONE }}
+                  width={tamanhoIcone}
+                  height={tamanhoIcone}
+                  style={{ width: tamanhoIcone, height: tamanhoIcone }}
                   className={CLASSE_LOGO_CANAL}
                 />
               )}
@@ -79,8 +84,8 @@ export function RankingBarChart<T extends { faturamento: number }>({
             Nenhuma venda encontrada para este período.
           </p>
         ) : (
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
-            <BarChart data={dadosGrafico} layout="vertical" margin={{ left: 12 }}>
+          <ChartContainer config={chartConfig} className="h-[17.5rem] w-full">
+            <BarChart data={dadosGrafico} layout="vertical" margin={{ left: 12 * escala }}>
               <CartesianGrid horizontal={false} />
               <XAxis type="number" tickLine={false} axisLine={false} tickFormatter={(v: number) => formatarMoedaAbreviada(v)} />
               <YAxis
@@ -88,7 +93,7 @@ export function RankingBarChart<T extends { faturamento: number }>({
                 type="category"
                 tickLine={false}
                 axisLine={false}
-                width={iconeDoItem ? LARGURA_EIXO_ROTULOS : 110}
+                width={iconeDoItem ? larguraEixoRotulos : 110 * escala}
                 tick={tickComIcone}
               />
               <ChartTooltip

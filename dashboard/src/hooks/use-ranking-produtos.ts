@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
@@ -39,18 +39,23 @@ interface Args {
   /** null = filtro padrão de situações (definido no banco). */
   situacoes: number[] | null
   ordenarPor: OrdenarRankingPor
+  /** Muda a cada atualização automática (modo TV): recarrega sem piscar o carregamento. */
+  refreshToken?: number
 }
 
-export function useRankingProdutos({ atual, canais, situacoes, ordenarPor }: Args) {
+export function useRankingProdutos({ atual, canais, situacoes, ordenarPor, refreshToken }: Args) {
   const [ranking, setRanking] = useState<ProdutoRanking[]>([])
   const [porCategoria, setPorCategoria] = useState<VendaPorCategoria[]>([])
   const [porMarca, setPorMarca] = useState<VendaPorMarca[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const tokenAnterior = useRef(refreshToken)
   useEffect(() => {
     let ativo = true
-    setLoading(true)
+    const silencioso = tokenAnterior.current !== refreshToken
+    tokenAnterior.current = refreshToken
+    if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
     const { data_inicial, data_final } = formatarRangeParaAPI(atual)
@@ -100,7 +105,7 @@ export function useRankingProdutos({ atual, canais, situacoes, ordenarPor }: Arg
     return () => {
       ativo = false
     }
-  }, [atual, canais, situacoes, ordenarPor])
+  }, [atual, canais, situacoes, ordenarPor, refreshToken])
 
   return { ranking, porCategoria, porMarca, loading, error }
 }

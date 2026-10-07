@@ -490,3 +490,15 @@ body {
   max-width: 100vw;
   overflow-x: hidden;
 }
+
+/* Modo TV (só no Dashboard): a base de rem acompanha a largura da tela, então a interface
+ * inteira escala junto — 16px em Full HD (1920), ~21px em 2K (2560), 32px em 4K (3840).
+ * Nunca fica menor que o padrão (16px). Ver src/contexts/tv-mode-context.tsx. */
+html.tv-mode {
+  font-size: clamp(16px, calc(100vw / 120), 40px);
+}
+
+/* Textos dos gráficos (SVG) usam px fixo; em rem acompanham a escala do modo TV. */
+html.tv-mode .recharts-wrapper text {
+  font-size: 0.75rem;
+}

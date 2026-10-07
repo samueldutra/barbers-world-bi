@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
@@ -58,9 +58,11 @@ interface UseVendasDashboardArgs {
   canais: number[] | null
   /** null = filtro padrão de situações (definido no banco). */
   situacoes: number[] | null
+  /** Muda a cada atualização automática (modo TV): recarrega sem piscar o esqueleto. */
+  refreshToken?: number
 }
 
-export function useVendasDashboard({ atual, comparacao, canais, situacoes }: UseVendasDashboardArgs) {
+export function useVendasDashboard({ atual, comparacao, canais, situacoes, refreshToken }: UseVendasDashboardArgs) {
   const [kpisAtual, setKpisAtual] = useState<KpisVendas>(KPIS_VAZIO)
   const [kpisComparacao, setKpisComparacao] = useState<KpisVendas>(KPIS_VAZIO)
   const [evolucao, setEvolucao] = useState<EvolucaoComparada[]>([])
@@ -69,8 +71,9 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes }: Use
   const [error, setError] = useState<string | null>(null)
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null)
 
-  const carregar = useCallback(async () => {
-    setLoading(true)
+  const carregar = useCallback(async (silencioso = false) => {
+    // Atualização automática mantém os números na tela até os novos chegarem.
+    if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
 
@@ -170,9 +173,14 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes }: Use
     }
   }, [atual, comparacao, canais, situacoes])
 
+  const tokenAnterior = useRef(refreshToken)
   useEffect(() => {
-    carregar()
-  }, [carregar])
+    const silencioso = tokenAnterior.current !== refreshToken
+    tokenAnterior.current = refreshToken
+    carregar(silencioso)
+  }, [carregar, refreshToken])
 
-  return { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm, recarregar: carregar }
+  const recarregar = useCallback(() => carregar(false), [carregar])
+
+  return { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm, recarregar }
 }

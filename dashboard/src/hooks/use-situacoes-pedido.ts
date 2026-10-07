@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
@@ -21,16 +21,21 @@ export interface SituacaoPedido {
 interface Args {
   atual: RangeData
   canais: number[] | null
+  /** Muda a cada atualização automática (modo TV): recarrega sem piscar o carregamento. */
+  refreshToken?: number
 }
 
 /** Todas as situações de pedido já vistas, com volume no período/canais filtrados. */
-export function useSituacoesPedido({ atual, canais }: Args) {
+export function useSituacoesPedido({ atual, canais, refreshToken }: Args) {
   const [situacoes, setSituacoes] = useState<SituacaoPedido[]>([])
   const [loading, setLoading] = useState(true)
 
+  const tokenAnterior = useRef(refreshToken)
   useEffect(() => {
     let ativo = true
-    setLoading(true)
+    const silencioso = tokenAnterior.current !== refreshToken
+    tokenAnterior.current = refreshToken
+    if (!silencioso) setLoading(true)
     const supabase = createClient()
     const { data_inicial, data_final } = formatarRangeParaAPI(atual)
     supabase
@@ -58,7 +63,7 @@ export function useSituacoesPedido({ atual, canais }: Args) {
     return () => {
       ativo = false
     }
-  }, [atual, canais])
+  }, [atual, canais, refreshToken])
 
   return { situacoes, loading }
 }
