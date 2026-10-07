@@ -34,7 +34,10 @@ export function useBuscaNicho() {
       return { novosSalvos: (dados.novosSalvos as number) ?? 0 }
     } catch (err) {
       console.error('Erro ao buscar leads por nicho:', err)
-      setError('Não foi possível buscar. Tente novamente em alguns segundos.')
+      // Mostra o motivo real devolvido pela API (chave ausente, API não habilitada, cobrança...)
+      // em vez de uma mensagem genérica — facilita achar o problema sem abrir os logs.
+      const motivo = err instanceof Error && err.message && err.message !== 'Erro na busca' ? err.message : null
+      setError(motivo ? `Não foi possível buscar: ${motivo}` : 'Não foi possível buscar. Tente novamente em alguns segundos.')
       setResultados([])
       return { novosSalvos: 0 }
     } finally {

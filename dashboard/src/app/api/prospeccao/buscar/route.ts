@@ -23,7 +23,8 @@ export interface ResultadoBusca {
 interface ComponenteEndereco {
   longText?: string
   shortText?: string
-  types: string[]
+  // O Google nem sempre devolve "types" em todos os componentes de endereço.
+  types?: string[]
 }
 
 interface LugarGoogle {
@@ -41,8 +42,8 @@ interface LugarGoogle {
 function extrairCidade(componentes: ComponenteEndereco[] | undefined): string | null {
   if (!componentes) return null
   const cidade =
-    componentes.find((c) => c.types.includes('locality')) ??
-    componentes.find((c) => c.types.includes('administrative_area_level_2'))
+    componentes.find((c) => c.types?.includes('locality')) ??
+    componentes.find((c) => c.types?.includes('administrative_area_level_2'))
   return cidade?.longText ?? null
 }
 
