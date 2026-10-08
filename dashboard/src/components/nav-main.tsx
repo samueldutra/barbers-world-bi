@@ -28,7 +28,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
         {items.map((item) => {
           const grupoAtivo = item.items ? ativo(pathname, item.url) : pathname === item.url
           return (
-            <Collapsible key={item.id} asChild defaultOpen={grupoAtivo}>
+            <Collapsible key={item.id} asChild defaultOpen>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip={item.title} isActive={grupoAtivo}>
                   {/* O item pai leva ao primeiro submenu, como antes. */}
