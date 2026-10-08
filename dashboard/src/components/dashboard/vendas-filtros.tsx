@@ -42,20 +42,21 @@ interface Props {
   atualizando: boolean
 }
 
-export function VendasFiltros({
+interface PropsPeriodo {
+  periodo: PeriodoPreset
+  onPeriodoChange: (p: PeriodoPreset) => void
+  rangePersonalizado: RangeData | null
+  onRangePersonalizadoChange: (r: RangeData) => void
+}
+
+/** Seletor de período (presets + intervalo personalizado). Compartilhado entre os filtros em
+ * linha (relatórios) e a barra do topo do Dashboard. */
+export function FiltroPeriodo({
   periodo,
   onPeriodoChange,
   rangePersonalizado,
   onRangePersonalizadoChange,
-  canais,
-  canaisSelecionados,
-  onCanaisChange,
-  situacoes,
-  situacoesSelecionadas,
-  onSituacoesChange,
-  onAtualizar,
-  atualizando,
-}: Props) {
+}: PropsPeriodo) {
   const [calendarioAberto, setCalendarioAberto] = useState(false)
   // Estado local da seleção em andamento no calendário — distinto de rangePersonalizado
   // (que exige início E fim), pra permitir o estado intermediário "só a data inicial
@@ -64,7 +65,7 @@ export function VendasFiltros({
   const [selecaoEmAndamento, setSelecaoEmAndamento] = useState<DateRange | undefined>(undefined)
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       <Select value={periodo} onValueChange={(v) => onPeriodoChange(v as PeriodoPreset)}>
         <SelectTrigger className="w-44" size="sm">
           <SelectValue />
@@ -123,6 +124,32 @@ export function VendasFiltros({
           </PopoverContent>
         </Popover>
       )}
+    </>
+  )
+}
+
+export function VendasFiltros({
+  periodo,
+  onPeriodoChange,
+  rangePersonalizado,
+  onRangePersonalizadoChange,
+  canais,
+  canaisSelecionados,
+  onCanaisChange,
+  situacoes,
+  situacoesSelecionadas,
+  onSituacoesChange,
+  onAtualizar,
+  atualizando,
+}: Props) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <FiltroPeriodo
+        periodo={periodo}
+        onPeriodoChange={onPeriodoChange}
+        rangePersonalizado={rangePersonalizado}
+        onRangePersonalizadoChange={onRangePersonalizadoChange}
+      />
 
       <FiltroCanais canais={canais} canaisSelecionados={canaisSelecionados} onCanaisChange={onCanaisChange} />
 
