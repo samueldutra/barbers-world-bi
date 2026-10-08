@@ -8,7 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { EvolucaoVendasChart } from '@/components/dashboard/evolucao-vendas-chart'
 import { VendasPorCanalChart } from '@/components/dashboard/vendas-por-canal-chart'
-import { VendasFiltros } from '@/components/dashboard/vendas-filtros'
+import { FiltroPeriodo } from '@/components/dashboard/vendas-filtros'
+import { FiltrosDrawer } from '@/components/dashboard/filtros-drawer'
 import { RankingProdutos } from '@/components/dashboard/ranking-produtos'
 import { RankingBarChart } from '@/components/dashboard/ranking-bar-chart'
 import { useVendasDashboard } from '@/hooks/use-vendas-dashboard'
@@ -19,28 +20,19 @@ import { useRankingProdutos, type OrdenarRankingPor } from '@/hooks/use-ranking-
 import { obterRangePreset, obterRangeComparacao, rangePadrao, type PeriodoPreset, type RangeData } from '@/lib/date-ranges'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
 
-/** Modo TV: atualiza todos os dados a cada 30 minutos. */
-const INTERVALO_ATUALIZACAO_TV_MS = 30 * 60 * 1000
+/** Atualização automática dos dados (sem botão de atualizar): a cada 10 minutos. */
+const INTERVALO_ATUALIZACAO_MS = 10 * 60 * 1000
 
 export default function DashboardPage() {
   const { tvMode, entrar: entrarModoTv, sair: sairModoTv } = useTvMode()
   // Muda a cada atualização automática: recalcula os períodos ("hoje", "mês atual"...) e
   // recarrega os dados sem piscar o esqueleto.
   const [refreshToken, setRefreshToken] = useState(0)
-  const [proximaAtualizacao, setProximaAtualizacao] = useState<Date | null>(null)
 
   useEffect(() => {
-    if (!tvMode) {
-      setProximaAtualizacao(null)
-      return
-    }
-    setProximaAtualizacao(new Date(Date.now() + INTERVALO_ATUALIZACAO_TV_MS))
-    const id = setInterval(() => {
-      setRefreshToken((t) => t + 1)
-      setProximaAtualizacao(new Date(Date.now() + INTERVALO_ATUALIZACAO_TV_MS))
-    }, INTERVALO_ATUALIZACAO_TV_MS)
+    const id = setInterval(() => setRefreshToken((t) => t + 1), INTERVALO_ATUALIZACAO_MS)
     return () => clearInterval(id)
-  }, [tvMode])
+  }, [])
 
   // O modo TV é só do Dashboard: sai (tela cheia, menu escondido) ao navegar pra outra página.
   useEffect(() => sairModoTv, [sairModoTv])
@@ -62,7 +54,7 @@ export default function DashboardPage() {
 
   const { canais } = useCanaisVenda()
   const { situacoes } = useSituacoesPedido({ atual, canais: canaisSelecionados, refreshToken })
-  const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm, recarregar } = useVendasDashboard({
+  const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm } = useVendasDashboard({
     atual,
     comparacao,
     canais: canaisSelecionados,
@@ -95,6 +87,20 @@ export default function DashboardPage() {
           <p className="text-sm text-muted-foreground">Vendas consolidadas de todos os canais da Barbers World</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <FiltroPeriodo
+            periodo={periodo}
+            onPeriodoChange={setPeriodo}
+            rangePersonalizado={rangePersonalizado}
+            onRangePersonalizadoChange={setRangePersonalizado}
+          />
+          <FiltrosDrawer
+            canais={canaisComVenda}
+            canaisSelecionados={canaisSelecionados}
+            onCanaisChange={setCanaisSelecionados}
+            situacoes={situacoes}
+            situacoesSelecionadas={situacoesSelecionadas}
+            onSituacoesChange={setSituacoesSelecionadas}
+          />
           <Button
             variant={tvMode ? 'default' : 'outline'}
             size="sm"
@@ -104,20 +110,6 @@ export default function DashboardPage() {
             {tvMode ? <IconX className="size-4" /> : <IconDeviceTv className="size-4" />}
             {tvMode ? 'Sair do modo TV' : 'Modo TV'}
           </Button>
-        <VendasFiltros
-          periodo={periodo}
-          onPeriodoChange={setPeriodo}
-          rangePersonalizado={rangePersonalizado}
-          onRangePersonalizadoChange={setRangePersonalizado}
-          canais={canaisComVenda}
-          canaisSelecionados={canaisSelecionados}
-          onCanaisChange={setCanaisSelecionados}
-          situacoes={situacoes}
-          situacoesSelecionadas={situacoesSelecionadas}
-          onSituacoesChange={setSituacoesSelecionadas}
-          onAtualizar={recarregar}
-          atualizando={loading}
-        />
         </div>
       </div>
 
@@ -125,12 +117,7 @@ export default function DashboardPage() {
         <p className="-mt-4 text-xs text-muted-foreground">
           Dados atualizados às {atualizadoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
           {' · '}Situações consideradas: {descreverSelecaoSituacoes(situacoes, situacoesSelecionadas)}
-          {tvMode && proximaAtualizacao && (
-            <>
-              {' · '}Modo TV: atualiza sozinho a cada 30 min (próxima às{' '}
-              {proximaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})
-            </>
-          )}
+          {' · '}Atualização automática a cada 10 min
         </p>
       )}
 
