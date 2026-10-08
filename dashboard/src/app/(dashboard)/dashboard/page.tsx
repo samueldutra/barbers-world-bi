@@ -133,10 +133,18 @@ export default function DashboardPage() {
 
       <Tabs value={aba} onValueChange={(v) => setAba(v as AbaDashboard)} className="-mb-2">
         <div className="max-w-full overflow-x-auto">
-          <TabsList>
+          <TabsList className="group-data-horizontal/tabs:h-14 gap-1.5 p-1.5">
             {ABAS_DASHBOARD.map((a) => (
-              <TabsTrigger key={a.id} value={a.id} disabled={!!a.grupo && carregandoCanais}>
-                {a.grupo ? <CanalLogo grupo={a.grupo} tamanho={16} /> : <LayoutDashboard className="size-4" />}
+              <TabsTrigger
+                key={a.id}
+                value={a.id}
+                disabled={!!a.grupo && carregandoCanais}
+                className="gap-2.5 px-4 text-base font-medium data-active:bg-primary data-active:text-primary-foreground data-active:shadow-md"
+              >
+                {/* Pastilha branca: mantém logos escuros (Nuvemshop, TikTok) visíveis na aba ativa preta. */}
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-white text-foreground ring-1 ring-black/10">
+                  {a.grupo ? <CanalLogo grupo={a.grupo} tamanho={22} /> : <LayoutDashboard className="size-5" />}
+                </span>
                 {a.label}
               </TabsTrigger>
             ))}
