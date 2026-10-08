@@ -139,7 +139,7 @@ export default function DashboardPage() {
                 key={a.id}
                 value={a.id}
                 disabled={!!a.grupo && carregandoCanais}
-                className="gap-2.5 px-4 text-base font-medium data-active:bg-primary data-active:text-primary-foreground data-active:shadow-md"
+                className="gap-2.5 px-4 text-base font-medium data-active:bg-primary data-active:text-primary-foreground data-active:shadow-md data-active:hover:text-yellow-400"
               >
                 {/* Pastilha branca: mantém logos escuros (Nuvemshop, TikTok) visíveis na aba ativa preta. */}
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-white text-foreground ring-1 ring-black/10">
