@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { usePathname } from "next/navigation"
 
 import { ativo, navMain, navUsuarios } from "@/components/nav-items"
@@ -37,10 +38,13 @@ export function SiteHeader() {
             {partes.map((parte, i) => {
               const ultimo = i === partes.length - 1
               return (
-                <BreadcrumbItem key={parte} className={ultimo ? undefined : "hidden md:block"}>
-                  {ultimo ? <BreadcrumbPage>{parte}</BreadcrumbPage> : <span>{parte}</span>}
+                <React.Fragment key={parte}>
+                  <BreadcrumbItem className={ultimo ? undefined : "hidden md:block"}>
+                    {ultimo ? <BreadcrumbPage>{parte}</BreadcrumbPage> : <span>{parte}</span>}
+                  </BreadcrumbItem>
+                  {/* O separador é irmão do item (dentro do item ele quebra de linha). */}
                   {!ultimo && <BreadcrumbSeparator className="hidden md:block" />}
-                </BreadcrumbItem>
+                </React.Fragment>
               )
             })}
           </BreadcrumbList>
