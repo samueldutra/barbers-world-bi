@@ -12,13 +12,16 @@ export interface AbaCanal {
   situacoesPadrao?: number[]
 }
 
+/** Padrão de situações dos canais online (Nuvemshop, Mercado Livre, Shopee, TikTok Shop):
+ * Atendido (9), P/ Separação (914897), Verificado (24) e Em aberto (6). P/ Separação herda de
+ * Em aberto, mas entra por id; as demais herdeiras de Em aberto continuam de fora. */
+const SITUACOES_PADRAO_CANAIS_ONLINE = [9, 914897, 24, 6]
+
 export const ABAS_DASHBOARD: AbaCanal[] = [
   { id: 'geral', label: 'Geral', grupo: null },
   { id: 'loja-fisica', label: 'Loja Física', grupo: 'Loja Física (PDV)' },
-  // Atendido, P/ Separação, Verificado e Em aberto. (P/ Separação herda de Em aberto, mas entra
-  // aqui por id; as demais herdeiras de Em aberto continuam de fora.)
-  { id: 'nuvemshop', label: 'Nuvemshop', grupo: 'Nuvemshop', situacoesPadrao: [9, 914897, 24, 6] },
-  { id: 'mercado-livre', label: 'Mercado Livre', grupo: 'Mercado Livre' },
-  { id: 'shopee', label: 'Shopee', grupo: 'Shopee' },
-  { id: 'tiktok', label: 'TikTok Shop', grupo: 'TikTok' },
+  { id: 'nuvemshop', label: 'Nuvemshop', grupo: 'Nuvemshop', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
+  { id: 'mercado-livre', label: 'Mercado Livre', grupo: 'Mercado Livre', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
+  { id: 'shopee', label: 'Shopee', grupo: 'Shopee', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
+  { id: 'tiktok', label: 'TikTok Shop', grupo: 'TikTok', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
 ]
