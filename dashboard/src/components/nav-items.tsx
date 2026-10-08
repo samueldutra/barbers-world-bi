@@ -20,8 +20,8 @@ export interface NavItem {
 
 export const navMain: NavItem[] = [
   { id: "dashboard", title: "Dashboard", url: "/dashboard", icon: IconDashboard },
-  { id: "relatorio-produtos", title: "Relatório de Vendas por Produto", url: "/relatorio-produtos", icon: IconReportAnalytics },
-  { id: "relatorio-clientes", title: "Relatório de Vendas por Cliente", url: "/relatorio-clientes", icon: IconUsersGroup },
+  { id: "relatorio-produtos", title: "Produtos", url: "/relatorio-produtos", icon: IconReportAnalytics },
+  { id: "relatorio-clientes", title: "Clientes", url: "/relatorio-clientes", icon: IconUsersGroup },
   { id: "conferencia-precos", title: "Conferência de Preços", url: "/conferencia-precos", icon: IconTags },
   {
     id: "prospeccao",
