@@ -27,7 +27,7 @@ Não há test runner configurado ainda.
 
 ## Arquitetura
 
-Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 + shadcn/ui (style "new-york").
+Next.js 16 (App Router) + React 19 + TypeScript + Tailwind v4 + shadcn/ui (preset `b2oDUijvc`, style "radix-nova", base Radix; fonte IBM Plex Sans; reaplicar com `npx shadcn@latest init --preset b2oDUijvc --base radix --template next --force`).
 Mesmo projeto Supabase do ETL (`ajxmbhfmitehmxvjkcdk`), mas usando `anon key` (RLS) no
 cliente/server components e `service_role` só em rotas de API que precisem bypassar RLS.
 
