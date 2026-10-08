@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Origem
 
 Este projeto reaproveita a infraestrutura de autenticação (login, cadastro, recuperação/
-redefinição de senha, logout, proteção de rotas, tema, rate limit) do **datapro-findash**
+redefinição de senha, logout, proteção de rotas, rate limit) do **datapro-findash**
 (`~/datapro-findash`), adaptada para o BI da Barbers World. Portado deliberadamente **sem**
 a parte multi-tenant/multi-módulo daquele projeto (troca de tenant, `SYSTEM_MODULES`,
 feature flags, gestão de "Contas") porque a Barbers World é um tenant só por enquanto —
@@ -60,10 +60,12 @@ cliente/server components e `service_role` só em rotas de API que precisem bypa
 - `src/hooks/use-profile.ts` — versão simplificada do `use-tenant.ts` do datapro-findash,
   sem troca de tenant (só busca o próprio perfil).
 
-### Tema
+### Cores
 
-`src/contexts/theme-context.tsx` — claro/escuro/sistema, persistido em
-`user_profiles.theme_preference` (usuário logado) ou `localStorage` (deslogado).
+Padrão único de cores (sem tema claro/escuro): a moldura — sidebar e fundo da página — é preta
+(`--sidebar`) com texto e ícones brancos; o conteúdo fica no cartão branco (`SidebarInset`). Tokens em
+`src/app/globals.css`. Não há `ThemeProvider` nem classe `.dark` (o `@custom-variant dark` fica só
+pra manter as variantes `dark:` dos componentes shadcn inertes).
 
 ## Pendências conhecidas
 

@@ -23,7 +23,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Menu</SidebarGroupLabel>
+      <SidebarGroupLabel className="text-sidebar-foreground">Menu</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => {
           const grupoAtivo = item.items ? ativo(pathname, item.url) : pathname === item.url
