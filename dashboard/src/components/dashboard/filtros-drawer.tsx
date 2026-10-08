@@ -16,6 +16,8 @@ import {
 import { Label } from '@/components/ui/label'
 import { FiltroCanais } from '@/components/filtros/filtro-canais'
 import { FiltroSituacoes } from '@/components/filtros/filtro-situacoes'
+import { CanalLogo } from '@/components/filtros/canal-logo'
+import type { AbaCanal } from '@/lib/abas-canais'
 import type { CanalVenda } from '@/hooks/use-canais-venda'
 import type { SituacaoPedido } from '@/hooks/use-situacoes-pedido'
 
@@ -26,6 +28,8 @@ interface Props {
   situacoes: SituacaoPedido[]
   situacoesSelecionadas: number[] | null
   onSituacoesChange: (ids: number[] | null) => void
+  /** Aba de canal ativa: o filtro de canais fica bloqueado (vale o canal da aba). */
+  abaDeCanal?: AbaCanal | null
 }
 
 /** Botão "Filtrar" (com a quantidade de filtros aplicados) que abre um drawer com Canais e
@@ -38,13 +42,16 @@ export function FiltrosDrawer({
   situacoes,
   situacoesSelecionadas,
   onSituacoesChange,
+  abaDeCanal = null,
 }: Props) {
   const [aberto, setAberto] = useState(false)
   const [rascunhoCanais, setRascunhoCanais] = useState<number[] | null>(null)
   const [rascunhoSituacoes, setRascunhoSituacoes] = useState<number[] | null>(null)
 
   // Filtros aplicados = grupos fora do padrão (canais restritos, situações diferentes do padrão).
-  const aplicados = (canaisSelecionados && canaisSelecionados.length > 0 ? 1 : 0) + (situacoesSelecionadas ? 1 : 0)
+  // Com aba de canal ativa o filtro de canais não conta (é definido pela aba).
+  const aplicados =
+    (!abaDeCanal && canaisSelecionados && canaisSelecionados.length > 0 ? 1 : 0) + (situacoesSelecionadas ? 1 : 0)
 
   const aoMudarAberto = (abrir: boolean) => {
     if (abrir) {
@@ -93,12 +100,24 @@ export function FiltrosDrawer({
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-4 pb-4">
           <div className="flex flex-col gap-2">
             <Label>Canais</Label>
-            <FiltroCanais
-              canais={canais}
-              canaisSelecionados={rascunhoCanais}
-              onCanaisChange={setRascunhoCanais}
-              className="w-full"
-            />
+            {abaDeCanal ? (
+              <>
+                <Button variant="outline" size="sm" disabled className="w-full justify-start font-normal">
+                  <CanalLogo grupo={abaDeCanal.grupo} />
+                  {abaDeCanal.label}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Definido pela aba {abaDeCanal.label}. Volte para a aba Geral para filtrar por canal.
+                </p>
+              </>
+            ) : (
+              <FiltroCanais
+                canais={canais}
+                canaisSelecionados={rascunhoCanais}
+                onCanaisChange={setRascunhoCanais}
+                className="w-full"
+              />
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <Label>Situação</Label>
