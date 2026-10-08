@@ -27,6 +27,7 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { useTvMode } from "@/contexts/tv-mode-context"
 import { useAuthorizedModules } from "@/hooks/use-authorized-modules"
 import { useProfile } from "@/hooks/use-profile"
 import { cn } from "cn"
@@ -70,6 +71,37 @@ export function AppNavbar() {
   const superAdmin = isSuperAdmin(profile)
   const [menuMobileAberto, setMenuMobileAberto] = React.useState(false)
 
+  // Modo TV: o menu fica escondido acima da tela e desce quando o mouse encosta no topo.
+  const { tvMode } = useTvMode()
+  const headerRef = React.useRef<HTMLElement>(null)
+  const [visivelNoTv, setVisivelNoTv] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!tvMode) {
+      setVisivelNoTv(false)
+      return
+    }
+    const ZONA_GATILHO_PX = 48
+    const aoMoverMouse = (e: MouseEvent) => {
+      const header = headerRef.current
+      const alvo = e.target as Element | null
+      // Mantém aberto enquanto o mouse está no menu, num submenu/dropdown (renderizados num
+      // portal fora do header) ou com algum menu aberto.
+      const sobreMenu =
+        !!header?.contains(alvo) ||
+        !!alvo?.closest?.('[role="menu"], [data-radix-popper-content-wrapper]') ||
+        !!header?.querySelector('[data-state="open"]')
+      setVisivelNoTv(e.clientY <= ZONA_GATILHO_PX || sobreMenu)
+    }
+    const aoSairDaJanela = () => setVisivelNoTv(false)
+    document.addEventListener("mousemove", aoMoverMouse)
+    document.documentElement.addEventListener("mouseleave", aoSairDaJanela)
+    return () => {
+      document.removeEventListener("mousemove", aoMoverMouse)
+      document.documentElement.removeEventListener("mouseleave", aoSairDaJanela)
+    }
+  }, [tvMode])
+
   const liberados = navMain.filter((item) => superAdmin || modules.includes(item.id))
   const items: NavItem[] = superAdmin
     ? [...liberados, { id: "usuarios", title: "Usuários", url: "/usuarios", icon: IconUsers }]
@@ -85,7 +117,23 @@ export function AppNavbar() {
   )
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 lg:px-6">
+    <header
+      ref={headerRef}
+      // Navegação por teclado também revela o menu escondido no modo TV.
+      onFocusCapture={() => tvMode && setVisivelNoTv(true)}
+      onBlurCapture={(e) => {
+        if (tvMode && !e.currentTarget.contains(e.relatedTarget as Node | null)) setVisivelNoTv(false)
+      }}
+      className={cn(
+        "flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 lg:px-6",
+        tvMode
+          ? cn(
+              "fixed inset-x-0 top-0 z-50 transition-transform duration-300",
+              visivelNoTv ? "translate-y-0 shadow-lg" : "-translate-y-full"
+            )
+          : "sticky top-0 z-40"
+      )}
+    >
       {/* Celular: menu em gaveta. */}
       <Sheet open={menuMobileAberto} onOpenChange={setMenuMobileAberto}>
         <SheetTrigger asChild>

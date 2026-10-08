@@ -4,6 +4,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import { formatarMoeda, formatarMoedaAbreviada, formatarData } from '@/lib/formatters'
+import { useEscalaRem } from '@/hooks/use-escala-rem'
 import type { EvolucaoComparada } from '@/hooks/use-vendas-dashboard'
 
 const chartConfig = {
@@ -12,6 +13,7 @@ const chartConfig = {
 } satisfies ChartConfig
 
 export function EvolucaoVendasChart({ dados, comComparacao }: { dados: EvolucaoComparada[]; comComparacao: boolean }) {
+  const escala = useEscalaRem()
   return (
     <Card>
       <CardHeader>
@@ -19,7 +21,7 @@ export function EvolucaoVendasChart({ dados, comComparacao }: { dados: EvolucaoC
         <CardDescription>Faturamento diário do período{comComparacao ? ' comparado ao anterior' : ''}</CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer config={chartConfig} className="aspect-auto h-[280px] w-full">
+        <ChartContainer config={chartConfig} className="aspect-auto h-[17.5rem] w-full">
           <LineChart data={dados}>
             <CartesianGrid vertical={false} />
             <XAxis
@@ -30,7 +32,7 @@ export function EvolucaoVendasChart({ dados, comComparacao }: { dados: EvolucaoC
               minTickGap={24}
               tickFormatter={(value: string) => (value ? formatarData(value).slice(0, 5) : '')}
             />
-            <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatarMoedaAbreviada(v)} width={70} />
+            <YAxis tickLine={false} axisLine={false} tickFormatter={(v: number) => formatarMoedaAbreviada(v)} width={70 * escala} />
             <ChartTooltip
               content={
                 <ChartTooltipContent
