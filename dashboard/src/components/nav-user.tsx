@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { IconDeviceDesktop, IconDotsVertical, IconLogout, IconMoon, IconSun } from "@tabler/icons-react"
+import { IconDotsVertical, IconLogout } from "@tabler/icons-react"
 
 import {
   AlertDialog,
@@ -21,8 +21,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -32,7 +30,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { useTheme } from "@/contexts/theme-context"
 import { createClient } from "@/lib/supabase/client"
 import { useProfile } from "@/hooks/use-profile"
 import { useUser } from "@/hooks/use-user"
@@ -48,7 +45,6 @@ function initials(name: string) {
 
 export function NavUser() {
   const { isMobile } = useSidebar()
-  const { theme, setTheme } = useTheme()
   const { profile } = useProfile()
   const { user } = useUser()
   const router = useRouter()
@@ -74,11 +70,11 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg">{initials(displayName)}</AvatarFallback>
+                <AvatarFallback className="rounded-lg bg-sidebar-accent text-sidebar-accent-foreground">{initials(displayName)}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{displayName}</span>
-                <span className="truncate text-xs text-muted-foreground">{userEmail}</span>
+                <span className="truncate text-xs text-sidebar-foreground/80">{userEmail}</span>
               </div>
               <IconDotsVertical className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -101,22 +97,7 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs text-muted-foreground">Tema</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={theme}
-              onValueChange={(valor) => setTheme(valor as "light" | "dark" | "system")}
-            >
-              <DropdownMenuRadioItem value="light" onSelect={(e) => e.preventDefault()}>
-                <IconSun /> Claro
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="dark" onSelect={(e) => e.preventDefault()}>
-                <IconMoon /> Escuro
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="system" onSelect={(e) => e.preventDefault()}>
-                <IconDeviceDesktop /> Automático (aparelho)
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
+            
             <DropdownMenuItem
               onSelect={(event) => {
                 event.preventDefault()

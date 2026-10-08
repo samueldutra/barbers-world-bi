@@ -2,7 +2,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Sem tema escuro: a classe .dark nunca existe, então as variantes dark: dos componentes ficam
+   inertes (sem esta linha o Tailwind usaria o modo escuro do sistema operacional). */
 @custom-variant dark (&:is(.dark *));
+
 
 :root {
   --card: oklch(1 0 0);
@@ -27,13 +30,13 @@
   --chart-3: oklch(0.627 0.194 149.214);
   --chart-4: oklch(0.527 0.154 150.069);
   --chart-5: oklch(0.448 0.119 151.328);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: oklch(1 0 0 / 20%);
   --sidebar-ring: oklch(0.708 0 0);
   --font-serif: ui-serif, Georgia, serif;
   --link: var(--primary);
@@ -56,57 +59,6 @@
   --spacing: 0.25rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.922 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: #ffffff;
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.871 0.15 154.449);
-  --chart-2: oklch(0.723 0.219 149.579);
-  --chart-3: oklch(0.627 0.194 149.214);
-  --chart-4: oklch(0.527 0.154 150.069);
-  --chart-5: oklch(0.448 0.119 151.328);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-  --font-serif: ui-serif, Georgia, serif;
-  --shadow-x: 0px;
-  --shadow-y: 4px;
-  --shadow-blur: 10px;
-  --shadow-spread: 0px;
-  --shadow-opacity: 0.12;
-  --shadow-color: hsl(0 0% 0%);
-  --shadow-2xs: 0px 4px 10px 0px hsl(0 0% 0% / 0.06);
-  --shadow-xs: 0px 4px 10px 0px hsl(0 0% 0% / 0.06);
-  --shadow-sm: 0px 4px 10px 0px hsl(0 0% 0% / 0.12), 0px 1px 2px -1px hsl(0 0% 0% / 0.12);
-  --shadow: 0px 4px 10px 0px hsl(0 0% 0% / 0.12), 0px 1px 2px -1px hsl(0 0% 0% / 0.12);
-  --shadow-md: 0px 4px 10px 0px hsl(0 0% 0% / 0.12), 0px 2px 4px -1px hsl(0 0% 0% / 0.12);
-  --shadow-lg: 0px 4px 10px 0px hsl(0 0% 0% / 0.12), 0px 4px 6px -1px hsl(0 0% 0% / 0.12);
-  --shadow-xl: 0px 4px 10px 0px hsl(0 0% 0% / 0.12), 0px 8px 10px -1px hsl(0 0% 0% / 0.12);
-  --shadow-2xl: 0px 4px 10px 0px hsl(0 0% 0% / 0.30);
-  --link: var(--primary);
 }
 
 /* Força paleta clara num subtree, independente do tema do app — usar quando o container
@@ -228,6 +180,11 @@
   }
   a {
     color: var(--link);
+  }
+  /* Links dentro da sidebar herdam a cor dela (branca); a cor de link global é pro conteúdo. */
+  [data-slot="sidebar"] a,
+  [data-slot="sidebar-inner"] a {
+    color: inherit;
   }
   html {
     @apply font-sans;
@@ -463,4 +420,11 @@ html.tv-mode .recharts-wrapper text {
  * redimensiona quando ela aparece ao encostar o mouse na borda esquerda. */
 html.tv-mode [data-slot="sidebar-gap"] {
   width: 0 !important;
+}
+
+/* Padrão de cores único (sem tema claro/escuro): a moldura — sidebar e fundo da página — é
+ * preta com texto e ícones brancos; o conteúdo fica no cartão branco (SidebarInset). Com isso o
+ * fundo atrás do cartão (overscroll) também acompanha a sidebar. */
+body:has([data-slot="sidebar-wrapper"]) {
+  background-color: var(--sidebar);
 }
