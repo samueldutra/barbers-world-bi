@@ -458,3 +458,9 @@ html.tv-mode {
 html.tv-mode .recharts-wrapper text {
   font-size: 0.75rem;
 }
+
+/* Modo TV: a sidebar vira sobreposição (não ocupa espaço), então o conteúdo não se
+ * redimensiona quando ela aparece ao encostar o mouse na borda esquerda. */
+html.tv-mode [data-slot="sidebar-gap"] {
+  width: 0 !important;
+}
