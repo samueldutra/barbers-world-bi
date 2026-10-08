@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { IconDeviceTv, IconX } from '@tabler/icons-react'
+import { LayoutDashboard } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CanalLogo } from '@/components/filtros/canal-logo'
+import { ABAS_DASHBOARD, type AbaDashboard } from '@/lib/abas-canais'
 import { Button } from '@/components/ui/button'
 import { useTvMode } from '@/contexts/tv-mode-context'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -39,6 +43,8 @@ export default function DashboardPage() {
 
   const [periodo, setPeriodo] = useState<PeriodoPreset>('mes_atual')
   const [rangePersonalizado, setRangePersonalizado] = useState<RangeData | null>(null)
+  const [aba, setAba] = useState<AbaDashboard>('geral')
+  // Escolha do usuário no filtro de canais — só vale na aba Geral e é preservada ao navegar entre abas.
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
   // null = filtro padrão de situações do dashboard (situacoes_padrao_dashboard() no banco).
   const [situacoesSelecionadas, setSituacoesSelecionadas] = useState<number[] | null>(null)
@@ -52,12 +58,21 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshToken força recalcular datas relativas (hoje, mês atual) na atualização automática do modo TV
   }, [periodo, rangePersonalizado, refreshToken])
 
-  const { canais } = useCanaisVenda()
-  const { situacoes } = useSituacoesPedido({ atual, canais: canaisSelecionados, refreshToken })
+  const { canais, loading: carregandoCanais } = useCanaisVenda()
+
+  // Aba de canal: usa o período e a situação escolhidos, mas IGNORA o filtro de canais — os
+  // canais são todos os do grupo da aba (inclui lojas antigas/recriadas do mesmo marketplace).
+  const abaDeCanal = ABAS_DASHBOARD.find((a) => a.id === aba && a.grupo) ?? null
+  const canaisDaAba = useMemo(
+    () => (abaDeCanal ? canais.filter((c) => c.grupo === abaDeCanal.grupo).map((c) => c.id_loja) : null),
+    [abaDeCanal, canais]
+  )
+  const canaisEfetivos = abaDeCanal ? canaisDaAba : canaisSelecionados
+  const { situacoes } = useSituacoesPedido({ atual, canais: canaisEfetivos, refreshToken })
   const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm } = useVendasDashboard({
     atual,
     comparacao,
-    canais: canaisSelecionados,
+    canais: canaisEfetivos,
     situacoes: situacoesSelecionadas,
     refreshToken,
   })
@@ -71,7 +86,7 @@ export default function DashboardPage() {
   }, [canais, porCanal, canaisSelecionados])
   const { ranking, porCategoria, porMarca } = useRankingProdutos({
     atual,
-    canais: canaisSelecionados,
+    canais: canaisEfetivos,
     situacoes: situacoesSelecionadas,
     ordenarPor: ordenarRankingPor,
     refreshToken,
@@ -84,7 +99,9 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Visão geral</h1>
-          <p className="text-sm text-muted-foreground">Vendas consolidadas de todos os canais da Barbers World</p>
+          <p className="text-sm text-muted-foreground">
+            {abaDeCanal ? `Vendas do canal ${abaDeCanal.label} (todas as lojas do canal)` : 'Vendas consolidadas de todos os canais da Barbers World'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FiltroPeriodo
@@ -100,6 +117,7 @@ export default function DashboardPage() {
             situacoes={situacoes}
             situacoesSelecionadas={situacoesSelecionadas}
             onSituacoesChange={setSituacoesSelecionadas}
+            abaDeCanal={abaDeCanal}
           />
           <Button
             variant={tvMode ? 'default' : 'outline'}
@@ -112,6 +130,19 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+
+      <Tabs value={aba} onValueChange={(v) => setAba(v as AbaDashboard)} className="-mb-2">
+        <div className="max-w-full overflow-x-auto">
+          <TabsList>
+            {ABAS_DASHBOARD.map((a) => (
+              <TabsTrigger key={a.id} value={a.id} disabled={!!a.grupo && carregandoCanais}>
+                {a.grupo ? <CanalLogo grupo={a.grupo} tamanho={16} /> : <LayoutDashboard className="size-4" />}
+                {a.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+      </Tabs>
 
       {atualizadoEm && (
         <p className="-mt-4 text-xs text-muted-foreground">
@@ -216,8 +247,8 @@ export default function DashboardPage() {
           <EvolucaoVendasChart dados={evolucao} comComparacao={comComparacao} />
 
           <VendasPorCanalChart
-            dados={porCanal}
-            onSelecionarCanal={(idLoja) => setCanaisSelecionados([idLoja])}
+            dados={canaisDaAba ? porCanal.filter((c) => canaisDaAba.includes(c.id_loja)) : porCanal}
+            onSelecionarCanal={abaDeCanal ? undefined : (idLoja) => setCanaisSelecionados([idLoja])}
           />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
