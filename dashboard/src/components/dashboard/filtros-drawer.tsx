@@ -30,6 +30,8 @@ interface Props {
   onSituacoesChange: (ids: number[] | null) => void
   /** Aba de canal ativa: o filtro de canais fica bloqueado (vale o canal da aba). */
   abaDeCanal?: AbaCanal | null
+  /** Padrão de situações da aba ativa (quando tem um próprio). */
+  idsPadraoSituacoes?: number[]
 }
 
 /** Botão "Filtrar" (com a quantidade de filtros aplicados) que abre um drawer com Canais e
@@ -43,6 +45,7 @@ export function FiltrosDrawer({
   situacoesSelecionadas,
   onSituacoesChange,
   abaDeCanal = null,
+  idsPadraoSituacoes,
 }: Props) {
   const [aberto, setAberto] = useState(false)
   const [rascunhoCanais, setRascunhoCanais] = useState<number[] | null>(null)
@@ -125,6 +128,7 @@ export function FiltrosDrawer({
               situacoes={situacoes}
               situacoesSelecionadas={rascunhoSituacoes}
               onSituacoesChange={setRascunhoSituacoes}
+              idsPadrao={idsPadraoSituacoes}
               className="w-full"
             />
           </div>

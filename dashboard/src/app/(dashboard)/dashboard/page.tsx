@@ -19,7 +19,7 @@ import { RankingBarChart } from '@/components/dashboard/ranking-bar-chart'
 import { useVendasDashboard } from '@/hooks/use-vendas-dashboard'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useSituacoesPedido } from '@/hooks/use-situacoes-pedido'
-import { descreverSelecaoSituacoes } from '@/components/filtros/filtro-situacoes'
+import { descreverSelecaoSituacoes, nomesDoPadrao } from '@/components/filtros/filtro-situacoes'
 import { useRankingProdutos, type OrdenarRankingPor } from '@/hooks/use-ranking-produtos'
 import { obterRangePreset, obterRangeComparacao, rangePadrao, type PeriodoPreset, type RangeData } from '@/lib/date-ranges'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
@@ -47,7 +47,8 @@ export default function DashboardPage() {
   // Escolha do usuário no filtro de canais — só vale na aba Geral e é preservada ao navegar entre abas.
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
   // null = filtro padrão de situações do dashboard (situacoes_padrao_dashboard() no banco).
-  const [situacoesSelecionadas, setSituacoesSelecionadas] = useState<number[] | null>(null)
+  // Escolha de situações POR ABA (null = padrão da aba): cada aba tem o seu padrão e a sua seleção.
+  const [situacoesPorAba, setSituacoesPorAba] = useState<Partial<Record<AbaDashboard, number[] | null>>>({})
   const [ordenarRankingPor, setOrdenarRankingPor] = useState<OrdenarRankingPor>('faturamento')
 
   const { atual, comparacao } = useMemo(() => {
@@ -68,12 +69,19 @@ export default function DashboardPage() {
     [abaDeCanal, canais]
   )
   const canaisEfetivos = abaDeCanal ? canaisDaAba : canaisSelecionados
+
+  // Situações: null = padrão. A aba pode ter um padrão próprio (ex.: Nuvemshop), que vale como
+  // lista explícita; sem padrão próprio, o banco aplica o padrão geral do dashboard.
+  const situacoesSelecionadas = situacoesPorAba[aba] ?? null
+  const setSituacoesSelecionadas = (ids: number[] | null) => setSituacoesPorAba((atual) => ({ ...atual, [aba]: ids }))
+  const idsPadraoDaAba = abaDeCanal?.situacoesPadrao
+  const situacoesEfetivas = situacoesSelecionadas ?? idsPadraoDaAba ?? null
   const { situacoes } = useSituacoesPedido({ atual, canais: canaisEfetivos, refreshToken })
   const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm } = useVendasDashboard({
     atual,
     comparacao,
     canais: canaisEfetivos,
-    situacoes: situacoesSelecionadas,
+    situacoes: situacoesEfetivas,
     refreshToken,
   })
   // Filtro de canais lista só canais com venda > 0 no período (mesma regra de situações do
@@ -87,7 +95,7 @@ export default function DashboardPage() {
   const { ranking, porCategoria, porMarca } = useRankingProdutos({
     atual,
     canais: canaisEfetivos,
-    situacoes: situacoesSelecionadas,
+    situacoes: situacoesEfetivas,
     ordenarPor: ordenarRankingPor,
     refreshToken,
   })
@@ -118,6 +126,7 @@ export default function DashboardPage() {
             situacoesSelecionadas={situacoesSelecionadas}
             onSituacoesChange={setSituacoesSelecionadas}
             abaDeCanal={abaDeCanal}
+            idsPadraoSituacoes={idsPadraoDaAba}
           />
           <Button
             variant={tvMode ? 'default' : 'outline'}
@@ -155,7 +164,9 @@ export default function DashboardPage() {
       {atualizadoEm && (
         <p className="-mt-4 text-xs text-muted-foreground">
           Dados atualizados às {atualizadoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-          {' · '}Situações consideradas: {descreverSelecaoSituacoes(situacoes, situacoesSelecionadas)}
+          {' · '}Situações consideradas: {situacoesSelecionadas === null && idsPadraoDaAba
+            ? `Padrão da aba (${nomesDoPadrao(situacoes, idsPadraoDaAba)})`
+            : descreverSelecaoSituacoes(situacoes, situacoesSelecionadas)}
           {' · '}Atualização automática a cada 10 min
         </p>
       )}
