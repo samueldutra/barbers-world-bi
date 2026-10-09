@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS barbers.leads_mapeados (
     latitude        DOUBLE PRECISION NOT NULL,
     longitude       DOUBLE PRECISION NOT NULL,
 
-    status          TEXT NOT NULL DEFAULT 'lead' CHECK (status IN ('cliente', 'concorrente', 'lead', 'pendente')),
+    status          TEXT NOT NULL DEFAULT 'lead' CHECK (status IN ('cliente', 'concorrente', 'lead', 'pendente', 'cliente_bw', 'cliente_anderson', 'cliente_leo')),
     observacoes     TEXT,
 
     criado_por      UUID,
@@ -65,14 +65,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_leads_mapeados_origem
 CREATE INDEX IF NOT EXISTS idx_leads_mapeados_status
     ON barbers.leads_mapeados (status);
 
--- Adiciona 'pendente' ao status (resultado de busca salvo automaticamente, ainda sem
--- classificação) — ALTER explícito porque a tabela já existe em produção com o CHECK
--- antigo (só cliente/concorrente/lead); CREATE TABLE IF NOT EXISTS não altera tabela
--- já criada.
-ALTER TABLE barbers.leads_mapeados DROP CONSTRAINT IF EXISTS leads_mapeados_status_check;
-ALTER TABLE barbers.leads_mapeados ADD CONSTRAINT leads_mapeados_status_check
-    CHECK (status IN ('cliente', 'concorrente', 'lead', 'pendente'));
-
+-- Status (cliente, concorrente, lead, pendente = "a classificar", cliente_bw, cliente_anderson, cliente_leo)
+-- e favorito: ver o bloco "Classificações novas e favoritos" logo abaixo, que refaz o CHECK e as funções.
 
 -- Assinaturas antigas (v1, com osm_type/osm_id BIGINT) viram sobrecargas órfãs se não
 -- forem removidas explicitamente — CREATE OR REPLACE só substitui uma função de mesma
@@ -82,7 +76,21 @@ DROP FUNCTION IF EXISTS salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE
 DROP FUNCTION IF EXISTS salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
 
 
--- Lista os leads salvos, opcionalmente filtrado por status.
+-- ---------------------------------------------------------------------------
+-- Classificações novas (cliente_bw, cliente_anderson, cliente_leo) e favoritos.
+-- ---------------------------------------------------------------------------
+ALTER TABLE barbers.leads_mapeados ADD COLUMN IF NOT EXISTS uf TEXT;
+ALTER TABLE barbers.leads_mapeados ADD COLUMN IF NOT EXISTS favorito BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_leads_mapeados_favorito ON barbers.leads_mapeados (favorito) WHERE favorito;
+
+ALTER TABLE barbers.leads_mapeados DROP CONSTRAINT IF EXISTS leads_mapeados_status_check;
+ALTER TABLE barbers.leads_mapeados ADD CONSTRAINT leads_mapeados_status_check
+    CHECK (status IN ('cliente', 'concorrente', 'lead', 'pendente', 'cliente_bw', 'cliente_anderson', 'cliente_leo'));
+
+
+-- Lista os leads salvos, opcionalmente filtrado por status. (DROP + CREATE troca as colunas; depois
+-- dele o REVOKE é obrigatório: função recriada nasce executável por PUBLIC/anon.)
+DROP FUNCTION IF EXISTS obter_leads_mapeados(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION obter_leads_mapeados(
     p_schema_name TEXT,
     p_status TEXT DEFAULT NULL
@@ -101,7 +109,9 @@ RETURNS TABLE(
     status TEXT,
     observacoes TEXT,
     criado_em TIMESTAMPTZ,
-    atualizado_em TIMESTAMPTZ
+    atualizado_em TIMESTAMPTZ,
+    uf TEXT,
+    favorito BOOLEAN
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -112,7 +122,7 @@ DECLARE
 BEGIN
     v_sql := format('
         SELECT id, origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude,
-               status, observacoes, criado_em, atualizado_em
+               status, observacoes, criado_em, atualizado_em, uf, favorito
         FROM %I.leads_mapeados
         WHERE (%L::TEXT IS NULL OR status = %L)
         ORDER BY criado_em DESC
@@ -122,7 +132,25 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION obter_leads_mapeados(TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION obter_leads_mapeados(TEXT, TEXT) TO authenticated;
+
+
+-- Marca/desmarca um lead como favorito (estrela).
+CREATE OR REPLACE FUNCTION favoritar_lead_mapeado(p_schema_name TEXT, p_id BIGINT, p_favorito BOOLEAN)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    EXECUTE format('UPDATE %I.leads_mapeados SET favorito = %L::BOOLEAN WHERE id = %L',
+                   p_schema_name, COALESCE(p_favorito, false), p_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION favoritar_lead_mapeado(TEXT, BIGINT, BOOLEAN) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION favoritar_lead_mapeado(TEXT, BIGINT, BOOLEAN) TO authenticated;
 
 
 -- Salva (ou atualiza, se já mapeado) um resultado de busca com um status. Upsert por
@@ -152,7 +180,7 @@ DECLARE
     v_id BIGINT;
     v_status TEXT;
 BEGIN
-    v_status := CASE WHEN p_status IN ('cliente', 'concorrente', 'lead') THEN p_status ELSE 'lead' END;
+    v_status := CASE WHEN p_status IN ('cliente', 'concorrente', 'lead', 'cliente_bw', 'cliente_anderson', 'cliente_leo') THEN p_status ELSE 'lead' END;
 
     IF p_origem_tipo IS NOT NULL AND p_origem_id IS NOT NULL THEN
         v_sql := format('
@@ -185,15 +213,12 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION salvar_lead_mapeado(TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
 
--- Salva em lote os resultados de uma busca como 'pendente' (a classificar). Pra quem já foi
--- salvo antes, só backfilla a cidade se ainda estiver NULL (ex.: lead salvo antes dessa
--- coluna existir) — não mexe em status/observações/nome de quem já foi classificado. Chamada
--- pelo server da busca (src/app/api/prospeccao/buscar), não pelo cliente. p_leads: array
--- JSON de objetos {origemTipo, origemId, nome, nicho, endereco, cidade, telefone, latitude,
--- longitude}. Retorna quantos leads foram realmente inseridos (novos).
+-- Salva em lote os resultados de uma busca como 'pendente' (a classificar); grava/completa cidade e UF de
+-- quem já existia sem eles (não conta como "novo"). Chamada pelas rotas de API (busca e mapeamento).
 CREATE OR REPLACE FUNCTION salvar_leads_novos(
     p_schema_name TEXT,
     p_leads JSONB
@@ -207,8 +232,6 @@ DECLARE
     v_sql TEXT;
     v_count INT;
 BEGIN
-    -- Passo 1: insere só quem é realmente novo (ON CONFLICT DO NOTHING) — o ROW_COUNT daqui
-    -- vira o retorno da função, então não pode contar update de quem já existia.
     v_sql := format('
         WITH dados AS (
             SELECT
@@ -218,14 +241,15 @@ BEGIN
                 item->>''nicho''                            AS nicho,
                 item->>''endereco''                         AS endereco,
                 item->>''cidade''                           AS cidade,
+                item->>''uf''                               AS uf,
                 item->>''telefone''                         AS telefone,
                 (item->>''latitude'')::DOUBLE PRECISION    AS latitude,
                 (item->>''longitude'')::DOUBLE PRECISION   AS longitude
             FROM jsonb_array_elements(%L::JSONB) AS item
         )
         INSERT INTO %I.leads_mapeados
-            (origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude, status, criado_por)
-        SELECT origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude, ''pendente'', auth.uid()
+            (origem_tipo, origem_id, nome, nicho, endereco, cidade, uf, telefone, latitude, longitude, status, criado_por)
+        SELECT origem_tipo, origem_id, nome, nicho, endereco, cidade, uf, telefone, latitude, longitude, ''pendente'', auth.uid()
         FROM dados
         WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL
         ON CONFLICT (origem_tipo, origem_id) WHERE origem_tipo IS NOT NULL AND origem_id IS NOT NULL DO NOTHING
@@ -234,21 +258,21 @@ BEGIN
     EXECUTE v_sql;
     GET DIAGNOSTICS v_count = ROW_COUNT;
 
-    -- Passo 2: backfill de cidade em quem já existia sem essa coluna preenchida (lead salvo
-    -- antes dela existir) — separado do INSERT de propósito, pra não contar como "novo".
+    -- Completa cidade/UF de quem já existia sem esses campos (não conta como "novo").
     v_sql := format('
         WITH dados AS (
             SELECT
                 item->>''origemTipo'' AS origem_tipo,
                 item->>''origemId''   AS origem_id,
-                item->>''cidade''     AS cidade
+                item->>''cidade''     AS cidade,
+                item->>''uf''         AS uf
             FROM jsonb_array_elements(%L::JSONB) AS item
         )
         UPDATE %I.leads_mapeados l
-        SET cidade = d.cidade
+        SET cidade = COALESCE(l.cidade, d.cidade), uf = COALESCE(l.uf, d.uf)
         FROM dados d
         WHERE l.origem_tipo = d.origem_tipo AND l.origem_id = d.origem_id
-          AND l.cidade IS NULL AND d.cidade IS NOT NULL
+          AND ((l.cidade IS NULL AND d.cidade IS NOT NULL) OR (l.uf IS NULL AND d.uf IS NOT NULL))
     ', p_leads, p_schema_name);
 
     EXECUTE v_sql;
@@ -257,7 +281,9 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION salvar_leads_novos(TEXT, JSONB) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION salvar_leads_novos(TEXT, JSONB) TO authenticated;
+GRANT EXECUTE ON FUNCTION salvar_leads_novos(TEXT, JSONB) TO service_role;
 
 
 CREATE OR REPLACE FUNCTION atualizar_status_lead_mapeado(
@@ -274,7 +300,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
-    IF p_status NOT IN ('cliente', 'concorrente', 'lead', 'pendente') THEN
+    IF p_status NOT IN ('cliente', 'concorrente', 'lead', 'pendente', 'cliente_bw', 'cliente_anderson', 'cliente_leo') THEN
         RAISE EXCEPTION 'status inválido: %', p_status;
     END IF;
 
@@ -290,6 +316,7 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION atualizar_status_lead_mapeado(TEXT, BIGINT, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION atualizar_status_lead_mapeado(TEXT, BIGINT, TEXT, TEXT) TO authenticated;
 
 

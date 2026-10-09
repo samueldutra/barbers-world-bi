@@ -64,6 +64,21 @@ export function useRotaVisita(id: number) {
     }
   }
 
+  const favoritarLead = async (parada: ParadaRota) => {
+    const favorito = !parada.favorito
+    const aplicar = (v: boolean) =>
+      setParadas((atual) => atual.map((p) => (p.lead_id === parada.lead_id ? { ...p, favorito: v } : p)))
+    aplicar(favorito)
+    const supabase = createClient()
+    const { error } = await Promise.resolve(
+      supabase.rpc('favoritar_lead_mapeado', { p_schema_name: TENANT_SCHEMA, p_id: parada.lead_id, p_favorito: favorito })
+    )
+    if (error) {
+      aplicar(parada.favorito)
+      throw error
+    }
+  }
+
   const atualizarStatus = async (status: StatusRota) => {
     const supabase = createClient()
     const { error } = await Promise.resolve(
@@ -79,5 +94,5 @@ export function useRotaVisita(id: number) {
     if (error) throw error
   }
 
-  return { rota, paradas, loading, error, naoEncontrada, recarregar: carregar, alternarVisita, atualizarStatus, excluir }
+  return { rota, paradas, loading, error, naoEncontrada, recarregar: carregar, alternarVisita, favoritarLead, atualizarStatus, excluir }
 }

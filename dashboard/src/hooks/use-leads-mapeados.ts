@@ -4,7 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 
-export type StatusLead = 'cliente' | 'concorrente' | 'lead' | 'pendente'
+export type StatusLead =
+  | 'cliente'
+  | 'concorrente'
+  | 'lead'
+  | 'pendente'
+  | 'cliente_bw'
+  | 'cliente_anderson'
+  | 'cliente_leo'
 
 export interface LeadMapeado {
   id: number
@@ -20,6 +27,7 @@ export interface LeadMapeado {
   latitude: number
   longitude: number
   status: StatusLead
+  favorito: boolean
   observacoes: string | null
   criado_em: string
   atualizado_em: string
@@ -104,6 +112,18 @@ export function useLeadsMapeados() {
     }
   }
 
+  const favoritar = async (id: number, favorito: boolean) => {
+    setLeads((atual) => atual.map((l) => (l.id === id ? { ...l, favorito } : l)))
+    const supabase = createClient()
+    const { error } = await Promise.resolve(
+      supabase.rpc('favoritar_lead_mapeado', { p_schema_name: TENANT_SCHEMA, p_id: id, p_favorito: favorito })
+    )
+    if (error) {
+      await carregar()
+      throw error
+    }
+  }
+
   const excluir = async (id: number) => {
     setLeads((atual) => atual.filter((l) => l.id !== id))
     const supabase = createClient()
@@ -116,5 +136,5 @@ export function useLeadsMapeados() {
     }
   }
 
-  return { leads, loading, error, recarregar: carregar, salvar, atualizarStatus, excluir }
+  return { leads, loading, error, recarregar: carregar, salvar, atualizarStatus, favoritar, excluir }
 }

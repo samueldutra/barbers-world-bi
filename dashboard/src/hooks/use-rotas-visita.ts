@@ -35,6 +35,7 @@ export interface ParadaRota {
   latitude: number
   longitude: number
   status_lead: StatusLead
+  favorito: boolean
 }
 
 export function useRotasVisita() {

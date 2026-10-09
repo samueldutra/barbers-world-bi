@@ -151,6 +151,16 @@ campo `codigo` do Bling é um EAN.
 - O link do Google Maps de uma rota leva só as próximas 23 paradas não visitadas (limite do Maps).
 - Fila e progresso em `barbers.cidades_mapeamento`.
 
+### Prospecção: classificações e favoritos
+
+- Status do lead (`leads_mapeados.status`, CHECK no banco): `pendente` (A classificar), `cliente`, `concorrente`, `lead`,
+  `cliente_bw`, `cliente_anderson`, `cliente_leo`. Rótulos, cores do mapa e estilo dos botões ficam num lugar só:
+  `src/lib/leads-status.ts` (para criar uma nova classificação: CHECK + as 2 RPCs de status no SQL + esse arquivo + o tipo
+  `StatusLead` em `use-leads-mapeados.ts`).
+- Favorito (`leads_mapeados.favorito`, estrela): RPC `favoritar_lead_mapeado`; aparece na lista de leads (com filtro
+  "Favoritos"), no detalhe do lead, na seleção de paradas de Nova rota e nas paradas de cada rota. O favorito é do
+  lead, então vale em todas as rotas.
+
 ## Variáveis de ambiente (`.env.local` e Vercel)
 
 | Variável | Uso |

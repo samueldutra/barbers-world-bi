@@ -14,6 +14,7 @@ import { LeadsSalvosLista } from '@/components/prospeccao/leads-salvos-lista'
 import { LeadDetalheSheet } from '@/components/prospeccao/lead-detalhe-sheet'
 import { PontoPartidaCampo } from '@/components/prospeccao/ponto-partida-campo'
 import { useBuscaNicho, type ResultadoBusca, type PontoBusca } from '@/hooks/use-busca-nicho'
+import { STATUS_LEAD } from '@/lib/leads-status'
 import { useLeadsMapeados, type LeadMapeado, type StatusLead } from '@/hooks/use-leads-mapeados'
 import { usePontoPartida } from '@/hooks/use-ponto-partida'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -36,12 +37,9 @@ const OPCOES_RAIO = [
 // a se repetir. Pra cobrir mais área, some pontos de busca em vez de só aumentar o raio.
 const MAX_PONTOS_EXTRAS = 8
 
-const LABEL_STATUS: Record<StatusLead, string> = {
-  cliente: 'cliente',
-  concorrente: 'concorrente',
-  lead: 'lead',
-  pendente: 'a classificar',
-}
+const LABEL_STATUS = Object.fromEntries(
+  Object.entries(STATUS_LEAD).map(([k, v]) => [k, v.label.toLowerCase()])
+) as Record<StatusLead, string>
 
 /** Mapeamento de Leads: encontrar estabelecimentos por nicho no mapa e classificá-los.
  * Montar e acompanhar rotas de visita fica em /prospeccao/rotas. */
@@ -64,7 +62,7 @@ export default function MapeamentoLeadsPage() {
   const [triagemSolicitada, setTriagemSolicitada] = useState(false)
 
   const { resultados, loading: buscando, error: erroBusca, buscar } = useBuscaNicho()
-  const { leads, loading: carregandoLeads, salvar, atualizarStatus, excluir, recarregar: recarregarLeads } = useLeadsMapeados()
+  const { leads, loading: carregandoLeads, salvar, atualizarStatus, favoritar, excluir, recarregar: recarregarLeads } = useLeadsMapeados()
 
   const pendentes = useMemo(() => leads.filter((l) => l.status === 'pendente'), [leads])
   const leadAberto =
@@ -157,6 +155,15 @@ export default function MapeamentoLeadsPage() {
     }
   }
 
+  const handleFavoritar = async (id: number, favorito: boolean) => {
+    try {
+      await favoritar(id, favorito)
+    } catch (err) {
+      console.error('Erro ao favoritar lead:', err)
+      toast.error('Não foi possível atualizar o favorito.')
+    }
+  }
+
   const handleExcluir = async (id: number) => {
     try {
       await excluir(id)
@@ -218,6 +225,7 @@ export default function MapeamentoLeadsPage() {
       centro={centro}
       onAtualizarStatus={handleAtualizarStatus}
       onExcluir={handleExcluir}
+      onFavoritar={handleFavoritar}
       onAbrirLead={abrirLead}
       filtroStatus={filtroStatus}
       onFiltroStatusChange={setFiltroStatus}
@@ -229,7 +237,7 @@ export default function MapeamentoLeadsPage() {
       <div>
         <h1 className="text-2xl font-semibold">Mapeamento de leads</h1>
         <p className="text-sm text-muted-foreground">
-          Busque estabelecimentos por nicho e classifique como cliente, concorrente ou lead
+          Busque estabelecimentos por nicho e classifique e marque os favoritos
         </p>
       </div>
 
@@ -370,6 +378,7 @@ export default function MapeamentoLeadsPage() {
         onOpenChange={(v) => !v && fecharPainel()}
         onClassificar={handleClassificarNoPainel}
         onExcluir={handleExcluirNoPainel}
+        onFavoritar={(lead) => handleFavoritar(lead.id, !lead.favorito)}
         pendentesRestantes={leadAberto?.status === 'pendente' ? filaTriagem.length : 0}
         onPular={handlePular}
       />

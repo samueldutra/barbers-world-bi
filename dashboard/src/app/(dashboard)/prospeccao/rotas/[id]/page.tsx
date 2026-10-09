@@ -5,7 +5,7 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, List, Map as MapIcon, Navigation } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, List, Map as MapIcon, Navigation, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ParadaItem } from '@/components/prospeccao/rotas/parada-item'
 import { RotaAcoesMenu } from '@/components/prospeccao/rotas/rota-acoes-menu'
+import { FILTROS_ROTA_PADRAO, FiltrosRotaDrawer, type FiltrosRota } from '@/components/prospeccao/rotas/filtros-rota-drawer'
 import { useRotaVisita } from '@/hooks/use-rota-visita'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { formatarData } from '@/lib/formatters'
@@ -44,11 +45,12 @@ export default function RotaDetalhePage() {
   const id = Number(params.id)
   const router = useRouter()
   const isMobile = useIsMobile()
-  const [aba, setAba] = useState<'paradas' | 'mapa'>('paradas')
+  const [aba, setAba] = useState<'paradas' | 'favoritos' | 'mapa'>('paradas')
+  const [filtros, setFiltros] = useState<FiltrosRota>(FILTROS_ROTA_PADRAO)
   const [destacada, setDestacada] = useState<number | null>(null)
   const refsParadas = useRef(new Map<number, HTMLLIElement>())
 
-  const { rota, paradas, loading, error, naoEncontrada, alternarVisita, atualizarStatus, excluir } = useRotaVisita(id)
+  const { rota, paradas, loading, error, naoEncontrada, alternarVisita, favoritarLead, atualizarStatus, excluir } = useRotaVisita(id)
 
   if (loading) {
     return (
@@ -90,6 +92,15 @@ export default function RotaDetalhePage() {
     } catch (err) {
       console.error('Erro ao atualizar parada:', err)
       toast.error('Não foi possível salvar a visita — verifique a conexão e tente de novo.')
+    }
+  }
+
+  const handleFavoritar = async (parada: ParadaRota) => {
+    try {
+      await favoritarLead(parada)
+    } catch (err) {
+      console.error('Erro ao favoritar lead:', err)
+      toast.error('Não foi possível atualizar o favorito.')
     }
   }
 
@@ -144,7 +155,7 @@ export default function RotaDetalhePage() {
 
   // Toque num marcador: no celular volta pra lista; em ambos, rola até a parada e destaca.
   const handleSelecionarNoMapa = (parada: ParadaRota) => {
-    if (isMobile) setAba('paradas')
+    setAba('paradas')
     setDestacada(parada.parada_id)
     setTimeout(() => {
       refsParadas.current.get(parada.parada_id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -152,12 +163,14 @@ export default function RotaDetalhePage() {
     setTimeout(() => setDestacada((d) => (d === parada.parada_id ? null : d)), 2000)
   }
 
-  const listaParadas =
-    paradas.length === 0 ? (
-      <p className="py-8 text-center text-sm text-muted-foreground">Essa rota não tem paradas.</p>
+  // Ordem original da rota é mantida nas duas listas (a parada 7 continua sendo a 7 em Favoritos).
+  const passaFiltro = (p: ParadaRota) => filtros.classificacoes.length === 0 || filtros.classificacoes.includes(p.status_lead)
+  const montarLista = (itens: { parada: ParadaRota; ordem: number }[], vazio: string) =>
+    itens.length === 0 ? (
+      <p className="py-8 text-center text-sm text-muted-foreground">{vazio}</p>
     ) : (
       <ol className="flex flex-col gap-2">
-        {paradas.map((parada, i) => (
+        {itens.map(({ parada, ordem }) => (
           <ParadaItem
             key={parada.parada_id}
             ref={(el) => {
@@ -165,14 +178,33 @@ export default function RotaDetalhePage() {
               else refsParadas.current.delete(parada.parada_id)
             }}
             parada={parada}
-            ordem={i + 1}
+            ordem={ordem}
             proxima={parada.parada_id === proxima?.parada_id}
             destacada={parada.parada_id === destacada}
             onAlternarVisita={() => handleAlternarVisita(parada)}
+            onFavoritar={() => handleFavoritar(parada)}
           />
         ))}
       </ol>
     )
+  const comOrdem = paradas.map((parada, i) => ({ parada, ordem: i + 1 })).filter((x) => passaFiltro(x.parada))
+  const filtrando = filtros.classificacoes.length > 0
+  const listaParadas = montarLista(
+    comOrdem,
+    paradas.length === 0 ? 'Essa rota não tem paradas.' : 'Nenhuma parada com essa classificação.'
+  )
+  const favoritas = comOrdem.filter((x) => x.parada.favorito)
+  const listaFavoritos = montarLista(
+    favoritas,
+    filtrando ? 'Nenhuma parada favorita com essa classificação.' : 'Nenhuma parada favorita. Toque na estrela de uma parada para marcá-la.'
+  )
+  const totalFavoritas = paradas.filter((p) => p.favorito).length
+
+  const filtroBarra = (
+    <div className="flex items-center justify-end">
+      <FiltrosRotaDrawer valor={filtros} onAplicar={setFiltros} />
+    </div>
+  )
 
   const mapa = (
     <div className="h-[60vh] overflow-hidden rounded-lg border lg:sticky lg:top-4 lg:h-[calc(100vh-10rem)]">
@@ -285,19 +317,27 @@ export default function RotaDetalhePage() {
       )}
 
       {isMobile ? (
-        <Tabs value={aba} onValueChange={(v) => setAba(v as 'paradas' | 'mapa')}>
+        <Tabs value={aba} onValueChange={(v) => setAba(v as 'paradas' | 'favoritos' | 'mapa')}>
           <TabsList className="w-full">
             <TabsTrigger value="paradas" className="flex-1">
               <List className="h-4 w-4" />
               Paradas ({paradas.length})
+            </TabsTrigger>
+            <TabsTrigger value="favoritos" className="flex-1">
+              <Star className="h-4 w-4" />
+              Favoritos ({totalFavoritas})
             </TabsTrigger>
             <TabsTrigger value="mapa" className="flex-1">
               <MapIcon className="h-4 w-4" />
               Mapa
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="paradas" className="animate-in fade-in-0 duration-200">
+          <div className="mt-3">{filtroBarra}</div>
+          <TabsContent value="paradas" className="mt-3 animate-in fade-in-0 duration-200">
             {listaParadas}
+          </TabsContent>
+          <TabsContent value="favoritos" className="mt-3 animate-in fade-in-0 duration-200">
+            {listaFavoritos}
           </TabsContent>
           <TabsContent value="mapa" className="animate-in fade-in-0 duration-200">
             {mapa}
@@ -305,7 +345,27 @@ export default function RotaDetalhePage() {
         </Tabs>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div>{listaParadas}</div>
+          <Tabs value={aba === 'favoritos' ? 'favoritos' : 'paradas'} onValueChange={(v) => setAba(v as 'paradas' | 'favoritos')}>
+            <div className="flex items-center justify-between gap-2">
+              <TabsList>
+                <TabsTrigger value="paradas">
+                  <List className="h-4 w-4" />
+                  Paradas ({paradas.length})
+                </TabsTrigger>
+                <TabsTrigger value="favoritos">
+                  <Star className="h-4 w-4" />
+                  Favoritos ({totalFavoritas})
+                </TabsTrigger>
+              </TabsList>
+              {filtroBarra}
+            </div>
+            <TabsContent value="paradas" className="mt-3">
+              {listaParadas}
+            </TabsContent>
+            <TabsContent value="favoritos" className="mt-3">
+              {listaFavoritos}
+            </TabsContent>
+          </Tabs>
           {mapa}
         </div>
       )}
