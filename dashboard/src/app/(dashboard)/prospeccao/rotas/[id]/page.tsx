@@ -17,7 +17,8 @@ import { RotaAcoesMenu } from '@/components/prospeccao/rotas/rota-acoes-menu'
 import { useRotaVisita } from '@/hooks/use-rota-visita'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { formatarData } from '@/lib/formatters'
-import { montarUrlRota } from '@/lib/google-maps-route'
+import { montarUrlRota, proximoTrecho } from '@/lib/google-maps-route'
+import { MAX_PARADAS_ROTA } from '@/lib/prospeccao'
 import { exportarRotaPDF } from '@/lib/pdf-rota'
 import { LABEL_STATUS_ROTA, VARIANTE_STATUS_ROTA, origemRota, percentualVisitado } from '@/lib/rotas'
 import type { ParadaRota, StatusRota } from '@/hooks/use-rotas-visita'
@@ -73,7 +74,15 @@ export default function RotaDetalhePage() {
   const pct = percentualVisitado(rota)
   const proxima = paradas.find((p) => !p.visita_realizada) ?? null
   const todasVisitadas = paradas.length > 0 && !proxima
-  const urlRota = paradas.length > 0 ? montarUrlRota(origemRota(rota), paradas) : ''
+  // O link do Maps leva só o próximo trecho (até MAX_PARADAS_ROTA paradas ainda não visitadas):
+  // rotas por cidade podem ter centenas de paradas e o Maps rejeita links com mais de ~25 pontos.
+  // Depois de visitar alguma parada, o link parte da localização atual (sem origem fixa).
+  const trecho = proximoTrecho(paradas)
+  const rotaLonga = paradas.length > MAX_PARADAS_ROTA
+  const jaVisitouAlguma = paradas.some((p) => p.visita_realizada)
+  const urlRota = trecho.length > 0 ? montarUrlRota(jaVisitouAlguma ? null : origemRota(rota), trecho) : ''
+  // O PDF é um documento fixo: leva o link do início da rota.
+  const urlRotaPdf = paradas.length > 0 ? montarUrlRota(origemRota(rota), paradas) : ''
 
   const handleAlternarVisita = async (parada: ParadaRota) => {
     try {
@@ -130,7 +139,7 @@ export default function RotaDetalhePage() {
         latitude: p.latitude,
         longitude: p.longitude,
       })),
-      urlGoogleMaps: urlRota,
+      urlGoogleMaps: urlRotaPdf,
     })
 
   // Toque num marcador: no celular volta pra lista; em ambos, rola até a parada e destaca.
@@ -237,6 +246,13 @@ export default function RotaDetalhePage() {
             </Button>
           )}
         </div>
+
+        {rotaLonga && trecho.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Rota com {paradas.length} paradas: o Google Maps recebe as próximas {trecho.length} ainda não visitadas
+            (o link aceita no máximo {MAX_PARADAS_ROTA}). Marque as paradas como visitadas para o link avançar.
+          </p>
+        )}
       </Card>
 
       {(rota.status === 'mapeando' || rota.status === 'erro_mapeamento') && (
