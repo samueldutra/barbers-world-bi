@@ -1,28 +1,15 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronRight, MapPin, Route, Save, Trash2 } from 'lucide-react'
+import { ChevronRight, MapPin, Route, Save, Star, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from 'cn'
 import { montarUrlRota } from '@/lib/google-maps-route'
+import { ORDEM_STATUS, STATUS_LEAD } from '@/lib/leads-status'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
-
-const LABEL_STATUS: Record<StatusLead, string> = {
-  cliente: 'Cliente',
-  concorrente: 'Concorrente',
-  lead: 'Lead',
-  pendente: 'A classificar',
-}
-
-const VARIANTE_STATUS: Record<StatusLead, 'default' | 'secondary' | 'outline'> = {
-  cliente: 'default',
-  lead: 'secondary',
-  concorrente: 'outline',
-  pendente: 'outline',
-}
 
 const CLASSE_BADGE_PENDENTE = 'border-sky-400 text-sky-600 dark:border-sky-500 dark:text-sky-400'
 
@@ -37,6 +24,7 @@ interface Props {
   centro: { lat: number; lon: number }
   onAtualizarStatus?: (id: number, status: StatusLead) => void
   onExcluir?: (id: number) => void
+  onFavoritar?: (id: number, favorito: boolean) => void
   selecionados?: Set<number>
   onToggleSelecionado?: (id: number) => void
   onLimparSelecao?: () => void
@@ -59,12 +47,28 @@ function Selos({ lead, className }: { lead: LeadMapeado; className?: string }) {
         </Badge>
       )}
       <Badge
-        variant={VARIANTE_STATUS[lead.status]}
+        variant={STATUS_LEAD[lead.status].variante}
         className={lead.status === 'pendente' ? CLASSE_BADGE_PENDENTE : undefined}
       >
-        {LABEL_STATUS[lead.status]}
+        {STATUS_LEAD[lead.status].label}
       </Badge>
     </div>
+  )
+}
+
+function EstrelaFavorito({ lead, onFavoritar }: { lead: LeadMapeado; onFavoritar?: (id: number, favorito: boolean) => void }) {
+  if (!onFavoritar) return null
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      className="shrink-0"
+      aria-pressed={lead.favorito}
+      aria-label={lead.favorito ? `Desmarcar ${lead.nome} dos favoritos` : `Marcar ${lead.nome} como favorito`}
+      onClick={() => onFavoritar(lead.id, !lead.favorito)}
+    >
+      <Star className={cn('h-4 w-4', lead.favorito && 'fill-amber-400 text-amber-400')} />
+    </Button>
   )
 }
 
@@ -94,6 +98,7 @@ export function LeadsSalvosLista({
   onLimparSelecao,
   onAtualizarStatus,
   onExcluir,
+  onFavoritar,
   onAbrirSalvarRota,
   onAbrirLead,
   filtroStatus: filtroControlado,
@@ -101,12 +106,13 @@ export function LeadsSalvosLista({
 }: Props) {
   const modoRota = modo === 'rota'
   const [filtroInterno, setFiltroInterno] = useState<StatusLead | 'todos'>('todos')
+  const [soFavoritos, setSoFavoritos] = useState(false)
   const filtroStatus = filtroControlado ?? filtroInterno
   const setFiltroStatus = onFiltroStatusChange ?? setFiltroInterno
 
   const leadsFiltrados = useMemo(
-    () => (filtroStatus === 'todos' ? leads : leads.filter((l) => l.status === filtroStatus)),
-    [leads, filtroStatus]
+    () => leads.filter((l) => (filtroStatus === 'todos' || l.status === filtroStatus) && (!soFavoritos || l.favorito)),
+    [leads, filtroStatus, soFavoritos]
   )
 
   // Ordem de seleção (não a ordem da lista) — Set preserva a ordem de inserção em JS, então
@@ -124,20 +130,32 @@ export function LeadsSalvosLista({
           <CardDescription>
             {modoRota
               ? `${leads.length} leads mapeados — toque aqui ou no mapa, na ordem da visita`
-              : `${leads.length} salvos no total — classifique como cliente, concorrente ou lead`}
+              : `${leads.length} salvos no total — classifique e marque os favoritos`}
           </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onFavoritar && (
+            <Button
+              size="sm"
+              variant={soFavoritos ? 'default' : 'outline'}
+              aria-pressed={soFavoritos}
+              onClick={() => setSoFavoritos((v) => !v)}
+            >
+              <Star className={cn('h-4 w-4', soFavoritos && 'fill-current')} />
+              Favoritos
+            </Button>
+          )}
           <Select value={filtroStatus} onValueChange={(v) => setFiltroStatus(v as StatusLead | 'todos')}>
-            <SelectTrigger className="w-full sm:w-40" size="sm">
+            <SelectTrigger className="w-full sm:w-44" size="sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os status</SelectItem>
-              <SelectItem value="pendente">A classificar</SelectItem>
-              <SelectItem value="cliente">Cliente</SelectItem>
-              <SelectItem value="concorrente">Concorrente</SelectItem>
-              <SelectItem value="lead">Lead</SelectItem>
+              {ORDEM_STATUS.map((st) => (
+                <SelectItem key={st} value={st}>
+                  {STATUS_LEAD[st].label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {/* No celular essas ações ficam na barra fixa da página. */}
@@ -170,7 +188,7 @@ export function LeadsSalvosLista({
           <p className="py-8 text-center text-sm text-muted-foreground">Carregando...</p>
         ) : leadsFiltrados.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum lead {filtroStatus !== 'todos' ? `com status "${LABEL_STATUS[filtroStatus]}"` : 'salvo ainda'}.{' '}
+            Nenhum lead {soFavoritos ? 'favorito ' : ''}{filtroStatus !== 'todos' ? `com status "${STATUS_LEAD[filtroStatus].label}"` : 'salvo ainda'}.{' '}
             {modoRota
               ? 'Mapeie leads no Mapeamento de Leads pra montar rotas com eles.'
               : 'Busque no mapa acima — os resultados são salvos automaticamente pra você classificar.'}
@@ -182,13 +200,13 @@ export function LeadsSalvosLista({
                 const posicao = ordemSelecao.get(lead.id)
                 // A linha inteira é o alvo de toque (mais fácil no celular que um checkbox).
                 return (
-                  <li key={lead.id}>
+                  <li key={lead.id} className="flex items-center gap-1">
                     <button
                       type="button"
                       onClick={() => onToggleSelecionado?.(lead.id)}
                       aria-pressed={!!posicao}
                       className={cn(
-                        '-mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md px-2 py-3 text-left transition-colors hover:bg-muted/50',
+                        '-mx-2 flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-3 text-left transition-colors hover:bg-muted/50',
                         posicao && 'bg-primary/5'
                       )}
                     >
@@ -202,6 +220,7 @@ export function LeadsSalvosLista({
                       </span>
                       <InfoLead lead={lead} />
                     </button>
+                    <EstrelaFavorito lead={lead} onFavoritar={onFavoritar} />
                   </li>
                 )
               }
@@ -224,19 +243,21 @@ export function LeadsSalvosLista({
                       <InfoLead lead={lead} />
                     </>
                   )}
+                  <EstrelaFavorito lead={lead} onFavoritar={onFavoritar} />
                   <Select value={lead.status} onValueChange={(v) => onAtualizarStatus?.(lead.id, v as StatusLead)}>
                     <SelectTrigger
-                      className={cn('w-32 shrink-0', onAbrirLead && 'hidden sm:flex')}
+                      className={cn('w-40 shrink-0', onAbrirLead && 'hidden sm:flex')}
                       size="sm"
                       aria-label="Status"
                     >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="pendente">A classificar</SelectItem>
-                      <SelectItem value="cliente">Cliente</SelectItem>
-                      <SelectItem value="concorrente">Concorrente</SelectItem>
-                      <SelectItem value="lead">Lead</SelectItem>
+                      {ORDEM_STATUS.map((st) => (
+                        <SelectItem key={st} value={st}>
+                          {STATUS_LEAD[st].label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Button

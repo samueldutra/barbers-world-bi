@@ -48,7 +48,7 @@ export default function RotaDetalhePage() {
   const [destacada, setDestacada] = useState<number | null>(null)
   const refsParadas = useRef(new Map<number, HTMLLIElement>())
 
-  const { rota, paradas, loading, error, naoEncontrada, alternarVisita, atualizarStatus, excluir } = useRotaVisita(id)
+  const { rota, paradas, loading, error, naoEncontrada, alternarVisita, favoritarLead, atualizarStatus, excluir } = useRotaVisita(id)
 
   if (loading) {
     return (
@@ -90,6 +90,15 @@ export default function RotaDetalhePage() {
     } catch (err) {
       console.error('Erro ao atualizar parada:', err)
       toast.error('Não foi possível salvar a visita — verifique a conexão e tente de novo.')
+    }
+  }
+
+  const handleFavoritar = async (parada: ParadaRota) => {
+    try {
+      await favoritarLead(parada)
+    } catch (err) {
+      console.error('Erro ao favoritar lead:', err)
+      toast.error('Não foi possível atualizar o favorito.')
     }
   }
 
@@ -169,6 +178,7 @@ export default function RotaDetalhePage() {
             proxima={parada.parada_id === proxima?.parada_id}
             destacada={parada.parada_id === destacada}
             onAlternarVisita={() => handleAlternarVisita(parada)}
+            onFavoritar={() => handleFavoritar(parada)}
           />
         ))}
       </ol>

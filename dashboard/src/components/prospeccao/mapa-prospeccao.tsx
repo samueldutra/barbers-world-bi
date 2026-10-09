@@ -5,14 +5,11 @@ import { APIProvider, Map, Marker, InfoWindow, useMap, type MapMouseEvent } from
 import { Button } from '@/components/ui/button'
 import type { ResultadoBusca } from '@/hooks/use-busca-nicho'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
+import { STATUS_CLASSIFICAVEIS, STATUS_LEAD } from '@/lib/leads-status'
 
 /** Ícones coloridos por status via SVG inline (data URI) — não depende de Map ID nem do
  * script do Google já ter carregado (diferente de AdvancedMarker/google.maps.Size). */
 const CORES: Record<string, string> = {
-  cliente: '#102694', // azul da marca
-  concorrente: '#78716c', // cinza neutro (não usamos vermelho fora de erro/destrutivo)
-  lead: '#f59e0b', // âmbar
-  pendente: '#0ea5e9', // azul-céu — salvo automaticamente pela busca, ainda sem classificar
   resultado: '#94a3b8', // cinza claro — resultado de busca ainda não salvo
   centro: '#16a34a', // verde — ponto de partida (Barbers World)
   pontoExtra: '#9333ea', // roxo — ponto extra de busca adicionado pelo usuário
@@ -38,25 +35,12 @@ function svgCirculoSelecionado(cor: string, tamanho = 24): string {
 const ICONE_CENTRO = svgCirculo(CORES.centro, 22)
 const ICONE_RESULTADO = svgCirculo(CORES.resultado)
 const ICONE_PONTO_EXTRA = svgCruz(CORES.pontoExtra)
-const ICONES_STATUS: Record<StatusLead, string> = {
-  cliente: svgCirculo(CORES.cliente),
-  concorrente: svgCirculo(CORES.concorrente),
-  lead: svgCirculo(CORES.lead),
-  pendente: svgCirculo(CORES.pendente),
-}
-const ICONES_STATUS_SELECIONADO: Record<StatusLead, string> = {
-  cliente: svgCirculoSelecionado(CORES.cliente),
-  concorrente: svgCirculoSelecionado(CORES.concorrente),
-  lead: svgCirculoSelecionado(CORES.lead),
-  pendente: svgCirculoSelecionado(CORES.pendente),
-}
-
-const LABEL_STATUS: Record<StatusLead, string> = {
-  cliente: 'Cliente',
-  concorrente: 'Concorrente',
-  lead: 'Lead',
-  pendente: 'A classificar',
-}
+const ORDEM = Object.keys(STATUS_LEAD) as StatusLead[]
+const ICONES_STATUS = Object.fromEntries(ORDEM.map((st) => [st, svgCirculo(STATUS_LEAD[st].cor)])) as Record<StatusLead, string>
+const ICONES_STATUS_SELECIONADO = Object.fromEntries(
+  ORDEM.map((st) => [st, svgCirculoSelecionado(STATUS_LEAD[st].cor)])
+) as Record<StatusLead, string>
+const LABEL_STATUS = Object.fromEntries(ORDEM.map((st) => [st, STATUS_LEAD[st].label])) as Record<StatusLead, string>
 
 function RecentrarMapa({ centro }: { centro: { lat: number; lon: number } }) {
   const map = useMap()
@@ -268,7 +252,7 @@ export function MapaProspeccao({
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               {selecionado.item.telefone && <p className="text-xs text-muted-foreground">{selecionado.item.telefone}</p>}
               <div className="flex flex-wrap gap-1 pt-1">
-                {(['cliente', 'concorrente', 'lead'] as StatusLead[]).map((status) => (
+                {STATUS_CLASSIFICAVEIS.map((status) => (
                   <Button
                     key={status}
                     size="sm"
@@ -296,7 +280,7 @@ export function MapaProspeccao({
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               <p className="text-xs font-medium uppercase text-muted-foreground">{LABEL_STATUS[selecionado.item.status]}</p>
               <div className="flex flex-wrap gap-1 pt-1">
-                {(['cliente', 'concorrente', 'lead'] as StatusLead[]).map((status) => (
+                {STATUS_CLASSIFICAVEIS.map((status) => (
                   <Button
                     key={status}
                     size="sm"

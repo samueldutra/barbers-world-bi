@@ -33,7 +33,7 @@ export default function NovaRotaPage() {
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set())
   const [dialogSalvarAberto, setDialogSalvarAberto] = useState(false)
 
-  const { leads, loading: carregandoLeads, atualizarStatus, excluir } = useLeadsMapeados()
+  const { leads, loading: carregandoLeads, atualizarStatus, favoritar, excluir } = useLeadsMapeados()
   const { salvar } = useRotasVisita()
 
   const leadsSelecionados = useMemo(
@@ -87,6 +87,15 @@ export default function NovaRotaPage() {
     } catch (err) {
       console.error('Erro ao atualizar status:', err)
       toast.error('Não foi possível atualizar o status.')
+    }
+  }
+
+  const handleFavoritarLead = async (id: number, favorito: boolean) => {
+    try {
+      await favoritar(id, favorito)
+    } catch (err) {
+      console.error('Erro ao favoritar lead:', err)
+      toast.error('Não foi possível atualizar o favorito.')
     }
   }
 
@@ -158,6 +167,7 @@ export default function NovaRotaPage() {
       </div>
 
       <LeadsSalvosLista
+        onFavoritar={handleFavoritarLead}
         modo="rota"
         leads={leads}
         loading={carregandoLeads}

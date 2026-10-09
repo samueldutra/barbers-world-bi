@@ -1,27 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, Navigation, Phone, SkipForward, Trash2 } from 'lucide-react'
+import { ExternalLink, Navigation, Phone, SkipForward, Star, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from 'cn'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { montarUrlNavegacao } from '@/lib/google-maps-route'
+import { STATUS_CLASSIFICAVEIS, STATUS_LEAD } from '@/lib/leads-status'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
 
-const OPCOES: { status: StatusLead; label: string; classe: string }[] = [
-  { status: 'lead', label: 'Lead', classe: 'data-[ativo=true]:bg-amber-500 data-[ativo=true]:text-white data-[ativo=true]:border-amber-500' },
-  { status: 'cliente', label: 'Cliente', classe: 'data-[ativo=true]:bg-primary data-[ativo=true]:text-primary-foreground data-[ativo=true]:border-primary' },
-  { status: 'concorrente', label: 'Concorrente', classe: 'data-[ativo=true]:bg-stone-500 data-[ativo=true]:text-white data-[ativo=true]:border-stone-500' },
-]
+const OPCOES = STATUS_CLASSIFICAVEIS.map((status) => ({ status, label: STATUS_LEAD[status].label, classe: STATUS_LEAD[status].classeAtivo }))
 
-const LABEL_STATUS: Record<StatusLead, string> = {
-  cliente: 'Cliente',
-  concorrente: 'Concorrente',
-  lead: 'Lead',
-  pendente: 'A classificar',
-}
 
 /** Ficha do estabelecimento no Google Maps (fotos, horário, avaliações) — pelo place_id
  * quando o lead veio do Google Places, senão pela busca do nome perto do ponto. */
@@ -36,6 +27,7 @@ interface Props {
   onOpenChange: (aberto: boolean) => void
   onClassificar: (lead: LeadMapeado, status: StatusLead) => void
   onExcluir: (lead: LeadMapeado) => void
+  onFavoritar: (lead: LeadMapeado) => void
   /** Leads ainda "A classificar" além deste — alimenta o modo triagem. */
   pendentesRestantes: number
   onPular: () => void
@@ -43,7 +35,7 @@ interface Props {
 
 /** Detalhe/classificação de um lead. No celular vem de baixo (alcance do polegar) e, ao
  * classificar um lead pendente, a página já abre o próximo — triagem em sequência. */
-export function LeadDetalheSheet({ lead, onOpenChange, onClassificar, onExcluir, pendentesRestantes, onPular }: Props) {
+export function LeadDetalheSheet({ lead, onOpenChange, onClassificar, onExcluir, onFavoritar, pendentesRestantes, onPular }: Props) {
   const isMobile = useIsMobile()
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
   const telefone = lead?.telefone?.replace(/[^\d+]/g, '')
@@ -66,19 +58,31 @@ export function LeadDetalheSheet({ lead, onOpenChange, onClassificar, onExcluir,
             {isMobile && <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-muted" aria-hidden />}
             <SheetHeader className="pb-0">
               <div className="flex flex-wrap items-center gap-2 pr-6">
-                <Badge variant="outline">{LABEL_STATUS[lead.status]}</Badge>
+                <Badge variant="outline">{STATUS_LEAD[lead.status].label}</Badge>
                 {lead.cidade && <Badge variant="outline">{lead.cidade}</Badge>}
                 {pendentesRestantes > 0 && (
                   <span className="text-xs text-muted-foreground">{pendentesRestantes} a classificar depois deste</span>
                 )}
               </div>
-              <SheetTitle className="text-lg leading-snug">{lead.nome}</SheetTitle>
+              <div className="flex items-start gap-1">
+                <SheetTitle className="min-w-0 flex-1 text-lg leading-snug">{lead.nome}</SheetTitle>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="-mt-1 shrink-0"
+                  onClick={() => onFavoritar(lead)}
+                  aria-pressed={lead.favorito}
+                  aria-label={lead.favorito ? 'Desmarcar favorito' : 'Marcar como favorito'}
+                >
+                  <Star className={cn('h-5 w-5', lead.favorito && 'fill-amber-400 text-amber-400')} />
+                </Button>
+              </div>
               <SheetDescription>{lead.endereco || 'Sem endereço'}</SheetDescription>
             </SheetHeader>
 
             <div className="flex flex-col gap-2 px-4">
               <p className="text-xs font-medium text-muted-foreground">Classificar como</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {OPCOES.map((op) => (
                   <Button
                     key={op.status}

@@ -1,7 +1,7 @@
 'use client'
 
 import { forwardRef } from 'react'
-import { Check, Navigation, Phone } from 'lucide-react'
+import { Check, Navigation, Phone, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from 'cn'
@@ -15,12 +15,13 @@ interface Props {
   proxima: boolean
   destacada: boolean
   onAlternarVisita: () => void
+  onFavoritar: () => void
 }
 
 /** Parada da rota, pensada pro uso em campo no celular: alvo de toque grande pra marcar a
  * visita, e atalhos de ligar/navegar que abrem os apps do telefone. */
 export const ParadaItem = forwardRef<HTMLLIElement, Props>(function ParadaItem(
-  { parada, ordem, proxima, destacada, onAlternarVisita },
+  { parada, ordem, proxima, destacada, onAlternarVisita, onFavoritar },
   ref
 ) {
   const visitada = parada.visita_realizada
@@ -51,6 +52,16 @@ export const ParadaItem = forwardRef<HTMLLIElement, Props>(function ParadaItem(
             <p className={cn('min-w-0 flex-1 font-medium leading-snug', visitada && 'text-muted-foreground line-through')}>
               {parada.nome}
             </p>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="-my-1.5 h-8 w-8 shrink-0"
+              onClick={onFavoritar}
+              aria-pressed={parada.favorito}
+              aria-label={parada.favorito ? 'Desmarcar favorito' : 'Marcar como favorito'}
+            >
+              <Star className={cn('h-4 w-4', parada.favorito && 'fill-amber-400 text-amber-400')} />
+            </Button>
             {proxima && (
               <Badge variant="outline" className="shrink-0 border-amber-400 text-amber-600 dark:text-amber-400">
                 Próxima

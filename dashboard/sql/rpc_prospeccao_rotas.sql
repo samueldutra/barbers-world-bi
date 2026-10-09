@@ -105,7 +105,8 @@ RETURNS TABLE(
     telefone TEXT,
     latitude DOUBLE PRECISION,
     longitude DOUBLE PRECISION,
-    status_lead TEXT
+    status_lead TEXT,
+    favorito BOOLEAN
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -117,7 +118,7 @@ BEGIN
     v_sql := format('
         SELECT
             p.id, p.lead_id, p.ordem, p.visita_realizada, p.visitado_em, p.observacoes,
-            l.nome, l.endereco, l.cidade, l.telefone, l.latitude, l.longitude, l.status
+            l.nome, l.endereco, l.cidade, l.telefone, l.latitude, l.longitude, l.status, l.favorito
         FROM %I.rotas_visita_paradas p
         JOIN %I.leads_mapeados l ON l.id = p.lead_id
         WHERE p.rota_id = %L
@@ -128,6 +129,8 @@ BEGIN
 END;
 $$;
 
+-- DROP + CREATE devolve a permissão padrão (PUBLIC): o REVOKE é obrigatório.
+REVOKE ALL ON FUNCTION obter_rota_visita_paradas(TEXT, BIGINT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION obter_rota_visita_paradas(TEXT, BIGINT) TO authenticated;
 
 
