@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
@@ -31,18 +31,24 @@ interface Args {
   ordenarDirecao: OrdenarDirecao
   pagina: number
   tamanhoPagina: number
+  /** Muda a cada atualização automática da tela. */
+  refreshToken?: number
 }
 
-export function useRelatorioProdutos({ atual, canais, busca, marca, categoria, ordenarPor, ordenarDirecao, pagina, tamanhoPagina }: Args) {
+export function useRelatorioProdutos({ atual, canais, busca, marca, categoria, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, refreshToken }: Args) {
   const [linhas, setLinhas] = useState<LinhaRelatorioProduto[]>([])
   const [totalRegistros, setTotalRegistros] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [gatilho, setGatilho] = useState(0)
 
+  // Muda a cada atualização automática: recarrega sem piscar o carregamento.
+  const tokenAnterior = useRef(refreshToken)
   useEffect(() => {
     let ativo = true
-    setLoading(true)
+    const silencioso = tokenAnterior.current !== refreshToken
+    tokenAnterior.current = refreshToken
+    if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
     const { data_inicial, data_final } = formatarRangeParaAPI(atual)
@@ -84,7 +90,7 @@ export function useRelatorioProdutos({ atual, canais, busca, marca, categoria, o
       ativo = false
       clearTimeout(timer)
     }
-  }, [atual, canais, busca, marca, categoria, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
+  }, [atual, canais, busca, marca, categoria, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho, refreshToken])
 
   return { linhas, totalRegistros, loading, error, recarregar: () => setGatilho((g) => g + 1) }
 }

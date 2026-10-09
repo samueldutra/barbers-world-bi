@@ -1,15 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { VendasFiltros } from '@/components/dashboard/vendas-filtros'
+import { FiltroPeriodo } from '@/components/dashboard/vendas-filtros'
 import { RelatorioClientesTabela } from '@/components/relatorio-clientes/relatorio-clientes-tabela'
 import { CurvaAbcClientesTabela } from '@/components/relatorio-clientes/curva-abc-clientes-tabela'
-import { FiltroSelecaoUnica } from '@/components/filtros/filtro-selecao-unica'
-import { FiltroUltimaCompra, calcularUltimaCompraAntesDe, type UltimaCompraPreset } from '@/components/relatorio-clientes/filtro-ultima-compra'
-import { FiltroFrequenciaCompra, calcularFrequenciaFaixa, type FrequenciaCompraPreset } from '@/components/relatorio-clientes/filtro-frequencia-compra'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import { FiltrosClientesDrawer } from '@/components/relatorio-clientes/filtros-clientes-drawer'
+import { calcularUltimaCompraAntesDe, type UltimaCompraPreset } from '@/components/relatorio-clientes/filtro-ultima-compra'
+import { calcularFrequenciaFaixa, type FrequenciaCompraPreset } from '@/components/relatorio-clientes/filtro-frequencia-compra'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useFiltrosClientes } from '@/hooks/use-filtros-clientes'
 import { useRelatorioClientes, type LinhaRelatorioCliente, type OrdenarClientesPor } from '@/hooks/use-relatorio-clientes'
@@ -20,6 +18,9 @@ import { TENANT_SCHEMA } from '@/lib/tenant'
 import { exportarCSV, exportarXLSX, type ColunaExportavel } from '@/lib/export'
 import { formatarData, formatarAniversario, formatarDias } from '@/lib/formatters'
 import { linkWhatsapp } from '@/lib/whatsapp'
+
+/** Atualização automática dos dados (sem botão de atualizar): a cada 10 minutos. */
+const INTERVALO_ATUALIZACAO_MS = 10 * 60 * 1000
 
 const TAMANHO_PAGINA = 50
 const LIMITE_EXPORTACAO = 20000
@@ -62,9 +63,18 @@ export default function RelatorioClientesPage() {
   const [pagina, setPagina] = useState(1)
   const [exportando, setExportando] = useState(false)
 
+  // Muda a cada atualização automática: recalcula os períodos relativos (hoje, mês atual...) e
+  // recarrega os dados sem piscar o carregamento.
+  const [refreshToken, setRefreshToken] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setRefreshToken((t) => t + 1), INTERVALO_ATUALIZACAO_MS)
+    return () => clearInterval(id)
+  }, [])
+
   const atual = useMemo(
     () => (periodo === 'personalizado' ? (rangePersonalizado ?? obterRangePreset(periodo)) : obterRangePreset(periodo)),
-    [periodo, rangePersonalizado]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshToken recalcula datas relativas na atualização automática
+    [periodo, rangePersonalizado, refreshToken]
   )
   const ultimaCompraAntesDe = useMemo(
     () => calcularUltimaCompraAntesDe(ultimaCompraPreset, dataPersonalizadaUltimaCompra),
@@ -77,7 +87,7 @@ export default function RelatorioClientesPage() {
   const { canais } = useCanaisVenda()
   const { municipios } = useFiltrosClientes()
 
-  const { linhas, totalRegistros, loading, error, recarregar } = useRelatorioClientes({
+  const { linhas, totalRegistros, loading, error } = useRelatorioClientes({
     atual,
     canais: canaisSelecionados,
     busca,
@@ -90,6 +100,7 @@ export default function RelatorioClientesPage() {
     ordenarDirecao,
     pagina,
     tamanhoPagina: TAMANHO_PAGINA,
+    refreshToken,
   })
 
   const { clientes: clientesAbc, loading: loadingAbc } = useCurvaAbcClientes({
@@ -97,6 +108,7 @@ export default function RelatorioClientesPage() {
     canais: canaisSelecionados,
     cidade: cidadeSelecionada,
     limite: LIMITE_CURVA_ABC,
+    refreshToken,
   })
 
   const handleOrdenarChange = (coluna: OrdenarClientesPor) => {
@@ -215,40 +227,36 @@ export default function RelatorioClientesPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <VendasFiltros
+          <FiltroPeriodo
             periodo={periodo}
             onPeriodoChange={handlePeriodoChange}
             rangePersonalizado={rangePersonalizado}
             onRangePersonalizadoChange={handleRangePersonalizadoChange}
+          />
+          <FiltrosClientesDrawer
+            valor={{
+              canais: canaisSelecionados,
+              cidade: cidadeSelecionada,
+              ultimaCompraPreset,
+              dataPersonalizadaUltimaCompra: dataPersonalizadaUltimaCompra,
+              frequenciaPreset,
+              frequenciaPersonalizada,
+              incluirSemVenda,
+            }}
+            onAplicar={(novo) => {
+              handleCanaisChange(novo.canais)
+              handleCidadeChange(novo.cidade)
+              if (novo.ultimaCompraPreset !== ultimaCompraPreset) handleUltimaCompraPresetChange(novo.ultimaCompraPreset)
+              if (novo.dataPersonalizadaUltimaCompra && novo.dataPersonalizadaUltimaCompra !== dataPersonalizadaUltimaCompra) {
+                handleDataPersonalizadaChange(novo.dataPersonalizadaUltimaCompra)
+              }
+              if (novo.frequenciaPreset !== frequenciaPreset) handleFrequenciaPresetChange(novo.frequenciaPreset)
+              if (novo.frequenciaPersonalizada !== frequenciaPersonalizada) handleFrequenciaPersonalizadaChange(novo.frequenciaPersonalizada)
+              if (novo.incluirSemVenda !== incluirSemVenda) handleIncluirSemVendaChange(novo.incluirSemVenda)
+            }}
             canais={canais}
-            canaisSelecionados={canaisSelecionados}
-            onCanaisChange={handleCanaisChange}
-            onAtualizar={recarregar}
-            atualizando={loading}
+            municipios={municipios}
           />
-          <FiltroSelecaoUnica label="Cidade" opcoes={municipios} valor={cidadeSelecionada} onValorChange={handleCidadeChange} />
-          <FiltroUltimaCompra
-            preset={ultimaCompraPreset}
-            onPresetChange={handleUltimaCompraPresetChange}
-            dataPersonalizada={dataPersonalizadaUltimaCompra}
-            onDataPersonalizadaChange={handleDataPersonalizadaChange}
-          />
-          <FiltroFrequenciaCompra
-            preset={frequenciaPreset}
-            onPresetChange={handleFrequenciaPresetChange}
-            personalizada={frequenciaPersonalizada}
-            onPersonalizadaChange={handleFrequenciaPersonalizadaChange}
-          />
-          <div className="flex items-center gap-2 rounded-md border px-3 py-2">
-            <Checkbox
-              id="incluir-sem-venda"
-              checked={incluirSemVenda}
-              onCheckedChange={(v) => handleIncluirSemVendaChange(v === true)}
-            />
-            <Label htmlFor="incluir-sem-venda" className="text-sm font-normal">
-              Filtrar clientes sem venda
-            </Label>
-          </div>
         </div>
       </div>
 

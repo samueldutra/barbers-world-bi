@@ -67,6 +67,15 @@ Padrão único de cores (sem tema claro/escuro): a moldura — sidebar e fundo d
 `src/app/globals.css`. Não há `ThemeProvider` nem classe `.dark` (o `@custom-variant dark` fica só
 pra manter as variantes `dark:` dos componentes shadcn inertes).
 
+### Filtros (Dashboard, Produtos e Clientes)
+
+Padrão único: no topo, **Período** + botão **Filtrar** (com o número de filtros aplicados) que abre o
+drawer "Filtros" (`src/components/filtros/filtros-drawer-base.tsx`: voltar, campos, Aplicar e
+Cancelar, sempre num rascunho). Cada tela monta os seus campos (`dashboard/filtros-drawer.tsx`,
+`relatorio-produtos/filtros-produtos-drawer.tsx`, `relatorio-clientes/filtros-clientes-drawer.tsx`).
+Sem botão de atualizar: as telas recarregam sozinhas a cada 10 minutos (`refreshToken` nos hooks,
+recarga silenciosa).
+
 ## Pendências conhecidas
 
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` precisa ser preenchida em `.env.local` (Settings → API →
