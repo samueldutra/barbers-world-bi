@@ -1,5 +1,6 @@
 import { after, NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { executarEEncadear } from '@/lib/prospeccao/executar-mapeamento'
 import { usuarioPodeProspectar } from '@/lib/prospeccao/acesso'
@@ -35,7 +36,9 @@ export async function POST(request: NextRequest) {
   }
   const numero = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
 
-  const { data, error } = await supabase.rpc('iniciar_mapeamento_cidade', {
+  // A função é só do service_role (quem está logado não a chama direto): o módulo de Prospecção
+  // já foi conferido acima e o usuário vai como parâmetro.
+  const { data, error } = await getAdminClient().rpc('iniciar_mapeamento_cidade', {
     p_schema_name: TENANT_SCHEMA,
     p_id_ibge: idIbge,
     p_rota_nome: nomeRota,
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
     p_ponto_partida_endereco: typeof body.pontoPartidaEndereco === 'string' ? body.pontoPartidaEndereco : null,
     p_ponto_lat: numero(body.pontoLat),
     p_ponto_lon: numero(body.pontoLon),
+    p_criado_por: user.id,
   })
   if (error) {
     console.error('Erro ao iniciar mapeamento de cidade:', error)
