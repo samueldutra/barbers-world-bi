@@ -19,7 +19,15 @@ erro() { echo "ERRO: $*" >&2; exit 1; }
 
 command -v gh >/dev/null 2>&1 || erro "GitHub CLI (gh) não encontrado. Instale (brew install gh) e rode 'gh auth login'."
 gh auth status >/dev/null 2>&1 || erro "gh não está logado. Rode 'gh auth login'."
-[ -f "$ENV_FILE" ] || erro "arquivo não encontrado: $ENV_FILE (rode da raiz do repositório ou passe o caminho)."
+# O .env não vai pro git: se o script roda de um worktree, ele só existe no repositório principal.
+if [ ! -f "$ENV_FILE" ] && [ -z "${1:-}" ]; then
+  principal="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print substr($0, 10); exit}')"
+  if [ -n "$principal" ] && [ -f "$principal/etl-bling-pedidos-vendas/.env" ]; then
+    ENV_FILE="$principal/etl-bling-pedidos-vendas/.env"
+    echo "Usando o .env do repositório principal: $ENV_FILE"
+  fi
+fi
+[ -f "$ENV_FILE" ] || erro "arquivo não encontrado: $ENV_FILE (rode da raiz do repositório ou passe o caminho do .env como argumento)."
 
 # Valor de uma variável do .env (sem aspas nas pontas).
 ler() {
