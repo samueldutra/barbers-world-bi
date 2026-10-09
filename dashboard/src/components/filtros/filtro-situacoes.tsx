@@ -22,6 +22,8 @@ interface Props {
   /** null = filtro padrão (definido no banco — situacoes_padrao_dashboard()). */
   situacoesSelecionadas: number[] | null
   onSituacoesChange: (ids: number[] | null) => void
+  /** Padrão próprio (ex.: padrão de uma aba do dashboard). Sem ele vale o padrão do banco (flag `padrao`). */
+  idsPadrao?: number[]
   className?: string
 }
 
@@ -42,6 +44,11 @@ function selecionouTodas(situacoes: SituacaoPedido[], selecionadas: number[]) {
   return visiveis.length > 0 && visiveis.every((s) => selecionadas.includes(s.id_situacao))
 }
 
+/** Nomes das situações de um padrão próprio (ordem do padrão), caindo no id se o nome não veio. */
+export function nomesDoPadrao(situacoes: SituacaoPedido[], ids: number[]): string {
+  return ids.map((id) => situacoes.find((s) => s.id_situacao === id)?.nome ?? `Situação ${id}`).join(', ')
+}
+
 /** Rótulo curto da seleção atual — também usado fora do filtro (linha de contexto). */
 export function descreverSelecaoSituacoes(situacoes: SituacaoPedido[], selecionadas: number[] | null): string {
   if (!selecionadas) return 'Padrão'
@@ -57,10 +64,10 @@ export function descreverSelecaoSituacoes(situacoes: SituacaoPedido[], seleciona
 /** Seleção múltipla de situações de pedido. Começa no padrão (null); "Todas" seleciona
  * todas as situações com valor no período. Mostra o volume de cada situação no período
  * filtrado pra deixar claro o que está entrando (ou ficando de fora) do faturamento. */
-export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesChange, className }: Props) {
+export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesChange, idsPadrao: idsPadraoProp, className }: Props) {
   const [aberto, setAberto] = useState(false)
 
-  const idsPadrao = situacoes.filter((s) => s.padrao).map((s) => s.id_situacao)
+  const idsPadrao = idsPadraoProp ?? situacoes.filter((s) => s.padrao).map((s) => s.id_situacao)
   const visiveis = situacoesComValor(situacoes)
   const idsTodas = visiveis.map((s) => s.id_situacao)
   const efetivas = situacoesSelecionadas ?? idsPadrao
@@ -99,7 +106,9 @@ export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesC
                 <div className="flex flex-col">
                   <span>Padrão</span>
                   <span className="text-xs text-muted-foreground">
-                    Todas, exceto Cancelado, Em aberto e as que herdam de Em aberto
+                    {idsPadraoProp
+                      ? nomesDoPadrao(situacoes, idsPadraoProp)
+                      : 'Todas, exceto Cancelado, Em aberto e as que herdam de Em aberto'}
                   </span>
                 </div>
               </CommandItem>
@@ -127,7 +136,7 @@ export function FiltroSituacoes({ situacoes, situacoesSelecionadas, onSituacoesC
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate">
                       {s.nome}
-                      {s.padrao && <span className="ml-1 text-xs text-muted-foreground">· padrão</span>}
+                      {idsPadrao.includes(s.id_situacao) && <span className="ml-1 text-xs text-muted-foreground">· padrão</span>}
                       {s.cancelamento && <span className="ml-1 text-xs text-destructive">· cancelamento</span>}
                     </span>
                     {s.nome_herdado && (
