@@ -12,6 +12,7 @@ export const SYSTEM_MODULES: SystemModule[] = [
   { id: 'relatorio-produtos', label: 'Relatório de Vendas por Produto', url: '/relatorio-produtos' },
   { id: 'relatorio-clientes', label: 'Relatório de Vendas por Cliente', url: '/relatorio-clientes' },
   { id: 'conferencia-precos', label: 'Conferência de Preços', url: '/conferencia-precos' },
+  { id: 'canais-venda', label: 'Canais de Venda', url: '/canais-venda' },
   { id: 'prospeccao', label: 'Prospecção de Leads', url: '/prospeccao' },
 ]
 

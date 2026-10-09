@@ -1,5 +1,6 @@
 import {
   IconDashboard,
+  IconBuildingStore,
   IconMapPin,
   IconReportAnalytics,
   IconTags,
@@ -23,6 +24,7 @@ export const navMain: NavItem[] = [
   { id: "relatorio-produtos", title: "Produtos", url: "/relatorio-produtos", icon: IconReportAnalytics },
   { id: "relatorio-clientes", title: "Clientes", url: "/relatorio-clientes", icon: IconUsersGroup },
   { id: "conferencia-precos", title: "Conferência de Preços", url: "/conferencia-precos", icon: IconTags },
+  { id: "canais-venda", title: "Canais de Venda", url: "/canais-venda", icon: IconBuildingStore },
   {
     id: "prospeccao",
     title: "Prospecção de Leads",
