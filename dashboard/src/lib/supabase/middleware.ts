@@ -45,6 +45,12 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Continuação do mapeamento de cidade em segundo plano: chamada de servidor pra servidor
+  // (sem cookie de sessão), autenticada pelo token do mapeamento dentro da própria rota.
+  if (request.nextUrl.pathname === '/api/prospeccao/cidades/continuar') {
+    return supabaseResponse
+  }
+
   // Sem cadastro público — contas só nascem pela tela de Usuários (super admin).
   const publicRoutes = ['/login', '/recuperar-senha', '/redefinir-senha']
   const isPublicRoute = publicRoutes.some((route) => request.nextUrl.pathname.startsWith(route))

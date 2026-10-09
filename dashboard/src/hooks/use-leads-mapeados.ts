@@ -14,6 +14,8 @@ export interface LeadMapeado {
   nicho: string | null
   endereco: string | null
   cidade: string | null
+  /** UF da cidade (sigla) — identifica o município junto com a cidade. */
+  uf?: string | null
   telefone: string | null
   latitude: number
   longitude: number

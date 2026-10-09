@@ -239,6 +239,23 @@ export default function RotaDetalhePage() {
         </div>
       </Card>
 
+      {(rota.status === 'mapeando' || rota.status === 'erro_mapeamento') && (
+        <div
+          className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${
+            rota.status === 'erro_mapeamento' ? 'border-destructive/30 bg-destructive/5' : 'bg-muted/40'
+          }`}
+        >
+          {rota.status === 'erro_mapeamento' ? (
+            <>Não foi possível mapear as barbearias dessa cidade. Exclua a rota e tente de novo.</>
+          ) : (
+            <>
+              Buscando todas as barbearias da cidade em segundo plano. As paradas aparecem aqui quando terminar — volte
+              para a lista de rotas, que acompanha o andamento.
+            </>
+          )}
+        </div>
+      )}
+
       {todasVisitadas && rota.status !== 'concluida' && (
         <div className="flex flex-col gap-2 rounded-lg border border-green-600/30 bg-green-600/5 p-3 animate-in fade-in-0 slide-in-from-top-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-2 text-sm">

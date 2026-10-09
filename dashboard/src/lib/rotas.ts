@@ -6,15 +6,20 @@ export const LABEL_STATUS_ROTA: Record<StatusRota, string> = {
   em_andamento: 'Em andamento',
   concluida: 'Concluída',
   cancelada: 'Cancelada',
+  mapeando: 'Mapeando...',
+  erro_mapeamento: 'Erro no mapeamento',
 }
 
-export const VARIANTE_STATUS_ROTA: Record<StatusRota, 'default' | 'secondary' | 'outline'> = {
+export const VARIANTE_STATUS_ROTA: Record<StatusRota, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   planejada: 'outline',
   em_andamento: 'secondary',
   concluida: 'default',
   cancelada: 'outline',
+  mapeando: 'secondary',
+  erro_mapeamento: 'destructive',
 }
 
+/** Status que o usuário pode escolher (mapeando/erro_mapeamento são do sistema). */
 export const ORDEM_STATUS_ROTA: StatusRota[] = ['planejada', 'em_andamento', 'concluida', 'cancelada']
 
 /** Origem do link do Google Maps: o endereço de partida gravado na rota (o Maps geocodifica

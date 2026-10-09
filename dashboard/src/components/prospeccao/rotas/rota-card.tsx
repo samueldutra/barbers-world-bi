@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CalendarDays, ChevronRight, MapPin, Navigation } from 'lucide-react'
+import { CalendarDays, ChevronRight, Loader2, MapPin, Navigation, TriangleAlert } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -23,6 +23,8 @@ export function RotaCard({ rota, onAlterarStatus, onExcluir }: Props) {
   const href = `/prospeccao/rotas/${rota.id}`
   const pct = percentualVisitado(rota)
   const encerrada = rota.status === 'concluida' || rota.status === 'cancelada'
+  const mapeando = rota.status === 'mapeando'
+  const erroMapeamento = rota.status === 'erro_mapeamento'
 
   return (
     <Card
@@ -39,6 +41,7 @@ export function RotaCard({ rota, onAlterarStatus, onExcluir }: Props) {
           {rota.descricao && <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{rota.descricao}</p>}
         </div>
         <Badge variant={VARIANTE_STATUS_ROTA[rota.status]} className="shrink-0">
+          {mapeando && <Loader2 className="animate-spin" />}
           {LABEL_STATUS_ROTA[rota.status]}
         </Badge>
         <RotaAcoesMenu
@@ -50,6 +53,21 @@ export function RotaCard({ rota, onAlterarStatus, onExcluir }: Props) {
         />
       </div>
 
+      {mapeando || erroMapeamento ? (
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          {erroMapeamento ? (
+            <>
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              Não foi possível mapear as barbearias dessa cidade. Exclua a rota e tente de novo.
+            </>
+          ) : (
+            <>
+              <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+              Buscando todas as barbearias da cidade. A rota fica pronta sozinha — pode sair desta tela.
+            </>
+          )}
+        </p>
+      ) : (
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between text-sm">
           <span>
@@ -60,6 +78,7 @@ export function RotaCard({ rota, onAlterarStatus, onExcluir }: Props) {
         </div>
         <Progress value={pct} className="h-2" />
       </div>
+      )}
 
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
