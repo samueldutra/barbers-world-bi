@@ -139,3 +139,13 @@ Ver `.env.example`. Resumo:
 | Timeout | 15 minutos (ok pra incremental; backfill grande roda local) |
 | Memória | 512-1024 MB |
 | Variáveis de ambiente | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `DISCORD_WEBHOOK_URL` |
+
+## Segurança (acesso às funções do banco)
+
+Desde 09/10/2026 as funções `processar_carga_*`, `inativar_produtos_fora_listagem`,
+`obter_contatos_pendentes_sync`, `obter_produtos_pendentes_sync` e `debug_*` só aceitam a chave
+**`service_role`** (antes qualquer pessoa com a chave anon, que é pública, as executava). O segredo
+`SUPABASE_SERVICE_KEY` (GitHub e `.env`) tem que ser a `service_role`, não a `anon`. Os arquivos `sql/rpc_debug_*.sql`
+e `rpc_processar_carga_*.sql` desta pasta **não** trazem o `REVOKE`: se forem reaplicados, rode de novo
+`dashboard/sql/seguranca_revogar_acesso_publico.sql`.
+

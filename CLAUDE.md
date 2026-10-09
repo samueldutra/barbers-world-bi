@@ -6,27 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Estado atual
 
-Ainda não é um repositório Git e não há runner de testes automatizado. Este arquivo
-descreve a arquitetura e os padrões do projeto (herdados de projetos irmãos do mesmo autor).
+Repositório Git no GitHub (`samueldutra/barbers-world-bi`), `main` com deploy na Vercel. **CI** de código em
+`.github/workflows/ci.yml` (tsc, eslint, build do `dashboard/`) e **ETL** agendado em
+`.github/workflows/etl-hourly.yml` (nominalmente de hora em hora; na prática o GitHub dispara algumas vezes
+por dia). Não há runner de testes automatizado ainda.
 
-Objetivo: BI da **Barbers World**. Em andamento:
+Objetivo: BI da **Barbers World**. Em produção:
 - ✅ ETL de pedidos de venda do Bling → `barbers.pedidos_vendas` / `pedidos_vendas_parcelas`
-  (`etl-bling-pedidos-vendas/`). Backfill histórico ainda incompleto (rodar em blocos).
-- ✅ Dimensões `barbers.canais_venda` e `barbers.contatos`, sincronizadas sob demanda
-  (`etl-bling-pedidos-vendas/sync-canais-venda-bling.py` e `sync-clientes-bling.py`).
-- ✅ Dimensão `barbers.situacoes_pedido` (nomes das situações de pedido do Bling),
-  sincronizada sob demanda por `etl-bling-pedidos-vendas/sync-situacoes-bling.py`.
-  Alimenta o filtro de situações do dashboard. **Filtro padrão de situações** (o que conta
-  como venda em todo o BI) = `situacoes_validas_faturamento()` em
-  `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`); os relatórios
-  (produtos/clientes, conferência de preços) usam esse padrão. **Exceção — Dashboard:** as RPCs
-  do dashboard recebem `p_situacoes BIGINT[]` e, quando é `NULL`, caem em
-  `situacoes_padrao_dashboard(schema)` = todas as situações menos Cancelado (12), Em aberto (6) e
-  as que herdam de Em aberto (inclui Devolução).
-- ✅ Frontend (`dashboard/`) com login/logout/cadastro/recuperação de senha funcionando
-  (reaproveitado do `datapro-findash`). Dashboards de vendas por canal ainda não construídos.
+  (`etl-bling-pedidos-vendas/`), mais clientes, produtos, canais e situações (scripts `sync-*`).
+- ✅ Dimensões `barbers.canais_venda`, `contatos`, `produtos` e `situacoes_pedido`, sincronizadas pelo mesmo workflow.
+  **Filtro padrão de situações** (o que conta como venda): `situacoes_validas_faturamento()` em
+  `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`) vale para os relatórios (produtos/clientes) e a
+  conferência de preços. **Exceção — Dashboard:** as RPCs recebem `p_situacoes BIGINT[]` e, quando é `NULL`, caem em
+  `situacoes_padrao_dashboard(schema)` = todas as situações menos Cancelado (12), Em aberto (6) e as que herdam de Em
+  aberto (inclui Devolução). Cada aba de canal do Dashboard pode ter padrão próprio (`dashboard/src/lib/abas-canais.ts`).
+- ✅ Frontend (`dashboard/`, Next.js 16): login por convite, módulos por usuário, Dashboard (abas por canal e modo
+  TV), relatórios de produtos e clientes, conferência de preços, prospecção de leads e rotas (com mapeamento
+  automático de cidades) e gestão de usuários. Detalhes em `dashboard/CLAUDE.md`.
+- ⚠️ Dados do BI só são tão frescos quanto o ETL; o dashboard recarrega a cada 10 min, mas o ETL roda algumas
+  vezes por dia.
 
-## Arquitetura pretendida (3 camadas)
+## Arquitetura (3 camadas)
 
 O projeto replica o pipeline já usado em `~/Devingá/repo/etl-faturamento` (extração) e
 `~/datapro-findash` (BI/frontend):
@@ -36,7 +36,9 @@ O projeto replica o pipeline já usado em `~/Devingá/repo/etl-faturamento` (ext
      `etl-bling-contas-receber`, `etl-bling-contas-pagar`, `etl-bling-nfe`, etc.
    - Consome a API do Bling → transforma/denormaliza → chama uma RPC do Supabase que faz `upsert`.
    - Notifica o resultado de cada execução no Discord.
-   - Roda local (via `.env`, `LOCAL_MODE=true`) ou na AWS (credenciais via SSM).
+   - Hoje roda **no GitHub Actions** (`etl-hourly.yml`, `LOCAL_MODE=true`, segredos do ambiente
+     "Production – barbers-world-bi-dashboard"); também roda local (`.env`) ou, no futuro, na AWS (SSM).
+     A chave `SUPABASE_SERVICE_KEY` **precisa ser a `service_role`**: as RPCs `processar_carga_*` só aceitam essa chave.
 2. **Armazenamento — Supabase (Postgres)**
    - Isolamento **por schema** (um schema por tenant). Barbers World = um schema dedicado
      (definir o nome; ex.: `barbers`). O schema `public` guarda só configuração.
@@ -110,16 +112,18 @@ Endpoints prováveis para o BI: `/pedidos/vendas`, `/produtos`, `/estoques/saldo
 
 ## Comandos
 
-Ainda não há build. Assim que o primeiro ETL existir:
-
 ```bash
-# dentro de etl-bling-{entidade}/
+# ETL (dentro de etl-bling-pedidos-vendas/) — execução local, requer .env com LOCAL_MODE=true
 pip install -r requirements.txt
-python etl-bling-{entidade}.py          # execução local (requer .env com LOCAL_MODE=true)
+python etl-bling-pedidos-vendas.py
+
+# Frontend (dentro de dashboard/) — ver dashboard/CLAUDE.md
+npm install && npm run dev
+npx tsc --noEmit && npm run lint && npm run build   # o que o CI roda em todo PR
 ```
 
-Não há framework de testes; a verificação é: rodar local com `test_event.json`, conferir
-os logs e os registros no Supabase.
+Não há framework de testes. ETL: rodar local com `test_event.json` (ou Actions → Run workflow), conferir os logs
+e os registros no Supabase. Frontend: o CI de tipos/lint/build e a conferência manual no preview da Vercel.
 
 ## Supabase
 
