@@ -21,11 +21,9 @@ on:
 jobs:
   etl:
     runs-on: ubuntu-latest
-    # Os secrets foram cadastrados como "environment secret" desse ambiente (criado pela
-    # integração da Vercel), não como repository secret — declarar aqui é o que dá ao job
-    # acesso a eles. Sem proteção de branch configurada (confirmado via API), então roda
-    # normalmente no schedule/workflow_dispatch da main.
-    environment: "Production – barbers-world-bi-dashboard"
+    # Os segredos são do REPOSITÓRIO (Settings > Secrets and variables > Actions), sem depender de
+    # nenhum "environment" — antes ficavam num ambiente criado pela integração da Vercel, que some
+    # junto com o projeto duplicado da Vercel. Para cadastrar/atualizar: scripts/mover-segredos-etl-github.sh.
     # A sincronização de clientes processa "rodadas" de contatos pendentes até não sobrar
     # nenhum — na primeira execução (ou depois de um backfill grande de vendas) pode
     # demorar bem mais que uma rodada incremental normal. Se estourar, é seguro rodar de
@@ -53,6 +51,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      # Falha logo, com mensagem clara, se faltar segredo ou se a chave do Supabase não for a
+      # service_role (as funções de carga do banco só aceitam essa chave).
+      - name: Confere os segredos
+        run: |
+          faltando=""
+          for nome in SUPABASE_URL SUPABASE_SERVICE_KEY BLING_CLIENT_ID BLING_CLIENT_SECRET BLING_REDIRECT_URI; do
+            [ -n "${!nome}" ] || faltando="$faltando $nome"
+          done
+          if [ -n "$faltando" ]; then
+            echo "::error::Segredos do repositório faltando:$faltando. Rode scripts/mover-segredos-etl-github.sh (ver CLAUDE.md do ETL)."
+            exit 1
+          fi
+          papel=$(printf '%s' "$SUPABASE_SERVICE_KEY" | python3 -c 'import sys,base64,json; t=sys.stdin.read().split("."); p=t[1]+"="*(-len(t[1])%4); print(json.loads(base64.urlsafe_b64decode(p)).get("role",""))' 2>/dev/null || true)
+          if [ "$papel" != "service_role" ]; then
+            echo "::error::SUPABASE_SERVICE_KEY não é a chave service_role (papel: ${papel:-ilegível}). Pegue a service_role em Supabase > Settings > API."
+            exit 1
+          fi
 
       - name: Instala dependências
         run: pip install -r requirements.txt

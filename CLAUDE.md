@@ -36,8 +36,8 @@ O projeto replica o pipeline já usado em `~/Devingá/repo/etl-faturamento` (ext
      `etl-bling-contas-receber`, `etl-bling-contas-pagar`, `etl-bling-nfe`, etc.
    - Consome a API do Bling → transforma/denormaliza → chama uma RPC do Supabase que faz `upsert`.
    - Notifica o resultado de cada execução no Discord.
-   - Hoje roda **no GitHub Actions** (`etl-hourly.yml`, `LOCAL_MODE=true`, segredos do ambiente
-     "Production – barbers-world-bi-dashboard"); também roda local (`.env`) ou, no futuro, na AWS (SSM).
+   - Hoje roda **no GitHub Actions** (`etl-hourly.yml`, `LOCAL_MODE=true`, segredos do **repositório**
+     — ver `etl-bling-pedidos-vendas/CLAUDE.md`); também roda local (`.env`) ou, no futuro, na AWS (SSM).
      A chave `SUPABASE_SERVICE_KEY` **precisa ser a `service_role`**: as RPCs `processar_carga_*` só aceitam essa chave.
 2. **Armazenamento — Supabase (Postgres)**
    - Isolamento **por schema** (um schema por tenant). Barbers World = um schema dedicado
