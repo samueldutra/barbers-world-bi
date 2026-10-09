@@ -265,8 +265,10 @@ CREATE INDEX IF NOT EXISTS idx_cidades_mapeamento_cidade ON barbers.cidades_mape
 CREATE INDEX IF NOT EXISTS idx_cidades_mapeamento_status ON barbers.cidades_mapeamento (status);
 
 
--- Cria o mapeamento + a rota "mapeando" (já visível na lista). Chamada com o usuário logado
--- (auth.uid() vira criado_por). Um mapeamento ativo por cidade: evita pagar duas vezes a mesma busca.
+-- Cria o mapeamento + a rota "mapeando" (já visível na lista). SÓ o servidor chama (service_role),
+-- depois de conferir o módulo de Prospecção do usuário (rota /api/prospeccao/cidades/mapear);
+-- o usuário vai em p_criado_por. Um mapeamento ativo por cidade: evita pagar duas vezes a mesma busca.
+DROP FUNCTION IF EXISTS iniciar_mapeamento_cidade(TEXT, INTEGER, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION);
 CREATE OR REPLACE FUNCTION iniciar_mapeamento_cidade(
     p_schema_name TEXT,
     p_id_ibge INTEGER,
@@ -274,7 +276,8 @@ CREATE OR REPLACE FUNCTION iniciar_mapeamento_cidade(
     p_rota_descricao TEXT DEFAULT NULL,
     p_ponto_partida_endereco TEXT DEFAULT NULL,
     p_ponto_lat DOUBLE PRECISION DEFAULT NULL,
-    p_ponto_lon DOUBLE PRECISION DEFAULT NULL
+    p_ponto_lon DOUBLE PRECISION DEFAULT NULL,
+    p_criado_por UUID DEFAULT NULL
 )
 RETURNS TABLE(job_id BIGINT, rota_id BIGINT, token UUID, cidade TEXT, uf TEXT, estado TEXT)
 LANGUAGE plpgsql
@@ -308,22 +311,19 @@ BEGIN
 
     EXECUTE format('
         INSERT INTO %I.rotas_visita (nome, descricao, ponto_partida_endereco, status, criado_por)
-        VALUES (%L, %L, %L, ''mapeando'', auth.uid())
+        VALUES (%L, %L, %L, ''mapeando'', %L)
         RETURNING id
-    ', p_schema_name, p_rota_nome, p_rota_descricao, p_ponto_partida_endereco) INTO v_rota;
+    ', p_schema_name, p_rota_nome, p_rota_descricao, p_ponto_partida_endereco, p_criado_por) INTO v_rota;
 
     EXECUTE format('
         INSERT INTO %I.cidades_mapeamento (id_ibge, status, rota_id, ponto_lat, ponto_lon, criado_por)
-        VALUES (%L, ''pendente'', %L, %L, %L, auth.uid())
+        VALUES (%L, ''pendente'', %L, %L, %L, %L)
         RETURNING id, token
-    ', p_schema_name, p_id_ibge, v_rota, p_ponto_lat, p_ponto_lon) INTO v_job, v_token;
+    ', p_schema_name, p_id_ibge, v_rota, p_ponto_lat, p_ponto_lon, p_criado_por) INTO v_job, v_token;
 
     RETURN QUERY SELECT v_job, v_rota, v_token, v_nome, v_uf, v_estado;
 END;
 $$;
-
-GRANT EXECUTE ON FUNCTION iniciar_mapeamento_cidade(TEXT, INTEGER, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION) TO authenticated;
-
 
 -- Daqui pra baixo: só o servidor (service_role) chama.
 CREATE OR REPLACE FUNCTION obter_mapeamento_cidade(p_schema_name TEXT, p_job_id BIGINT)
@@ -474,6 +474,7 @@ DECLARE
 BEGIN
     FOREACH f IN ARRAY ARRAY[
         'reivindicar_mapeamento_cidade(TEXT, BIGINT, INTEGER)',
+        'iniciar_mapeamento_cidade(TEXT, INTEGER, TEXT, TEXT, TEXT, DOUBLE PRECISION, DOUBLE PRECISION, UUID)',
         'obter_mapeamento_cidade(TEXT, BIGINT)',
         'salvar_progresso_mapeamento(TEXT, BIGINT, JSONB, INTEGER, INTEGER, INTEGER, TEXT, BOOLEAN)',
         'concluir_mapeamento_cidade(TEXT, BIGINT, BIGINT[], BOOLEAN)',
