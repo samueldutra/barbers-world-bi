@@ -149,3 +149,19 @@ Desde 09/10/2026 as funções `processar_carga_*`, `inativar_produtos_fora_lista
 e `rpc_processar_carga_*.sql` desta pasta **não** trazem o `REVOKE`: se forem reaplicados, rode de novo
 `dashboard/sql/seguranca_revogar_acesso_publico.sql`.
 
+## Segredos no GitHub Actions
+
+O workflow `.github/workflows/etl-hourly.yml` lê **segredos do repositório** (Settings → Secrets and variables →
+Actions), sem depender de nenhum "environment" (antes ficavam num ambiente criado pela integração da Vercel). São
+eles: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET`, `BLING_REDIRECT_URI` e,
+opcional, `DISCORD_WEBHOOK_URL`. O primeiro passo do job (`Confere os segredos`) falha com mensagem clara se faltar
+algum ou se a chave do Supabase não for a `service_role`.
+
+Para cadastrar ou atualizar (a partir do `.env` local do ETL, sem mostrar valores; valida a `service_role` antes):
+
+```bash
+bash scripts/mover-segredos-etl-github.sh        # na raiz do repositório; precisa do gh logado
+```
+
+Se o `refresh_token` do Bling for refeito ou a chave do Supabase rotacionada, atualize o `.env` e rode o script de novo.
+
