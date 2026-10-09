@@ -39,19 +39,27 @@ AS $$
 DECLARE
     v_ids BIGINT[];
 BEGIN
+    -- "Loose index scan": os ids de situação vistos nos pedidos são achados com ~1 sonda no índice
+    -- por valor distinto (cerca de 25), em vez de ler as ~95 mil entradas do índice (DISTINCT) —
+    -- de ~31 ms para <1 ms por chamada (o dashboard chama isso ~9x por carga).
     EXECUTE format('
-        SELECT COALESCE(array_agg(ids.id_situacao ORDER BY ids.id_situacao), ARRAY[]::BIGINT[])
-        FROM (
-            SELECT DISTINCT id_situacao::BIGINT AS id_situacao
-            FROM %I.pedidos_vendas
-            WHERE id_situacao IS NOT NULL
+        WITH RECURSIVE vistas AS (
+            (SELECT id_situacao FROM %1$I.pedidos_vendas WHERE id_situacao IS NOT NULL ORDER BY id_situacao LIMIT 1)
+            UNION ALL
+            SELECT (SELECT p.id_situacao FROM %1$I.pedidos_vendas p WHERE p.id_situacao > v.id_situacao ORDER BY p.id_situacao LIMIT 1)
+            FROM vistas v WHERE v.id_situacao IS NOT NULL
+        ),
+        ids AS (
+            SELECT id_situacao::BIGINT AS id_situacao FROM vistas WHERE id_situacao IS NOT NULL
             UNION
-            SELECT id_situacao::BIGINT FROM %I.situacoes_pedido
-        ) ids
-        LEFT JOIN %I.situacoes_pedido s ON s.id_situacao = ids.id_situacao
+            SELECT id_situacao::BIGINT FROM %1$I.situacoes_pedido
+        )
+        SELECT COALESCE(array_agg(ids.id_situacao ORDER BY ids.id_situacao), ARRAY[]::BIGINT[])
+        FROM ids
+        LEFT JOIN %1$I.situacoes_pedido s ON s.id_situacao = ids.id_situacao
         WHERE ids.id_situacao NOT IN (12, 6)
           AND COALESCE(s.id_herdado, 0) <> 6
-    ', p_schema_name, p_schema_name, p_schema_name)
+    ', p_schema_name)
     INTO v_ids;
 
     RETURN v_ids;
@@ -320,43 +328,51 @@ DECLARE
     v_sql TEXT;
 BEGIN
     v_sql := format('
-        WITH ids AS (
-            SELECT DISTINCT id_situacao::BIGINT AS id_situacao
-            FROM %I.pedidos_vendas
-            WHERE id_situacao IS NOT NULL
+        WITH RECURSIVE vistas AS (
+            -- ids de situação vistos nos pedidos, por "loose index scan" (~1 sonda por valor distinto)
+            (SELECT id_situacao FROM %1$I.pedidos_vendas WHERE id_situacao IS NOT NULL ORDER BY id_situacao LIMIT 1)
+            UNION ALL
+            SELECT (SELECT p.id_situacao FROM %1$I.pedidos_vendas p WHERE p.id_situacao > v.id_situacao ORDER BY p.id_situacao LIMIT 1)
+            FROM vistas v WHERE v.id_situacao IS NOT NULL
+        ),
+        ids AS (
+            SELECT id_situacao::BIGINT AS id_situacao FROM vistas WHERE id_situacao IS NOT NULL
             UNION
             SELECT unnest(situacoes_validas_faturamento())
         ),
         pedidos_periodo AS (
             SELECT DISTINCT ON (id_pedido) id_pedido, id_situacao::BIGINT AS id_situacao, total
-            FROM %I.pedidos_vendas
-            WHERE (%L::DATE IS NULL OR data >= %L::DATE)
-              AND (%L::DATE IS NULL OR data <= %L::DATE)
-              AND (%L::BIGINT[] IS NULL OR id_loja = ANY(%L::BIGINT[]))
+            FROM %1$I.pedidos_vendas
+            WHERE (%2$L::DATE IS NULL OR data >= %2$L::DATE)
+              AND (%3$L::DATE IS NULL OR data <= %3$L::DATE)
+              AND (%4$L::BIGINT[] IS NULL OR id_loja = ANY(%4$L::BIGINT[]))
             ORDER BY id_pedido
         ),
         volume AS (
             SELECT id_situacao, count(*) AS pedidos, sum(total) AS valor
             FROM pedidos_periodo
             GROUP BY id_situacao
+        ),
+        -- Calculado UMA vez (na lista do SELECT ele rodaria uma vez por linha: ~870 ms no total).
+        padrao AS (
+            SELECT situacoes_padrao_dashboard(%1$L) AS ids
         )
         SELECT
             ids.id_situacao,
             COALESCE(s.nome, ''Situação '' || ids.id_situacao)::TEXT,
             s.cor::TEXT,
             h.nome::TEXT,
-            ids.id_situacao = ANY(situacoes_padrao_dashboard(%L)),
+            ids.id_situacao = ANY(padrao.ids),
             ids.id_situacao = ANY(situacoes_canceladas_faturamento()),
             COALESCE(v.pedidos, 0)::BIGINT,
             COALESCE(v.valor, 0)::NUMERIC
         FROM ids
-        LEFT JOIN %I.situacoes_pedido s ON s.id_situacao = ids.id_situacao
-        LEFT JOIN %I.situacoes_pedido h ON h.id_situacao = NULLIF(s.id_herdado, 0)
+        CROSS JOIN padrao
+        LEFT JOIN %1$I.situacoes_pedido s ON s.id_situacao = ids.id_situacao
+        LEFT JOIN %1$I.situacoes_pedido h ON h.id_situacao = NULLIF(s.id_herdado, 0)
         LEFT JOIN volume v ON v.id_situacao = ids.id_situacao
         ORDER BY COALESCE(v.pedidos, 0) DESC, 2
-    ', p_schema_name, p_schema_name,
-       p_data_inicial, p_data_inicial, p_data_final, p_data_final, p_canais, p_canais,
-       p_schema_name, p_schema_name, p_schema_name);
+    ', p_schema_name, p_data_inicial, p_data_final, p_canais);
 
     RETURN QUERY EXECUTE v_sql;
 END;
