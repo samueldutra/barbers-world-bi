@@ -46,7 +46,7 @@ cabeçalho com breadcrumb) dentro de `TooltipProvider` e `TvModeProvider`. Menu 
 | Rota | Módulo (`user_authorized_modules`) | O que é |
 |---|---|---|
 | `/dashboard` | `dashboard` | KPIs, evolução, vendas por canal, rankings; abas por canal; modo TV |
-| `/relatorio-produtos` | `relatorio-produtos` | Vendas por produto + curva ABC por categoria |
+| `/relatorio-produtos` | `relatorio-produtos` | Vendas por produto + curva ABC por categoria; ao abrir um produto, painel com **comparação de preços** da concorrência |
 | `/relatorio-clientes` | `relatorio-clientes` | Vendas por cliente + curva ABC |
 | `/conferencia-precos` | `conferencia-precos` | Preço de cadastro no Bling × preço cheio da última venda nos canais de referência; altera o preço no Bling |
 | `/prospeccao/mapeamento`, `/prospeccao/rotas/**` | `prospeccao` | Mapeia barbearias (Google Places) e monta rotas de visita |
@@ -85,7 +85,7 @@ Hooks: `use-profile.ts`, `use-authorized-modules.ts`, `use-user.ts`.
 
 Aplicar no SQL Editor do Supabase (ou pelo MCP). Cada tela tem o seu arquivo de RPCs:
 `rpc_dashboard_vendas.sql` (padrão de situações, KPIs, canais), `rpc_dashboard_produtos.sql`,
-`rpc_relatorio_produtos.sql`, `rpc_relatorio_clientes.sql`, `rpc_conferencia_precos.sql`,
+`rpc_relatorio_produtos.sql`, `rpc_relatorio_clientes.sql`, `rpc_conferencia_precos.sql`, `rpc_comparacao_precos.sql`,
 `rpc_prospeccao_leads.sql`, `rpc_prospeccao_rotas.sql`, `rpc_prospeccao_cidades.sql`.
 
 **Segurança das funções** (`seguranca_revogar_acesso_publico.sql`, aplicado em 09/10/2026): as funções
@@ -123,6 +123,19 @@ texto e ícones brancos; o conteúdo fica no cartão branco (`SidebarInset`). To
 `ThemeProvider` nem classe `.dark` (o `@custom-variant dark` fica só pra manter as variantes `dark:` dos
 componentes shadcn inertes).
 
+### Comparação de preços com a concorrência (piloto)
+
+Em `/relatorio-produtos`, clicar numa linha abre o painel do produto (`produto-detalhe-sheet.tsx`); a aba
+**Comparar preços** chama `POST /api/produtos/comparar-precos`, que busca o produto no **Google Shopping Brasil via
+SerpApi** (`src/lib/comparar-precos/`) e lista ofertas de outras lojas (preço, diferença para o nosso, link). A nossa
+loja é filtrada. O texto da busca (nome do produto) pode ser refinado, e há botão para buscar pelo **EAN** quando o
+campo `codigo` do Bling é um EAN.
+- **Custo controlado:** cada busca é paga. Cache de 24 h por produto (reabrir não gasta), teto diário de 100 buscas
+  (`COMPARAR_PRECOS_LIMITE_DIA`), acesso só com o módulo Produtos. Consultas e resultados ficam em
+  `barbers.consultas_precos(_itens)` (histórico de preços da concorrência).
+- Precisa de `SERPAPI_API_KEY` no servidor; sem ela a aba avisa que não está configurada.
+- O Google traz resultados parecidos que não são o mesmo produto: a tela pede conferir modelo/tamanho/kit.
+
 ### Prospecção: cidades do Brasil e mapeamento automático
 
 - `barbers.cidades` guarda os 5.571 municípios do IBGE (nome, UF, estado); em Rotas > Nova rota > "Gerar por
@@ -145,6 +158,7 @@ componentes shadcn inertes).
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente Supabase (browser e server). A anon é pública. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Precisa ser a chave com papel `service_role`** (confira o papel dentro do JWT; já houve a `anon` aqui). Usada em `/api/usuarios/**`, mapeamento de cidades, etc. |
 | `GOOGLE_PLACES_API_KEY` | Busca de barbearias (server). Restrinja à Places API (New). |
+| `SERPAPI_API_KEY`, `COMPARAR_PRECOS_LIMITE_DIA` | Comparação de preços (Google Shopping via SerpApi). A segunda é o teto diário de buscas (padrão 100). |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Mapa no navegador (Maps JavaScript API, restrita por HTTP referrer). |
 | `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET`, `BLING_CONTA` | Conferência de Preços altera preço no Bling; tokens OAuth em `public.bling_oauth`. |
 

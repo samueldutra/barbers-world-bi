@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { FiltroPeriodo } from '@/components/dashboard/vendas-filtros'
 import { RelatorioProdutosTabela } from '@/components/relatorio-produtos/relatorio-produtos-tabela'
 import { CurvaAbcTabela } from '@/components/relatorio-produtos/curva-abc-tabela'
+import { ProdutoDetalheSheet } from '@/components/relatorio-produtos/produto-detalhe-sheet'
 import { FiltrosProdutosDrawer } from '@/components/relatorio-produtos/filtros-produtos-drawer'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useFiltrosProdutos } from '@/hooks/use-filtros-produtos'
@@ -42,6 +43,8 @@ export default function RelatorioProdutosPage() {
   const [ordenarDirecao, setOrdenarDirecao] = useState<'asc' | 'desc'>('desc')
   const [pagina, setPagina] = useState(1)
   const [exportando, setExportando] = useState(false)
+  // Produto aberto na listagem (painel com comparação de preços da concorrência).
+  const [produtoAberto, setProdutoAberto] = useState<LinhaRelatorioProduto | null>(null)
 
   // Muda a cada atualização automática: recalcula os períodos relativos (hoje, mês atual...) e
   // recarrega os dados sem piscar o carregamento.
@@ -200,7 +203,10 @@ export default function RelatorioProdutosPage() {
         onPaginaChange={setPagina}
         onExportar={handleExportar}
         exportando={exportando}
+        onAbrirProduto={setProdutoAberto}
       />
+
+      <ProdutoDetalheSheet linha={produtoAberto} onFechar={() => setProdutoAberto(null)} />
 
       <CurvaAbcTabela categorias={categorias} loading={loadingAbc} />
     </div>
