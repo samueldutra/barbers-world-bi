@@ -1,0 +1,57 @@
+name: CI — Dashboard (tipos, lint e build)
+
+# Roda em todo PR que mexe no dashboard e também no main depois do merge. Pega no PR o que a
+# Vercel só mostraria no deploy (ou nem isso): erro de tipo, de lint e de build. Não há testes
+# automatizados ainda; quando houver, entram aqui.
+on:
+  pull_request:
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - '.github/workflows/ci.yml'
+
+# Um PR novo (ou um push novo no mesmo PR) cancela a execução anterior.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    name: tsc, eslint e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Instala dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Tipos (tsc)
+        run: npx tsc --noEmit
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      # O build prerenderiza páginas que criam o cliente do Supabase, então precisa das variáveis
+      # NEXT_PUBLIC_*. Valores de mentira bastam: o build não conecta em nada.
+      - name: Build (next build)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+        run: npm run build
