@@ -1,11 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { VendasFiltros } from '@/components/dashboard/vendas-filtros'
+import { FiltroPeriodo } from '@/components/dashboard/vendas-filtros'
 import { RelatorioProdutosTabela } from '@/components/relatorio-produtos/relatorio-produtos-tabela'
 import { CurvaAbcTabela } from '@/components/relatorio-produtos/curva-abc-tabela'
-import { FiltroSelecaoUnica } from '@/components/filtros/filtro-selecao-unica'
+import { FiltrosProdutosDrawer } from '@/components/relatorio-produtos/filtros-produtos-drawer'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useFiltrosProdutos } from '@/hooks/use-filtros-produtos'
 import { useRelatorioProdutos, type LinhaRelatorioProduto, type OrdenarRelatorioPor } from '@/hooks/use-relatorio-produtos'
@@ -25,6 +25,9 @@ const COLUNAS_EXPORTACAO: ColunaExportavel<LinhaRelatorioProduto>[] = [
   { cabecalho: 'Pedidos', valor: (l) => Number(l.pedidos), largura: 12 },
 ]
 
+/** Atualização automática dos dados (sem botão de atualizar): a cada 10 minutos. */
+const INTERVALO_ATUALIZACAO_MS = 10 * 60 * 1000
+
 const TAMANHO_PAGINA = 50
 const LIMITE_EXPORTACAO = 20000
 
@@ -40,14 +43,23 @@ export default function RelatorioProdutosPage() {
   const [pagina, setPagina] = useState(1)
   const [exportando, setExportando] = useState(false)
 
+  // Muda a cada atualização automática: recalcula os períodos relativos (hoje, mês atual...) e
+  // recarrega os dados sem piscar o carregamento.
+  const [refreshToken, setRefreshToken] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setRefreshToken((t) => t + 1), INTERVALO_ATUALIZACAO_MS)
+    return () => clearInterval(id)
+  }, [])
+
   const atual = useMemo(
     () => (periodo === 'personalizado' ? (rangePersonalizado ?? obterRangePreset(periodo)) : obterRangePreset(periodo)),
-    [periodo, rangePersonalizado]
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshToken recalcula datas relativas na atualização automática
+    [periodo, rangePersonalizado, refreshToken]
   )
   const { canais } = useCanaisVenda()
   const { marcas, categorias: categoriasDisponiveis } = useFiltrosProdutos()
 
-  const { linhas, totalRegistros, loading, error, recarregar } = useRelatorioProdutos({
+  const { linhas, totalRegistros, loading, error } = useRelatorioProdutos({
     atual,
     canais: canaisSelecionados,
     busca,
@@ -57,9 +69,10 @@ export default function RelatorioProdutosPage() {
     ordenarDirecao,
     pagina,
     tamanhoPagina: TAMANHO_PAGINA,
+    refreshToken,
   })
 
-  const { categorias, loading: loadingAbc } = useCurvaAbc({ atual, canais: canaisSelecionados, marca: marcaSelecionada })
+  const { categorias, loading: loadingAbc } = useCurvaAbc({ atual, canais: canaisSelecionados, marca: marcaSelecionada, refreshToken })
 
   const handleOrdenarChange = (coluna: OrdenarRelatorioPor) => {
     setPagina(1)
@@ -147,23 +160,22 @@ export default function RelatorioProdutosPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <VendasFiltros
+          <FiltroPeriodo
             periodo={periodo}
             onPeriodoChange={handlePeriodoChange}
             rangePersonalizado={rangePersonalizado}
             onRangePersonalizadoChange={handleRangePersonalizadoChange}
-            canais={canais}
-            canaisSelecionados={canaisSelecionados}
-            onCanaisChange={handleCanaisChange}
-            onAtualizar={recarregar}
-            atualizando={loading}
           />
-          <FiltroSelecaoUnica label="Marca" opcoes={marcas} valor={marcaSelecionada} onValorChange={handleMarcaChange} />
-          <FiltroSelecaoUnica
-            label="Categoria"
-            opcoes={categoriasDisponiveis}
-            valor={categoriaSelecionada}
-            onValorChange={handleCategoriaChange}
+          <FiltrosProdutosDrawer
+            valor={{ canais: canaisSelecionados, marca: marcaSelecionada, categoria: categoriaSelecionada }}
+            onAplicar={(novo) => {
+              handleCanaisChange(novo.canais)
+              handleMarcaChange(novo.marca)
+              handleCategoriaChange(novo.categoria)
+            }}
+            canais={canais}
+            marcas={marcas}
+            categorias={categoriasDisponiveis}
           />
         </div>
       </div>

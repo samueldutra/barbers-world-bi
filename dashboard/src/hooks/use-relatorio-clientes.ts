@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
@@ -30,6 +30,8 @@ export interface LinhaRelatorioCliente {
 }
 
 interface Args {
+  /** Muda a cada atualização automática da tela. */
+  refreshToken?: number
   atual: RangeData
   canais: number[] | null
   busca: string
@@ -57,6 +59,7 @@ export function useRelatorioClientes({
   ordenarDirecao,
   pagina,
   tamanhoPagina,
+  refreshToken,
 }: Args) {
   const [linhas, setLinhas] = useState<LinhaRelatorioCliente[]>([])
   const [totalRegistros, setTotalRegistros] = useState(0)
@@ -64,9 +67,13 @@ export function useRelatorioClientes({
   const [error, setError] = useState<string | null>(null)
   const [gatilho, setGatilho] = useState(0)
 
+  // Muda a cada atualização automática: recarrega sem piscar o carregamento.
+  const tokenAnterior = useRef(refreshToken)
   useEffect(() => {
     let ativo = true
-    setLoading(true)
+    const silencioso = tokenAnterior.current !== refreshToken
+    tokenAnterior.current = refreshToken
+    if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
     const { data_inicial, data_final } = formatarRangeParaAPI(atual)
@@ -125,6 +132,7 @@ export function useRelatorioClientes({
     pagina,
     tamanhoPagina,
     gatilho,
+    refreshToken,
   ])
 
   return { linhas, totalRegistros, loading, error, recarregar: () => setGatilho((g) => g + 1) }

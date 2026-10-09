@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
@@ -18,20 +18,26 @@ export interface ClienteCurvaAbc {
 }
 
 interface Args {
+  /** Muda a cada atualização automática da tela. */
+  refreshToken?: number
   atual: RangeData
   canais: number[] | null
   cidade: string | null
   limite?: number
 }
 
-export function useCurvaAbcClientes({ atual, canais, cidade, limite = 50 }: Args) {
+export function useCurvaAbcClientes({ atual, canais, cidade, limite = 50, refreshToken }: Args) {
   const [clientes, setClientes] = useState<ClienteCurvaAbc[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Muda a cada atualização automática: recarrega sem piscar o carregamento.
+  const tokenAnterior = useRef(refreshToken)
   useEffect(() => {
     let ativo = true
-    setLoading(true)
+    const silencioso = tokenAnterior.current !== refreshToken
+    tokenAnterior.current = refreshToken
+    if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
     const { data_inicial, data_final } = formatarRangeParaAPI(atual)
@@ -62,7 +68,7 @@ export function useCurvaAbcClientes({ atual, canais, cidade, limite = 50 }: Args
     return () => {
       ativo = false
     }
-  }, [atual, canais, cidade, limite])
+  }, [atual, canais, cidade, limite, refreshToken])
 
   return { clientes, loading, error }
 }
