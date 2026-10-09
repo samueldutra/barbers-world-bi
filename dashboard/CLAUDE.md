@@ -50,6 +50,7 @@ cabeçalho com breadcrumb) dentro de `TooltipProvider` e `TvModeProvider`. Menu 
 | `/relatorio-clientes` | `relatorio-clientes` | Vendas por cliente + curva ABC |
 | `/conferencia-precos` | `conferencia-precos` | Preço de cadastro no Bling × preço cheio da última venda nos canais de referência; altera o preço no Bling |
 | `/prospeccao/mapeamento`, `/prospeccao/rotas/**` | `prospeccao` | Mapeia barbearias (Google Places) e monta rotas de visita |
+| `/canais-venda` | `canais-venda` | Cadastro de canais; hoje conecta a Nuvemshop por OAuth (token em `public.canais_integracoes`, só service_role). Guia: `docs/integracao-nuvemshop.md` |
 | `/usuarios` | — (só super admin) | Cria usuários e libera módulos |
 | `/sem-acesso` | — | Destino de quem não tem nenhum módulo |
 
@@ -170,6 +171,7 @@ campo `codigo` do Bling é um EAN.
 | `GOOGLE_PLACES_API_KEY` | Busca de barbearias (server). Restrinja à Places API (New). |
 | `SERPAPI_API_KEY`, `COMPARAR_PRECOS_LIMITE_DIA` | Comparação de preços (Google Shopping via SerpApi). A segunda é o teto diário de buscas (padrão 100). |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Mapa no navegador (Maps JavaScript API, restrita por HTTP referrer). |
+| `NEXT_PUBLIC_APP_URL`, `NUVEMSHOP_APP_ID`, `NUVEMSHOP_CLIENT_SECRET` | Módulo Canais de Venda (OAuth da Nuvemshop). A URL de retorno é `{NEXT_PUBLIC_APP_URL}/api/canais-venda/nuvemshop/callback`. |
 | `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET`, `BLING_CONTA` | Conferência de Preços altera preço no Bling; tokens OAuth em `public.bling_oauth`. |
 
 Nunca commitar valores reais (o `.env.local.example` só tem os nomes).
