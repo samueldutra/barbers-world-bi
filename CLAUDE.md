@@ -14,6 +14,8 @@ por dia). Não há runner de testes automatizado ainda.
 Objetivo: BI da **Barbers World**. Em produção:
 - ✅ ETL de pedidos de venda do Bling → `barbers.pedidos_vendas` / `pedidos_vendas_parcelas`
   (`etl-bling-pedidos-vendas/`), mais clientes, produtos, canais e situações (scripts `sync-*`).
+- ✅ ETL de pedidos da **Nuvemshop** (`etl-nuvemshop-pedidos/`) → `barbers.nuvemshop_pedidos(_itens)`, último passo do mesmo
+  workflow; lê as lojas conectadas em Canais de Venda. Aguarda a primeira loja conectada para rodar de verdade.
 - ✅ Dimensões `barbers.canais_venda`, `contatos`, `produtos` e `situacoes_pedido`, sincronizadas pelo mesmo workflow.
   **Filtro padrão de situações** (o que conta como venda): `situacoes_validas_faturamento()` em
   `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`) vale para os relatórios (produtos/clientes) e a

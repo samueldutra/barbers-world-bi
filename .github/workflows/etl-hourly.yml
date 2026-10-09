@@ -102,3 +102,15 @@ jobs:
       # 1 request ao Bling. Por último pra uma falha aqui não atrasar os passos acima.
       - name: Situações de pedido (nomes do catálogo do Bling)
         run: python sync-situacoes-bling.py
+
+      # Pedidos da Nuvemshop (lojas conectadas no módulo Canais de Venda do dashboard). Sem loja
+      # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
+      # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
+      - name: Nuvemshop (pedidos alterados recentemente)
+        if: ${{ !cancelled() }}
+        working-directory: etl-nuvemshop-pedidos
+        env:
+          ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
+        run: |
+          pip install -r requirements.txt
+          python etl-nuvemshop-pedidos.py
