@@ -49,6 +49,9 @@ BEGIN
                                      'obter_mapeamento_cidade', 'salvar_progresso_mapeamento',
                                      'concluir_mapeamento_cidade', 'falhar_mapeamento_cidade',
                                      'listar_mapeamentos_travados', 'reivindicar_mapeamento_cidade', 'iniciar_mapeamento_cidade',
+                                     'obter_produto_comparacao', 'obter_ultima_consulta_precos',
+                                     'obter_itens_consulta_precos', 'salvar_consulta_precos',
+                                     'contar_consultas_precos_hoje',
                                      'registrar_alteracao_preco')) LOOP
         EXECUTE format('REVOKE ALL ON FUNCTION %s FROM authenticated', r.f);
         EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', r.f);
