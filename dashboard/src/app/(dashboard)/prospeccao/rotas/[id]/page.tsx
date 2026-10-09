@@ -155,7 +155,7 @@ export default function RotaDetalhePage() {
 
   // Toque num marcador: no celular volta pra lista; em ambos, rola até a parada e destaca.
   const handleSelecionarNoMapa = (parada: ParadaRota) => {
-    if (isMobile) setAba('paradas')
+    setAba('paradas')
     setDestacada(parada.parada_id)
     setTimeout(() => {
       refsParadas.current.get(parada.parada_id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
