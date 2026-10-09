@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -18,12 +18,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { RotaCard } from '@/components/prospeccao/rotas/rota-card'
 import { CriarRotaCidadeDialog } from '@/components/prospeccao/criar-rota-cidade-dialog'
 import { useRotasVisita, type StatusRota } from '@/hooks/use-rotas-visita'
-import { useLeadsMapeados } from '@/hooks/use-leads-mapeados'
 
 type FiltroRotas = 'ativas' | 'concluida' | 'cancelada' | 'todas'
 
 const FILTROS: { value: FiltroRotas; label: string; status: StatusRota[] | null }[] = [
-  { value: 'ativas', label: 'Ativas', status: ['planejada', 'em_andamento'] },
+  { value: 'ativas', label: 'Ativas', status: ['planejada', 'em_andamento', 'mapeando', 'erro_mapeamento'] },
   { value: 'concluida', label: 'Concluídas', status: ['concluida'] },
   { value: 'cancelada', label: 'Canceladas', status: ['cancelada'] },
   { value: 'todas', label: 'Todas', status: null },
@@ -36,13 +35,39 @@ export default function RotasPage() {
   const [filtro, setFiltro] = useState<FiltroRotas>('ativas')
   const [dialogCidadeAberto, setDialogCidadeAberto] = useState(false)
 
-  const { rotas, loading, error, salvar, atualizarStatus, excluir } = useRotasVisita()
-  const { leads } = useLeadsMapeados()
+  const { rotas, loading, error, recarregar, recarregarSilencioso, salvar, atualizarStatus, excluir } = useRotasVisita()
+
+  // Rotas por cidade ainda sendo mapeadas em segundo plano: acompanha a cada 15 s (recarga
+  // silenciosa) e religa a cadeia de busca se ela tiver caído (/retomar só age em mapeamento parado).
+  const temMapeando = rotas.some((r) => r.status === 'mapeando')
+  useEffect(() => {
+    if (!temMapeando) return
+    const id = setInterval(() => {
+      fetch('/api/prospeccao/cidades/retomar', { method: 'POST' }).catch(() => {})
+      recarregarSilencioso()
+    }, 15_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarregarSilencioso é recriada a cada render; só o início/fim do mapeamento importa
+  }, [temMapeando])
+
+  // Avisa quando uma rota que estava mapeando termina (ou falha).
+  const statusAnterior = useRef<Map<number, string>>(new Map())
+  useEffect(() => {
+    for (const r of rotas) {
+      const antes = statusAnterior.current.get(r.id)
+      if (antes === 'mapeando' && r.status === 'planejada') {
+        toast.success(`Rota "${r.nome}" pronta: ${r.total_paradas} barbearia(s) mapeada(s).`)
+      } else if (antes === 'mapeando' && r.status === 'erro_mapeamento') {
+        toast.error(`Não foi possível mapear a cidade da rota "${r.nome}".`)
+      }
+    }
+    statusAnterior.current = new Map(rotas.map((r) => [r.id, r.status]))
+  }, [rotas])
 
   const contagem = useMemo(() => {
     const c: Record<FiltroRotas, number> = { ativas: 0, concluida: 0, cancelada: 0, todas: rotas.length }
     for (const r of rotas) {
-      if (r.status === 'planejada' || r.status === 'em_andamento') c.ativas++
+      if (r.status === 'planejada' || r.status === 'em_andamento' || r.status === 'mapeando' || r.status === 'erro_mapeamento') c.ativas++
       else c[r.status]++
     }
     return c
@@ -119,7 +144,7 @@ export default function RotasPage() {
                 <Building2 className="h-4 w-4" />
                 Gerar por cidade
               </span>
-              <span className="pl-6 text-xs text-muted-foreground">Todos os leads da cidade, na melhor ordem</span>
+              <span className="pl-6 text-xs text-muted-foreground">Qualquer cidade do Brasil, na melhor ordem</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -182,8 +207,8 @@ export default function RotasPage() {
       <CriarRotaCidadeDialog
         open={dialogCidadeAberto}
         onOpenChange={setDialogCidadeAberto}
-        leads={leads}
         onCriar={handleCriarPorCidade}
+        onMapeamentoIniciado={recarregar}
       />
     </div>
   )

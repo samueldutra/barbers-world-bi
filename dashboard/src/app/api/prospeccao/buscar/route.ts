@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { TENANT_SCHEMA } from '@/lib/tenant'
+import {
+  CAMPOS_PLACES as CAMPOS,
+  mapearResultado,
+  type RespostaPlaces as RespostaGoogle,
+  type ResultadoBusca,
+} from '@/lib/places'
+
+export type { ResultadoBusca }
 
 /** Busca estabelecimentos por nicho perto de um ponto, via Google Places API (New).
  * Fica no server porque usa a chave de servidor (GOOGLE_PLACES_API_KEY), que nunca deve
@@ -8,49 +16,6 @@ import { TENANT_SCHEMA } from '@/lib/tenant'
  * essa é só pra exibição e pode ser pública (restrita por HTTP referrer no Google Cloud). */
 
 export const dynamic = 'force-dynamic'
-
-export interface ResultadoBusca {
-  origemTipo: 'google'
-  origemId: string
-  nome: string
-  endereco: string | null
-  cidade: string | null
-  telefone: string | null
-  latitude: number
-  longitude: number
-}
-
-interface ComponenteEndereco {
-  longText?: string
-  shortText?: string
-  // O Google nem sempre devolve "types" em todos os componentes de endereço.
-  types?: string[]
-}
-
-interface LugarGoogle {
-  id: string
-  displayName?: { text: string }
-  formattedAddress?: string
-  addressComponents?: ComponenteEndereco[]
-  nationalPhoneNumber?: string
-  location?: { latitude: number; longitude: number }
-}
-
-/** Cidade vem estruturada (addressComponents), não extraída do endereço em texto livre —
- * mais confiável. "locality" é o tipo padrão do Google pra cidade; em áreas raramente
- * cobertas por município formal (raro no Brasil urbano), cai pro nível administrativo 2. */
-function extrairCidade(componentes: ComponenteEndereco[] | undefined): string | null {
-  if (!componentes) return null
-  const cidade =
-    componentes.find((c) => c.types?.includes('locality')) ??
-    componentes.find((c) => c.types?.includes('administrative_area_level_2'))
-  return cidade?.longText ?? null
-}
-
-interface RespostaGoogle {
-  places?: LugarGoogle[]
-  error?: { message: string }
-}
 
 // Presets pros nichos mais comuns — mapeiam pro Table A do Google Places API (New)
 // (https://developers.google.com/maps/documentation/places/web-service/place-types).
@@ -72,29 +37,6 @@ function normalizar(texto: string): string {
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
 }
-
-function mapearResultado(lugar: LugarGoogle): ResultadoBusca | null {
-  if (!lugar.location) return null
-  return {
-    origemTipo: 'google',
-    origemId: lugar.id,
-    nome: lugar.displayName?.text ?? 'Sem nome',
-    endereco: lugar.formattedAddress ?? null,
-    cidade: extrairCidade(lugar.addressComponents),
-    telefone: lugar.nationalPhoneNumber ?? null,
-    latitude: lugar.location.latitude,
-    longitude: lugar.location.longitude,
-  }
-}
-
-const CAMPOS = [
-  'places.id',
-  'places.displayName',
-  'places.formattedAddress',
-  'places.addressComponents',
-  'places.location',
-  'places.nationalPhoneNumber',
-].join(',')
 
 // O Google Places (New) devolve no máximo 20 resultados por chamada, não importa o raio —
 // por isso um raio de 20km com muito mais de 20 estabelecimentos sempre traz o mesmo

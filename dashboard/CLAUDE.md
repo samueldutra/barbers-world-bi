@@ -76,6 +76,19 @@ Cancelar, sempre num rascunho). Cada tela monta os seus campos (`dashboard/filtr
 Sem botão de atualizar: as telas recarregam sozinhas a cada 10 minutos (`refreshToken` nos hooks,
 recarga silenciosa).
 
+### Prospecção: cidades do Brasil e mapeamento automático
+
+- `barbers.cidades` guarda os 5.571 municípios do IBGE (nome, UF, estado); em Rotas > Nova rota > "Gerar por
+  cidade" dá pra escolher qualquer uma (`buscar_cidades`). `leads_mapeados.uf` + `cidade` identificam o município.
+- Cidade sem leads (ou com "completar mapeamento" marcado): `POST /api/prospeccao/cidades/mapear` cria a rota em
+  `mapeando` e busca TODAS as barbearias no Google Places em segundo plano (`src/lib/prospeccao/mapeamento-cidade.ts`:
+  quadtree de retângulos buscados pelo círculo que os circunscreve; subdivide onde a busca volta com 20). O
+  processamento usa `after()` e se encadeia por `/continuar` (token do mapeamento) a cada ~40 s; `/retomar` religa
+  mapeamentos parados. Ao terminar a rota ganha as paradas (ordem do vizinho mais próximo) e vira `planejada`.
+- Teto de 500 buscas por cidade (`MAX_CIRCULOS_POR_CIDADE`) — cidades enormes terminam "parciais" (avisado na rota).
+- **Exige `SUPABASE_SERVICE_ROLE_KEY` real (papel `service_role`) no servidor** — as funções de processamento são só do
+  `service_role`. Fila e progresso em `barbers.cidades_mapeamento`; SQL em `sql/rpc_prospeccao_cidades.sql`.
+
 ## Pendências conhecidas
 
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` precisa ser preenchida em `.env.local` (Settings → API →

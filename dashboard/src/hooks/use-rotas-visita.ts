@@ -5,7 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
 import type { StatusLead } from '@/hooks/use-leads-mapeados'
 
-export type StatusRota = 'planejada' | 'em_andamento' | 'concluida' | 'cancelada'
+/** 'mapeando' e 'erro_mapeamento' são definidos pelo sistema (rota por cidade ainda sendo
+ * mapeada em segundo plano); o usuário só escolhe os quatro primeiros. */
+export type StatusRota = 'planejada' | 'em_andamento' | 'concluida' | 'cancelada' | 'mapeando' | 'erro_mapeamento'
 
 export interface RotaVisita {
   id: number
@@ -40,8 +42,9 @@ export function useRotasVisita() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const carregar = useCallback(async () => {
-    setLoading(true)
+  const carregar = useCallback(async (silencioso = false) => {
+    // Recarga silenciosa (acompanhar mapeamento em andamento) não pisca o esqueleto.
+    if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
     const { data, error } = await Promise.resolve(supabase.rpc('obter_rotas_visita', { p_schema_name: TENANT_SCHEMA }))
@@ -113,5 +116,5 @@ export function useRotasVisita() {
     await carregar()
   }
 
-  return { rotas, loading, error, recarregar: carregar, salvar, carregarParadas, atualizarStatus, atualizarParada, excluir }
+  return { rotas, loading, error, recarregar: () => carregar(), recarregarSilencioso: () => carregar(true), salvar, carregarParadas, atualizarStatus, atualizarParada, excluir }
 }
