@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { RefreshCw, Download } from 'lucide-react'
+import { RefreshCw, Download, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { VinculoSkuTabela } from '@/components/vinculo-sku/vinculo-sku-tabela'
+import { VinculoSkuTabela, type AlteracaoSkuPendente } from '@/components/vinculo-sku/vinculo-sku-tabela'
+import { ConfirmarAlteracoesSkuDialog, type AlteracaoSkuConfirmada } from '@/components/vinculo-sku/confirmar-alteracoes-sku-dialog'
+import type { ResultadoAlteracaoSku } from '@/app/api/vinculo-sku/alterar/route'
 import {
   buscarTodasLinhasVinculo,
   useResumoVinculoSku,
@@ -18,9 +20,10 @@ import {
 } from '@/hooks/use-vinculo-sku'
 import { cn } from 'cn'
 import { formatarNumero } from '@/lib/formatters'
-import { confiancaSugestao, infoStatusVinculo, ORDEM_STATUS_VINCULO } from '@/lib/vinculo-sku'
+import { confiancaSugestao, infoStatusVinculo, linhaCorrigivel, ORDEM_STATUS_VINCULO, skuAlvo } from '@/lib/vinculo-sku'
 
 const TAMANHO_PAGINA = 50
+const ITENS_POR_LOTE = 15 // mesmo limite da rota /api/vinculo-sku/alterar
 
 const OPCOES_STATUS: { value: FiltroStatusVinculo; label: string }[] = [
   { value: 'todos', label: 'Todas as variantes da Nuvemshop' },
@@ -61,6 +64,12 @@ export default function VinculoSkuPage() {
   const [exportando, setExportando] = useState(false)
   const [gatilhoResumo, setGatilhoResumo] = useState(0)
 
+  const [alteracoes, setAlteracoes] = useState<Map<number, AlteracaoSkuPendente>>(new Map())
+  const [dialogAberto, setDialogAberto] = useState(false)
+  const [aplicando, setAplicando] = useState(false)
+  const [progresso, setProgresso] = useState({ feitos: 0, total: 0 })
+  const [selecionando, setSelecionando] = useState(false)
+
   const { linhas, totalRegistros, loading, error, recarregar } = useVinculoSku({
     status, busca, apenasPublicados, ordenarPor, ordenarDirecao, pagina, tamanhoPagina: TAMANHO_PAGINA,
   })
@@ -83,6 +92,138 @@ export default function VinculoSkuPage() {
   const handleAtualizar = () => {
     recarregar()
     setGatilhoResumo((g) => g + 1)
+  }
+
+  // A seleção é mantida entre filtros e páginas (dá pra montar um lote juntando buscas diferentes).
+  const atualizarAlteracoes = (fn: (m: Map<number, AlteracaoSkuPendente>) => void) => {
+    setAlteracoes((atual) => {
+      const nova = new Map(atual)
+      fn(nova)
+      return nova
+    })
+  }
+
+  const novaSelecao = (linha: LinhaVinculo): AlteracaoSkuPendente => {
+    const alvo = skuAlvo(linha)
+    return { linha, sku: alvo.sku, origem: alvo.origem }
+  }
+
+  const handleToggle = (linha: LinhaVinculo) =>
+    atualizarAlteracoes((m) => {
+      const id = linha.id_variante as number
+      if (m.has(id)) m.delete(id)
+      else m.set(id, novaSelecao(linha))
+    })
+
+  const handleToggleTodos = (marcar: boolean) =>
+    atualizarAlteracoes((m) => {
+      for (const linha of linhas.filter(linhaCorrigivel)) {
+        const id = linha.id_variante as number
+        if (marcar && !m.has(id)) m.set(id, novaSelecao(linha))
+        if (!marcar) m.delete(id)
+      }
+    })
+
+  const handleSkuChange = (linha: LinhaVinculo, texto: string) =>
+    atualizarAlteracoes((m) => {
+      const id = linha.id_variante as number
+      const atual = m.get(id)
+      const alvo = skuAlvo(linha)
+      // Voltou a ser exatamente o valor sugerido → mantém a origem original; qualquer outra coisa é digitada.
+      const origem = texto.trim() !== '' && texto.trim() === alvo.sku ? alvo.origem : 'manual'
+      m.set(id, { linha: atual?.linha ?? linha, sku: texto, origem, erro: null })
+    })
+
+  /** Seleção rápida (todas as páginas do filtro "com problema"): as de maior segurança. */
+  const handleSelecionarRapido = async (tipo: 'identicas' | 'ajustes') => {
+    setSelecionando(true)
+    try {
+      const todas = await buscarTodasLinhasVinculo({ status: 'problemas', busca: '', apenasPublicados, ordenarPor: 'status', ordenarDirecao: 'asc' })
+      const alvo = todas.filter((l) =>
+        tipo === 'ajustes'
+          ? l.status === 'vinculado_ajustar'
+          : (l.status === 'sem_correspondencia' || l.status === 'sem_sku') && l.sugestao_score !== null && Number(l.sugestao_score) >= 0.999
+      )
+      atualizarAlteracoes((m) => {
+        for (const l of alvo) if (l.id_variante !== null && !m.has(l.id_variante)) m.set(l.id_variante, novaSelecao(l))
+      })
+      toast.success(`${formatarNumero(alvo.length)} variante(s) selecionada(s).`)
+    } catch (e) {
+      console.error('Erro na seleção rápida:', e)
+      toast.error('Não foi possível selecionar. Tente de novo.')
+    } finally {
+      setSelecionando(false)
+    }
+  }
+
+  // O que de fato vai pra Nuvemshop: SKU preenchido e diferente do atual. Só descarta o idêntico caractere a
+  // caractere — espaço/maiúscula diferente conta como alteração (é o caso "ajuste").
+  const { prontos, semSku, iguais } = useMemo(() => {
+    const prontos: AlteracaoSkuConfirmada[] = []
+    let semSku = 0
+    let iguais = 0
+    for (const alt of alteracoes.values()) {
+      const sku = alt.sku.trim()
+      if (!sku) semSku++
+      else if (sku === (alt.linha.sku_ns ?? '')) iguais++
+      else prontos.push({ linha: alt.linha, skuNovo: sku, origem: alt.origem })
+    }
+    return { prontos, semSku, iguais }
+  }, [alteracoes])
+
+  const handleConfirmar = async () => {
+    const itens = prontos
+    setAplicando(true)
+    setProgresso({ feitos: 0, total: itens.length })
+    const resultados: ResultadoAlteracaoSku[] = []
+
+    for (let i = 0; i < itens.length; i += ITENS_POR_LOTE) {
+      const lote = itens.slice(i, i + ITENS_POR_LOTE)
+      try {
+        const resp = await fetch('/api/vinculo-sku/alterar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            itens: lote.map((it) => ({
+              store_id: it.linha.store_id,
+              id_produto_ns: it.linha.id_produto_ns,
+              id_variante: it.linha.id_variante,
+              sku_anterior: it.linha.sku_ns,
+              sku_novo: it.skuNovo,
+              origem: it.origem,
+            })),
+          }),
+        })
+        const corpo = await resp.json().catch(() => null)
+        if (!resp.ok) throw new Error(corpo?.error || `Erro ${resp.status}`)
+        // Sessão expirada: o middleware redireciona /api/* pra /login e o fetch recebe HTML.
+        if (!Array.isArray(corpo?.resultados)) throw new Error('Sessão expirada — entre novamente e repita.')
+        resultados.push(...(corpo.resultados as ResultadoAlteracaoSku[]))
+      } catch (e) {
+        const mensagem = e instanceof Error ? e.message : 'Falha na comunicação com o servidor.'
+        resultados.push(...lote.map((it) => ({ id_variante: it.linha.id_variante as number, sucesso: false, sku_gravado: null, erro: mensagem })))
+      }
+      setProgresso({ feitos: Math.min(i + lote.length, itens.length), total: itens.length })
+    }
+
+    // Sucesso sai da seleção; falha fica selecionada com a mensagem na linha.
+    const falhas = resultados.filter((r) => !r.sucesso)
+    atualizarAlteracoes((m) => {
+      for (const r of resultados) {
+        if (r.sucesso) m.delete(r.id_variante)
+        else {
+          const alt = m.get(r.id_variante)
+          if (alt) m.set(r.id_variante, { ...alt, erro: r.erro })
+        }
+      }
+    })
+
+    setAplicando(false)
+    setDialogAberto(false)
+    const sucessos = resultados.length - falhas.length
+    if (falhas.length === 0) toast.success(`${formatarNumero(sucessos)} SKU(s) corrigido(s) na Nuvemshop.`)
+    else toast.error(`${formatarNumero(sucessos)} corrigido(s), ${formatarNumero(falhas.length)} com erro — veja a mensagem em cada linha.`)
+    handleAtualizar()
   }
 
   const handleExportar = async () => {
@@ -182,6 +323,38 @@ export default function VinculoSkuPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Seleção rápida:</span>
+        <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('identicas')}>
+          Sugestões de nome idêntico
+        </Button>
+        <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('ajustes')}>
+          Ajustes de espaço/maiúscula
+        </Button>
+      </div>
+
+      {alteracoes.size > 0 && (
+        <div className="sticky top-2 z-10 flex flex-col gap-2 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm">
+            <span className="font-medium">{formatarNumero(alteracoes.size)} selecionada(s)</span>
+            <span className="text-muted-foreground">
+              {' '}· {formatarNumero(prontos.length)} pronta(s) pra corrigir
+              {semSku > 0 && ` · ${formatarNumero(semSku)} sem SKU novo definido`}
+              {iguais > 0 && ` · ${formatarNumero(iguais)} já com esse SKU`}
+            </span>
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setAlteracoes(new Map())} disabled={aplicando}>
+              <X className="h-4 w-4" />
+              Limpar seleção
+            </Button>
+            <Button size="sm" onClick={() => setDialogAberto(true)} disabled={aplicando || prontos.length === 0}>
+              Revisar e corrigir ({formatarNumero(prontos.length)})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div>
       )}
@@ -196,6 +369,20 @@ export default function VinculoSkuPage() {
         pagina={pagina}
         tamanhoPagina={TAMANHO_PAGINA}
         onPaginaChange={setPagina}
+        alteracoes={alteracoes}
+        onToggle={handleToggle}
+        onToggleTodos={handleToggleTodos}
+        onSkuChange={handleSkuChange}
+        desabilitado={aplicando}
+      />
+
+      <ConfirmarAlteracoesSkuDialog
+        aberto={dialogAberto}
+        onOpenChange={setDialogAberto}
+        itens={prontos}
+        aplicando={aplicando}
+        progresso={progresso}
+        onConfirmar={handleConfirmar}
       />
     </div>
   )

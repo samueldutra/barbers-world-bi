@@ -4,12 +4,23 @@ import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, ExternalLin
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { cn } from 'cn'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
-import { confiancaSugestao, infoStatusVinculo } from '@/lib/vinculo-sku'
+import { confiancaSugestao, infoStatusVinculo, linhaCorrigivel, type OrigemAlteracaoSku } from '@/lib/vinculo-sku'
 import type { LinhaVinculo, OrdenarDirecao, OrdenarVinculoPor } from '@/hooks/use-vinculo-sku'
+
+export interface AlteracaoSkuPendente {
+  linha: LinhaVinculo
+  /** Texto do campo "SKU novo" (como digitado); vazio = selecionado sem SKU definido. */
+  sku: string
+  /** Origem do valor pré-preenchido; vira 'manual' assim que a pessoa edita o campo. */
+  origem: OrigemAlteracaoSku
+  erro?: string | null
+}
 
 interface Props {
   linhas: LinhaVinculo[]
@@ -21,6 +32,11 @@ interface Props {
   pagina: number
   tamanhoPagina: number
   onPaginaChange: (p: number) => void
+  alteracoes: Map<number, AlteracaoSkuPendente>
+  onToggle: (linha: LinhaVinculo) => void
+  onToggleTodos: (marcar: boolean) => void
+  onSkuChange: (linha: LinhaVinculo, texto: string) => void
+  desabilitado: boolean
 }
 
 /** SKU entre aspas quando tem espaço nas pontas — é o defeito que a tela precisa deixar visível. */
@@ -75,10 +91,20 @@ export function VinculoSkuTabela({
   pagina,
   tamanhoPagina,
   onPaginaChange,
+  alteracoes,
+  onToggle,
+  onToggleTodos,
+  onSkuChange,
+  desabilitado,
 }: Props) {
   const totalPaginas = Math.max(1, Math.ceil(totalRegistros / tamanhoPagina))
   const inicio = totalRegistros === 0 ? 0 : (pagina - 1) * tamanhoPagina + 1
   const fim = Math.min(pagina * tamanhoPagina, totalRegistros)
+
+  const corrigiveis = linhas.filter(linhaCorrigivel)
+  const selecionadosNaPagina = corrigiveis.filter((l) => alteracoes.has(l.id_variante as number)).length
+  const estadoCabecalho =
+    selecionadosNaPagina === 0 ? false : selecionadosNaPagina === corrigiveis.length ? true : 'indeterminate'
 
   const cabecalhoOrdenavel = (label: string, coluna: OrdenarVinculoPor) => {
     const ativo = ordenarPor === coluna
@@ -110,6 +136,14 @@ export function VinculoSkuTabela({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8">
+                    <Checkbox
+                      checked={estadoCabecalho}
+                      onCheckedChange={(v) => onToggleTodos(v === true)}
+                      disabled={desabilitado || corrigiveis.length === 0}
+                      aria-label="Selecionar todas as corrigíveis da página"
+                    />
+                  </TableHead>
                   <TableHead>{cabecalhoOrdenavel('Status', 'status')}</TableHead>
                   <TableHead>{cabecalhoOrdenavel('Produto na Nuvemshop', 'nome')}</TableHead>
                   <TableHead>{cabecalhoOrdenavel('SKU Nuvemshop', 'sku')}</TableHead>
@@ -118,13 +152,26 @@ export function VinculoSkuTabela({
                   <TableHead>Sugestão no Bling</TableHead>
                   <TableHead className="text-right">Preço Nuvemshop</TableHead>
                   <TableHead className="text-right">Preço Bling</TableHead>
+                  <TableHead className="w-48">SKU novo (Nuvemshop)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {linhas.map((linha) => {
                   const info = infoStatusVinculo(linha.status)
+                  const corrigivel = linhaCorrigivel(linha)
+                  const alteracao = linha.id_variante === null ? undefined : alteracoes.get(linha.id_variante)
                   return (
-                    <TableRow key={`${linha.visao}-${linha.id_variante ?? linha.id_produto_bling}`}>
+                    <TableRow key={`${linha.visao}-${linha.id_variante ?? linha.id_produto_bling}`} data-state={alteracao ? 'selected' : undefined}>
+                      <TableCell>
+                        {corrigivel && (
+                          <Checkbox
+                            checked={!!alteracao}
+                            onCheckedChange={() => onToggle(linha)}
+                            disabled={desabilitado}
+                            aria-label={`Selecionar ${linha.nome_ns ?? 'variante'}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <span
                           title={info.descricao}
@@ -184,6 +231,21 @@ export function VinculoSkuTabela({
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {linha.preco_bling === null ? '—' : formatarMoeda(Number(linha.preco_bling))}
+                      </TableCell>
+                      <TableCell>
+                        {alteracao && (
+                          <>
+                            <Input
+                              placeholder="SKU do Bling"
+                              value={alteracao.sku}
+                              onChange={(e) => onSkuChange(linha, e.target.value)}
+                              disabled={desabilitado}
+                              aria-invalid={!!alteracao.erro}
+                              className="h-8 w-44 font-mono text-xs"
+                            />
+                            {alteracao.erro && <p className="mt-1 max-w-44 text-xs text-destructive">{alteracao.erro}</p>}
+                          </>
+                        )}
                       </TableCell>
                     </TableRow>
                   )
