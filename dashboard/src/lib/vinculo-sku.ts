@@ -61,3 +61,16 @@ export const ORDEM_STATUS_VINCULO: StatusVinculo[] = [
 export function infoStatusVinculo(status: string): InfoStatusVinculo {
   return STATUS_VINCULO[status as StatusVinculo] ?? { label: status, descricao: '', classe: 'bg-muted text-muted-foreground' }
 }
+
+export interface ConfiancaSugestao {
+  label: string
+  classe: string
+}
+
+/** Rótulo da sugestão pela pontuação de similaridade (faixas calibradas com os dados reais; ver o SQL). */
+export function confiancaSugestao(score: number): ConfiancaSugestao {
+  if (score >= 0.999) return { label: 'Nome idêntico', classe: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' }
+  if (score >= 0.8) return { label: 'Provável', classe: 'bg-sky-500/10 text-sky-700 dark:text-sky-400' }
+  if (score >= 0.6) return { label: 'Possível', classe: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' }
+  return { label: 'Fraca — conferir', classe: 'bg-muted text-muted-foreground' }
+}

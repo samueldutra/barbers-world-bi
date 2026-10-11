@@ -18,7 +18,7 @@ import {
 } from '@/hooks/use-vinculo-sku'
 import { cn } from 'cn'
 import { formatarNumero } from '@/lib/formatters'
-import { infoStatusVinculo, ORDEM_STATUS_VINCULO } from '@/lib/vinculo-sku'
+import { confiancaSugestao, infoStatusVinculo, ORDEM_STATUS_VINCULO } from '@/lib/vinculo-sku'
 
 const TAMANHO_PAGINA = 50
 
@@ -33,6 +33,7 @@ function gerarCsv(linhas: LinhaVinculo[]): string {
   const cabecalho = [
     'Status', 'Produto Nuvemshop', 'Variação', 'SKU Nuvemshop', 'Publicado', 'Preço Nuvemshop', 'Preço promocional Nuvemshop',
     'Estoque Nuvemshop', 'Link na loja', 'ID produto Bling', 'SKU Bling', 'Produto Bling', 'Preço Bling', 'Qtde no Bling',
+    'SKU sugerido (Bling)', 'Produto sugerido (Bling)', 'Confiança da sugestão', 'Similaridade',
   ]
   const celula = (v: string | number | boolean | null) => {
     if (v === null || v === undefined) return ''
@@ -43,6 +44,8 @@ function gerarCsv(linhas: LinhaVinculo[]): string {
     [
       infoStatusVinculo(l.status).label, l.nome_ns, l.variacao_ns, l.sku_ns, l.publicado, l.preco_ns, l.preco_promocional_ns,
       l.estoque_ns, l.url_ns, l.id_produto_bling, l.codigo_bling, l.nome_bling, l.preco_bling, l.visao === 'nuvemshop' ? l.qtd_bling : null,
+      l.sugestao_codigo, l.sugestao_nome, l.sugestao_score === null ? null : confiancaSugestao(Number(l.sugestao_score)).label,
+      l.sugestao_score,
     ].map(celula).join(';')
   )
   return '﻿' + [cabecalho.join(';'), ...corpo].join('\r\n')

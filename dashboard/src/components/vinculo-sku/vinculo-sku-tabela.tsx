@@ -1,13 +1,14 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, ExternalLink } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, ExternalLink, Copy } from 'lucide-react'
+import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import { cn } from 'cn'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
-import { infoStatusVinculo } from '@/lib/vinculo-sku'
+import { confiancaSugestao, infoStatusVinculo } from '@/lib/vinculo-sku'
 import type { LinhaVinculo, OrdenarDirecao, OrdenarVinculoPor } from '@/hooks/use-vinculo-sku'
 
 interface Props {
@@ -30,6 +31,37 @@ function SkuTexto({ sku }: { sku: string | null }) {
     <code className={cn('rounded bg-muted px-1.5 py-0.5 text-xs', comEspaco && 'bg-sky-500/10 text-sky-700 dark:text-sky-400')}>
       {comEspaco ? `"${sku}"` : sku}
     </code>
+  )
+}
+
+function Sugestao({ linha }: { linha: LinhaVinculo }) {
+  if (linha.sugestao_score === null || !linha.sugestao_codigo) return <span className="text-muted-foreground">—</span>
+  const conf = confiancaSugestao(Number(linha.sugestao_score))
+  const copiar = () => {
+    navigator.clipboard
+      .writeText(linha.sugestao_codigo ?? '')
+      .then(() => toast.success('SKU do Bling copiado.'))
+      .catch(() => toast.error('Não foi possível copiar.'))
+  }
+  return (
+    <div className="min-w-0">
+      <p className="max-w-64 truncate text-sm" title={linha.sugestao_nome ?? undefined}>
+        {linha.sugestao_nome}
+      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+        <SkuTexto sku={linha.sugestao_codigo} />
+        <button type="button" onClick={copiar} aria-label="Copiar SKU sugerido" className="text-muted-foreground hover:text-foreground">
+          <Copy className="h-3.5 w-3.5" />
+        </button>
+        <span
+          title={`Similaridade de nome: ${Math.round(Number(linha.sugestao_score) * 100)}%`}
+          className={cn('inline-flex h-5 items-center rounded-4xl px-2 text-xs font-medium whitespace-nowrap', conf.classe)}
+        >
+          {conf.label}
+        </span>
+      </div>
+      {linha.sugestao_preco !== null && <p className="mt-1 text-xs text-muted-foreground">Bling: {formatarMoeda(Number(linha.sugestao_preco))}</p>}
+    </div>
   )
 }
 
@@ -83,6 +115,7 @@ export function VinculoSkuTabela({
                   <TableHead>{cabecalhoOrdenavel('SKU Nuvemshop', 'sku')}</TableHead>
                   <TableHead>Produto no Bling</TableHead>
                   <TableHead>SKU Bling</TableHead>
+                  <TableHead>Sugestão no Bling</TableHead>
                   <TableHead className="text-right">Preço Nuvemshop</TableHead>
                   <TableHead className="text-right">Preço Bling</TableHead>
                 </TableRow>
@@ -133,6 +166,9 @@ export function VinculoSkuTabela({
                         {linha.status === 'sku_duplicado' && linha.qtd_bling > 1 && (
                           <p className="mt-1 text-xs text-muted-foreground">{linha.qtd_bling} produtos no Bling</p>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <Sugestao linha={linha} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {linha.preco_ns === null ? (

@@ -13,6 +13,29 @@
 --   sem_sku             variante sem SKU
 -- Lado Bling:
 --   so_bling            produto ativo do Bling sem nenhuma variante na Nuvemshop
+--
+-- Sugestão (só pra 'sem_correspondencia' e 'sem_sku'): o produto "só no Bling" de nome mais parecido
+-- (pg_trgm sobre o nome normalizado, comparando com o nome e com nome + variação da Nuvemshop). Só aparece
+-- com pontuação >= 0,40; a tela rotula: >= 1,00 idêntico, >= 0,80 provável, >= 0,60 possível, resto fraca.
+-- É sugestão a confirmar — o vínculo continua sendo corrigido no SKU (Nuvemshop ou Bling).
+
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+
+CREATE OR REPLACE FUNCTION public.normalizar_nome(p_nome TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+AS $$
+    SELECT NULLIF(btrim(regexp_replace(
+        translate(lower(COALESCE(p_nome, '')), 'áàâãäéèêëíìîïóòôõöúùûüç', 'aaaaaeeeeiiiiooooouuuuc'),
+        '[^a-z0-9]+', ' ', 'g')), '')
+$$;
+
+-- Índice GiST de trigramas: a sugestão é uma busca por vizinho mais próximo (operador <->) nele; sem o índice
+-- a similaridade contra todos os produtos, linha a linha, leva ~50 s pra exportar 500 linhas (com ele, ~4 s).
+-- Criar um por schema/tenant (aqui "barbers").
+CREATE INDEX IF NOT EXISTS idx_produtos_nome_trgm
+    ON barbers.produtos USING gist (public.normalizar_nome(nome) extensions.gist_trgm_ops);
 
 CREATE OR REPLACE FUNCTION public.normalizar_sku(p_sku TEXT)
 RETURNS TEXT
@@ -123,6 +146,11 @@ RETURNS TABLE(
     formato_bling TEXT,
     qtd_bling INTEGER,
     status TEXT,
+    sugestao_id_produto_bling BIGINT,       -- produto "só no Bling" mais parecido (NULL = sem sugestão)
+    sugestao_codigo TEXT,
+    sugestao_nome TEXT,
+    sugestao_preco NUMERIC,
+    sugestao_score NUMERIC,                 -- 0 a 1 (1 = nome idêntico depois de normalizar)
     total_registros BIGINT
 )
 LANGUAGE plpgsql
@@ -134,6 +162,7 @@ DECLARE
     v_direcao TEXT;
     v_busca TEXT;
     v_offset INTEGER;
+    v_limite INTEGER;
 BEGIN
     -- Ordem padrão = do mais grave ao menos grave (sem SKU, duplicado, sem correspondência, ajustar...).
     v_ordem := CASE p_ordenar_por
@@ -144,27 +173,60 @@ BEGIN
     END;
     v_direcao := CASE lower(p_ordenar_direcao) WHEN 'desc' THEN 'DESC' ELSE 'ASC' END;
     v_busca := CASE WHEN p_busca IS NULL OR btrim(p_busca) = '' THEN NULL ELSE '%' || btrim(p_busca) || '%' END;
-    v_offset := (GREATEST(p_pagina, 1) - 1) * GREATEST(p_tamanho_pagina, 1);
+    v_limite := GREATEST(p_tamanho_pagina, 1);
+    v_offset := (GREATEST(p_pagina, 1) - 1) * v_limite;
 
+    -- A sugestão é o produto ativo do Bling de nome mais parecido que ainda não está vinculado a nenhuma
+    -- variante da Nuvemshop, achado por vizinho mais próximo no índice GiST de trigramas
+    -- (idx_produtos_nome_trgm) — só pras linhas da página.
     RETURN QUERY EXECUTE format($q$
-        SELECT t.visao, t.store_id, t.id_produto_ns, t.id_variante, t.nome_ns, t.variacao_ns, t.sku_ns,
-               t.publicado, t.preco_ns, t.preco_promocional_ns, t.estoque_ns, t.url_ns, t.imagem_url,
-               t.id_produto_bling, t.codigo_bling, t.nome_bling, t.preco_bling, t.formato_bling, t.qtd_bling,
-               t.status, count(*) OVER()::BIGINT AS total_registros
-        FROM (%s) t
-        WHERE CASE %L
-                WHEN 'todos' THEN t.visao = 'nuvemshop'
-                WHEN 'problemas' THEN t.visao = 'nuvemshop' AND t.status <> 'vinculado'
-                ELSE t.status = %L
-              END
-          AND (NOT %L OR t.visao = 'bling' OR t.publicado IS TRUE)
-          AND (%L::TEXT IS NULL OR t.nome_ns ILIKE %L OR t.sku_ns ILIKE %L
-               OR t.nome_bling ILIKE %L OR t.codigo_bling ILIKE %L)
-        ORDER BY %s %s NULLS LAST, COALESCE(t.nome_ns, t.nome_bling), t.id_variante NULLS LAST, t.id_produto_bling
-        LIMIT %L OFFSET %L
-    $q$, public.vinculo_sku_nuvemshop_sql(p_schema_name), p_status, p_status, p_apenas_publicados,
+        WITH base AS (%s),
+        filtrada AS (
+            SELECT t.*,
+                   row_number() OVER (ORDER BY %s %s NULLS LAST, COALESCE(t.nome_ns, t.nome_bling),
+                                               t.id_variante NULLS LAST, t.id_produto_bling) AS rn,
+                   count(*) OVER()::BIGINT AS tot
+            FROM base t
+            WHERE CASE %L
+                    WHEN 'todos' THEN t.visao = 'nuvemshop'
+                    WHEN 'problemas' THEN t.visao = 'nuvemshop' AND t.status <> 'vinculado'
+                    ELSE t.status = %L
+                  END
+              AND (NOT %L OR t.visao = 'bling' OR t.publicado IS TRUE)
+              AND (%L::TEXT IS NULL OR t.nome_ns ILIKE %L OR t.sku_ns ILIKE %L
+                   OR t.nome_bling ILIKE %L OR t.codigo_bling ILIKE %L)
+        ),
+        pagina AS (SELECT * FROM filtrada WHERE rn > %L AND rn <= %L),
+        skus_ns AS MATERIALIZED (
+            SELECT DISTINCT public.normalizar_sku(sku) AS sku_norm FROM %I.nuvemshop_produtos
+            WHERE public.normalizar_sku(sku) IS NOT NULL
+        )
+        SELECT p.visao, p.store_id, p.id_produto_ns, p.id_variante, p.nome_ns, p.variacao_ns, p.sku_ns,
+               p.publicado, p.preco_ns, p.preco_promocional_ns, p.estoque_ns, p.url_ns, p.imagem_url,
+               p.id_produto_bling, p.codigo_bling, p.nome_bling, p.preco_bling, p.formato_bling, p.qtd_bling,
+               p.status,
+               s.id_produto, s.codigo::TEXT, s.nome::TEXT, s.preco::NUMERIC, s.score,
+               p.tot
+        FROM pagina p
+        LEFT JOIN LATERAL (
+            SELECT c.id_produto, c.codigo, c.nome, c.preco,
+                   round(extensions.similarity(public.normalizar_nome(c.nome), k.chave)::NUMERIC, 3) AS score
+            FROM (SELECT public.normalizar_nome(COALESCE(p.nome_ns, '') || ' ' || COALESCE(p.variacao_ns, '')) AS chave) k
+            CROSS JOIN LATERAL (
+                SELECT pr.id_produto, pr.codigo, pr.nome, pr.preco
+                FROM %I.produtos pr
+                WHERE pr.situacao = 'A'
+                  AND p.status IN ('sem_correspondencia', 'sem_sku')
+                  AND NOT EXISTS (SELECT 1 FROM skus_ns sn WHERE sn.sku_norm = public.normalizar_sku(pr.codigo))
+                ORDER BY public.normalizar_nome(pr.nome) OPERATOR(extensions.<->) k.chave
+                LIMIT 1
+            ) c
+        ) s ON s.score >= 0.4
+        ORDER BY p.rn
+    $q$, public.vinculo_sku_nuvemshop_sql(p_schema_name),
+         v_ordem, v_direcao, p_status, p_status, p_apenas_publicados,
          v_busca, v_busca, v_busca, v_busca, v_busca,
-         v_ordem, v_direcao, p_tamanho_pagina, v_offset);
+         v_offset, v_offset + v_limite, p_schema_name, p_schema_name);
 END;
 $$;
 
