@@ -30,6 +30,13 @@ export interface LinhaVinculo {
   formato_bling: string | null
   qtd_bling: number
   status: string
+  /** Produto "só no Bling" de nome mais parecido (só em sem_correspondencia/sem_sku); null = sem sugestão. */
+  sugestao_id_produto_bling: number | null
+  sugestao_codigo: string | null
+  sugestao_nome: string | null
+  sugestao_preco: number | null
+  /** 0 a 1; 1 = nome idêntico depois de normalizar. */
+  sugestao_score: number | null
   total_registros: number
 }
 
