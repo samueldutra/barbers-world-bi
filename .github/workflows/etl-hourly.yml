@@ -114,3 +114,12 @@ jobs:
         run: |
           pip install -r requirements.txt
           python etl-nuvemshop-pedidos.py
+
+      # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
+      # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
+      - name: Nuvemshop (catálogo de produtos)
+        if: ${{ !cancelled() }}
+        working-directory: etl-nuvemshop-produtos
+        run: |
+          pip install -r requirements.txt
+          python etl-nuvemshop-produtos.py
