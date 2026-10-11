@@ -51,6 +51,7 @@ cabeçalho com breadcrumb) dentro de `TooltipProvider` e `TvModeProvider`. Menu 
 | `/conferencia-precos` | `conferencia-precos` | Preço de cadastro no Bling × preço cheio da última venda nos canais de referência; altera o preço no Bling |
 | `/prospeccao/mapeamento`, `/prospeccao/rotas/**` | `prospeccao` | Mapeia barbearias (Google Places) e monta rotas de visita |
 | `/vinculo-sku` | `vinculo-sku` | SKU de cada variante da Nuvemshop × código dos produtos ativos do Bling (vinculado / ajustar SKU / duplicado / sem correspondência / sem SKU / só no Bling); exporta CSV; sugere o produto do Bling por nome parecido e **corrige o SKU da variante na Nuvemshop** (só SKU; `POST /api/vinculo-sku/alterar`, exige `write_products`; grava o código exato do Bling, recusa SKU inexistente/duplicado; auditoria em `barbers.nuvemshop_alteracoes_sku`). Dados de `etl-nuvemshop-produtos` |
+| `/vinculo-sku/gerar-sku` | `vinculo-sku` | **Gerar SKU no Bling**: produtos ativos do Bling sem código recebem o código proposto (tabela `barbers.sku_bling_propostas`, gerada por `sql/seed_sku_bling_propostas.sql`); `POST /api/sku-bling/aplicar` faz PATCH só do `codigo`, **relê no Bling pra confirmar** e registra. **Trava:** enquanto nenhuma aplicação tiver dado certo, só 1 produto por vez (no servidor) |
 | `/canais-venda` | `canais-venda` | Cadastro de canais; hoje conecta a Nuvemshop por OAuth (token em `public.canais_integracoes`, só service_role). Guia: `docs/integracao-nuvemshop.md` |
 | `/usuarios` | — (só super admin) | Cria usuários e libera módulos |
 | `/sem-acesso` | — | Destino de quem não tem nenhum módulo |
@@ -88,7 +89,7 @@ Hooks: `use-profile.ts`, `use-authorized-modules.ts`, `use-user.ts`.
 Aplicar no SQL Editor do Supabase (ou pelo MCP). Cada tela tem o seu arquivo de RPCs:
 `rpc_dashboard_vendas.sql` (padrão de situações, KPIs, canais), `rpc_dashboard_produtos.sql`,
 `rpc_relatorio_produtos.sql`, `rpc_relatorio_clientes.sql`, `rpc_conferencia_precos.sql`, `rpc_comparacao_precos.sql`,
-`rpc_vinculo_sku_nuvemshop.sql`, `rpc_vinculo_sku_alteracao.sql`, `rpc_prospeccao_leads.sql`, `rpc_prospeccao_rotas.sql`, `rpc_prospeccao_cidades.sql`.
+`rpc_vinculo_sku_nuvemshop.sql`, `rpc_vinculo_sku_alteracao.sql`, `rpc_sku_bling_propostas.sql`, `rpc_prospeccao_leads.sql`, `rpc_prospeccao_rotas.sql`, `rpc_prospeccao_cidades.sql`.
 
 **Segurança das funções** (`seguranca_revogar_acesso_publico.sql`, aplicado em 09/10/2026): as funções
 `SECURITY DEFINER` do `public` **não** podem ser executáveis por `anon`/`PUBLIC` (a chave anon é pública). Toda

@@ -25,7 +25,16 @@ export const navMain: NavItem[] = [
   { id: "relatorio-produtos", title: "Produtos", url: "/relatorio-produtos", icon: IconReportAnalytics },
   { id: "relatorio-clientes", title: "Clientes", url: "/relatorio-clientes", icon: IconUsersGroup },
   { id: "conferencia-precos", title: "Conferência de Preços", url: "/conferencia-precos", icon: IconTags },
-  { id: "vinculo-sku", title: "Vínculo de SKU", url: "/vinculo-sku", icon: IconLink },
+  {
+    id: "vinculo-sku",
+    title: "Vínculo de SKU",
+    url: "/vinculo-sku",
+    icon: IconLink,
+    items: [
+      { title: "Nuvemshop × Bling", url: "/vinculo-sku" },
+      { title: "Gerar SKU no Bling", url: "/vinculo-sku/gerar-sku" },
+    ],
+  },
   { id: "canais-venda", title: "Canais de Venda", url: "/canais-venda", icon: IconBuildingStore },
   {
     id: "prospeccao",

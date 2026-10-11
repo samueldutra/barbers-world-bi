@@ -145,3 +145,33 @@ export async function alterarPrecoProduto(idProduto: number, preco: number): Pro
     throw new ErroBling(mensagemErroBling(corpo, resp.status), resp.status)
   }
 }
+
+export interface ProdutoBling {
+  id: number
+  nome: string | null
+  codigo: string | null
+}
+
+/** Lê o produto no Bling (só os campos que usamos). */
+export async function buscarProduto(idProduto: number): Promise<ProdutoBling> {
+  const resp = await blingFetch(`/produtos/${idProduto}`, { method: 'GET' })
+  const corpo = await resp.json().catch(() => null)
+  if (!resp.ok) throw new ErroBling(mensagemErroBling(corpo, resp.status), resp.status)
+  const d = (corpo as { data?: { id?: number; nome?: string; codigo?: string } })?.data
+  if (!d?.id) throw new ErroBling('Resposta inesperada do Bling ao ler o produto.', 502)
+  return { id: Number(d.id), nome: d.nome ?? null, codigo: d.codigo?.trim() ? d.codigo.trim() : null }
+}
+
+/** Altera só o código (SKU) do produto (PATCH parcial). O chamador deve conferir com buscarProduto depois:
+ * o Bling pode aceitar a chamada e ignorar o campo. */
+export async function alterarCodigoProduto(idProduto: number, codigo: string): Promise<void> {
+  const resp = await blingFetch(`/produtos/${idProduto}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codigo }),
+  })
+  if (!resp.ok) {
+    const corpo = await resp.json().catch(() => null)
+    throw new ErroBling(mensagemErroBling(corpo, resp.status), resp.status)
+  }
+}

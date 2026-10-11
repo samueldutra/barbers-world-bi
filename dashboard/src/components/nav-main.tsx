@@ -49,7 +49,11 @@ export function NavMain({ items }: { items: NavItem[] }) {
                       <SidebarMenuSub>
                         {item.items.map((sub) => (
                           <SidebarMenuSubItem key={sub.url}>
-                            <SidebarMenuSubButton asChild isActive={ativo(pathname, sub.url)}>
+                            <SidebarMenuSubButton
+                              asChild
+                              // Só o submenu mais específico fica ativo (/vinculo-sku não acende em /vinculo-sku/gerar-sku).
+                              isActive={ativo(pathname, sub.url) && !item.items!.some((o) => o.url.length > sub.url.length && ativo(pathname, o.url))}
+                            >
                               <Link href={sub.url}>
                                 <span>{sub.title}</span>
                               </Link>
