@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { AlertTriangle, ChevronLeft, ChevronRight, FlaskConical, Loader2, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from 'cn'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
-import { usePropostasSkuBling, useResumoPropostas, type LinhaProposta } from '@/hooks/use-propostas-sku-bling'
+import { buscarTodasPropostas, usePropostasSkuBling, useResumoPropostas, type LinhaProposta } from '@/hooks/use-propostas-sku-bling'
 import type { ResultadoAplicacaoSku } from '@/app/api/sku-bling/aplicar/route'
 
 const TAMANHO_PAGINA = 50
@@ -43,6 +43,8 @@ export default function GerarSkuBlingPage() {
   const [aplicando, setAplicando] = useState(false)
   const [progresso, setProgresso] = useState({ feitos: 0, total: 0 })
   const [errosPorProduto, setErrosPorProduto] = useState<Record<number, string>>({})
+  const [selecionandoTodos, setSelecionandoTodos] = useState(false)
+  const cancelarRef = useRef(false)
 
   const resumo = useResumoPropostas(gatilho)
   const { linhas, totalRegistros, loading, error } = usePropostasSkuBling({ status, busca, pagina, tamanhoPagina: TAMANHO_PAGINA }, gatilho)
@@ -84,6 +86,26 @@ export default function GerarSkuBlingPage() {
       return nova
     })
 
+  /** Seleção em massa (todas as páginas): 'sem_vendas' = menor risco (o código novo não aparece em nota nenhuma). */
+  const handleSelecionarMassa = async (tipo: 'sem_vendas' | 'todas') => {
+    setSelecionandoTodos(true)
+    try {
+      const [pendentes, comErro] = await Promise.all([buscarTodasPropostas('pendente'), buscarTodasPropostas('erro')])
+      const alvo = [...pendentes, ...comErro].filter((l) => tipo === 'todas' || !l.com_vendas)
+      setSelecionados((atual) => {
+        const nova = new Map(atual)
+        for (const l of alvo) nova.set(l.id_produto, l)
+        return nova
+      })
+      toast.success(`${formatarNumero(alvo.length)} produto(s) selecionado(s).`)
+    } catch (e) {
+      console.error('Erro na seleção em massa:', e)
+      toast.error('Não foi possível selecionar. Tente de novo.')
+    } finally {
+      setSelecionandoTodos(false)
+    }
+  }
+
   const aplicaveisNaPagina = linhas.filter(aplicavel)
   const marcadosNaPagina = aplicaveisNaPagina.filter((l) => selecionados.has(l.id_produto)).length
   const estadoCabecalho = marcadosNaPagina === 0 ? false : marcadosNaPagina === aplicaveisNaPagina.length ? true : 'indeterminate'
@@ -93,10 +115,13 @@ export default function GerarSkuBlingPage() {
     setAplicando(true)
     setProgresso({ feitos: 0, total: itens.length })
     setErrosPorProduto({})
+    cancelarRef.current = false
     const resultados: ResultadoAplicacaoSku[] = []
 
     // Em modo teste só existe 1 item. Fora dele, lotes pequenos (limite do Bling compartilhado com o ETL).
     for (let i = 0; i < itens.length; i += ITENS_POR_LOTE) {
+      // "Parar": termina o lote em andamento e não envia os próximos (o que já foi gravado fica gravado).
+      if (cancelarRef.current) break
       const lote = itens.slice(i, i + ITENS_POR_LOTE)
       try {
         const resp = await fetch('/api/sku-bling/aplicar', {
@@ -127,7 +152,9 @@ export default function GerarSkuBlingPage() {
     setDialogAberto(false)
 
     const sucessos = resultados.length - falhas.length
-    if (falhas.length === 0) toast.success(`${formatarNumero(sucessos)} SKU(s) gravado(s) e confirmado(s) no Bling.`)
+    const naoEnviados = itens.length - resultados.length
+    if (naoEnviados > 0) toast.info(`Interrompido: ${formatarNumero(sucessos)} gravado(s); ${formatarNumero(naoEnviados)} não enviado(s) continuam selecionados.`)
+    else if (falhas.length === 0) toast.success(`${formatarNumero(sucessos)} SKU(s) gravado(s) e confirmado(s) no Bling.`)
     else toast.error(falhas[0].erro ?? 'Falha ao gravar no Bling.', { description: `${sucessos} ok, ${falhas.length} com erro.` })
     recarregar()
   }
@@ -198,6 +225,19 @@ export default function GerarSkuBlingPage() {
           </Select>
         </div>
       </div>
+
+      {!modoTeste && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Seleção em massa (todas as páginas):</span>
+          <Button variant="outline" size="sm" disabled={selecionandoTodos || aplicando} onClick={() => handleSelecionarMassa('sem_vendas')}>
+            {selecionandoTodos && <Loader2 className="h-4 w-4 animate-spin" />}
+            Pendentes sem vendas
+          </Button>
+          <Button variant="outline" size="sm" disabled={selecionandoTodos || aplicando} onClick={() => handleSelecionarMassa('todas')}>
+            Todas as pendentes
+          </Button>
+        </div>
+      )}
 
       {selecionados.size > 0 && (
         <div className="sticky top-2 z-10 flex flex-col gap-2 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:justify-between">
@@ -326,6 +366,13 @@ export default function GerarSkuBlingPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {lista.length > ITENS_POR_LOTE && (
+            <p className="text-xs text-muted-foreground">
+              Cada produto leva ~2 s (ler, gravar e reler no Bling): estimativa de {Math.ceil((lista.length * 2) / 60)} min para {formatarNumero(lista.length)}{' '}
+              produtos. Dá pra parar no meio; o que já foi gravado fica gravado.
+            </p>
+          )}
+
           {comVendas > 0 && (
             <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -364,9 +411,14 @@ export default function GerarSkuBlingPage() {
           {aplicando && (
             <div className="flex flex-col gap-2">
               <Progress value={progresso.total ? (progresso.feitos / progresso.total) * 100 : 0} />
-              <p className="text-xs text-muted-foreground">
-                Gravando no Bling: {progresso.feitos} de {progresso.total}...
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  Gravando no Bling: {progresso.feitos} de {progresso.total}... Não feche esta página.
+                </p>
+                <Button variant="outline" size="sm" onClick={() => (cancelarRef.current = true)}>
+                  Parar após o lote atual
+                </Button>
+              </div>
             </div>
           )}
 
