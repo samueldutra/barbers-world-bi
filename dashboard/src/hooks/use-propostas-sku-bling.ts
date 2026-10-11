@@ -87,3 +87,24 @@ export function usePropostasSkuBling(filtros: { status: string; busca: string; p
 
   return { linhas, totalRegistros, loading, error }
 }
+
+/** Todas as propostas de um status (páginas de 1000 — o limite do Supabase por RPC), pra seleção em massa. */
+export async function buscarTodasPropostas(status: string): Promise<LinhaProposta[]> {
+  const supabase = createClient()
+  const TAMANHO = 1000
+  const todas: LinhaProposta[] = []
+  for (let pagina = 1; ; pagina++) {
+    const { data, error } = await supabase.rpc('obter_propostas_sku_bling', {
+      p_schema_name: TENANT_SCHEMA,
+      p_status: status,
+      p_busca: null,
+      p_pagina: pagina,
+      p_tamanho_pagina: TAMANHO,
+    })
+    if (error) throw error
+    const lote = (data as LinhaProposta[]) ?? []
+    todas.push(...lote)
+    if (lote.length < TAMANHO) break
+  }
+  return todas
+}
