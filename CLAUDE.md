@@ -16,6 +16,8 @@ Objetivo: BI da **Barbers World**. Em produção:
   (`etl-bling-pedidos-vendas/`), mais clientes, produtos, canais e situações (scripts `sync-*`).
 - ✅ ETL de pedidos da **Nuvemshop** (`etl-nuvemshop-pedidos/`) → `barbers.nuvemshop_pedidos(_itens)`, último passo do mesmo
   workflow; lê as lojas conectadas em Canais de Venda. Aguarda a primeira loja conectada para rodar de verdade.
+- ✅ ETL do catálogo da **Nuvemshop** (`etl-nuvemshop-produtos/`) → `barbers.nuvemshop_produtos` (uma linha por variante, com SKU),
+  penúltimo passo do workflow; alimenta o módulo **Vínculo de SKU** do dashboard. Precisa do escopo `read_products`.
 - ✅ Dimensões `barbers.canais_venda`, `contatos`, `produtos` e `situacoes_pedido`, sincronizadas pelo mesmo workflow.
   **Filtro padrão de situações** (o que conta como venda): `situacoes_validas_faturamento()` em
   `dashboard/sql/rpc_dashboard_vendas.sql` (hoje só `9 = Atendido`) vale para os relatórios (produtos/clientes) e a
