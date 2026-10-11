@@ -74,3 +74,29 @@ export function confiancaSugestao(score: number): ConfiancaSugestao {
   if (score >= 0.6) return { label: 'Possível', classe: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' }
   return { label: 'Fraca — conferir', classe: 'bg-muted text-muted-foreground' }
 }
+
+export type OrigemAlteracaoSku = 'sugestao' | 'manual' | 'ajuste'
+
+/** Status que dá pra corrigir pela tela (o resto — vinculado e só no Bling — não tem o que ajustar). */
+const STATUS_CORRIGIVEIS: StatusVinculo[] = ['sem_sku', 'sem_correspondencia', 'sku_duplicado', 'vinculado_ajustar']
+
+interface LinhaComAlvo {
+  visao: string
+  status: string
+  codigo_bling: string | null
+  sugestao_codigo: string | null
+}
+
+export function linhaCorrigivel(linha: Pick<LinhaComAlvo, 'visao' | 'status'>): boolean {
+  return linha.visao === 'nuvemshop' && STATUS_CORRIGIVEIS.includes(linha.status as StatusVinculo)
+}
+
+/** SKU do Bling que corrige a linha: o próprio código (só difere em espaço/maiúscula) ou a sugestão por nome.
+ * Duplicado e sem sugestão ficam sem alvo — a pessoa digita o SKU do Bling. */
+export function skuAlvo(linha: LinhaComAlvo): { sku: string; origem: OrigemAlteracaoSku } {
+  if (linha.status === 'vinculado_ajustar' && linha.codigo_bling) return { sku: linha.codigo_bling, origem: 'ajuste' }
+  if ((linha.status === 'sem_sku' || linha.status === 'sem_correspondencia') && linha.sugestao_codigo) {
+    return { sku: linha.sugestao_codigo, origem: 'sugestao' }
+  }
+  return { sku: '', origem: 'manual' }
+}

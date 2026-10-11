@@ -93,3 +93,38 @@ export async function buscarLoja(
   const nome = typeof loja.name === 'string' ? loja.name : loja.name?.pt ?? Object.values(loja.name ?? {})[0] ?? null
   return { nome: (nome as string | null) ?? null, url: loja.original_domain ?? loja.url_with_protocol ?? null }
 }
+
+/** Altera SÓ o SKU de uma variante (PUT parcial: os demais campos — preço, estoque... — ficam como estão).
+ * Exige o escopo write_products. Lança Error com a mensagem da Nuvemshop quando ela recusa. */
+export async function alterarSkuVariante(
+  accessToken: string,
+  storeId: string,
+  idProduto: number,
+  idVariante: number,
+  sku: string
+): Promise<void> {
+  const url = `${API_URL}/${storeId}/products/${idProduto}/variants/${idVariante}`
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const resp = await fetch(url, {
+      method: 'PUT',
+      headers: headersApi(accessToken),
+      body: JSON.stringify({ sku }),
+      cache: 'no-store',
+    })
+    if (resp.status === 429) {
+      // Balde de requisições cheio: espera o tempo que a API informa e tenta de novo.
+      const espera = Math.min(Number(resp.headers.get('x-rate-limit-reset') ?? 2000) / 1000 + 0.5, 10)
+      await new Promise((r) => setTimeout(r, espera * 1000))
+      continue
+    }
+    if (resp.ok) return
+    const corpo = await resp.json().catch(() => null)
+    const detalhe = corpo?.description || corpo?.message || corpo?.error || `HTTP ${resp.status}`
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error(`A Nuvemshop recusou o acesso (${detalhe}). Reconecte o canal em Canais de Venda com a permissão de escrita em produtos.`)
+    }
+    if (resp.status === 404) throw new Error('A variante não existe mais na Nuvemshop (produto excluído?). Atualize os dados.')
+    throw new Error(`A Nuvemshop recusou a alteração: ${typeof detalhe === 'string' ? detalhe : JSON.stringify(detalhe)}`)
+  }
+  throw new Error('A Nuvemshop está limitando as requisições; tente de novo em instantes.')
+}
