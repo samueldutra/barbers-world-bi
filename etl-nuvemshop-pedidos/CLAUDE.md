@@ -47,6 +47,15 @@ novos e mudanças de status. **Backfill**: `ETL_DATA_INICIAL=AAAA-MM-DD` (ou Act
 - Lista vazia / página além da última volta como **404** (tratado como "sem mais pedidos").
 - Valores monetários vêm como string (`"105.50"`); datas como `...+0000`.
 
+## Pares Bling × Nuvemshop (pós-carga)
+
+No fim de cada execução, `atualizar_pares_bling()` chama a RPC `atualizar_pares_id_bling_nuvemshop` (~10 s), que recalcula
+`barbers.pares_id_bling_nuvemshop`: pedido do Bling casado com o da Nuvemshop pelo número (`numero_loja = numero`) e itens
+pareados (1 item de cada lado, ou quantidade + preço únicos) → liga o `id_produto` do Bling ao `id_variante` da Nuvemshop.
+Alimenta o módulo Vínculo de SKU ("Confirmado por pedidos", divergências). Falha aqui só gera aviso. SQL em
+`dashboard/sql/rpc_vinculo_sku_pedidos.sql`. Backfill de um ano: Actions → Run workflow com `alterados_horas=8760` e
+`apenas_nuvemshop` marcado.
+
 ## Banco
 
 `sql/create_table_nuvemshop_pedidos.sql` e `sql/rpc_processar_carga_nuvemshop_pedidos.sql` (já aplicados em

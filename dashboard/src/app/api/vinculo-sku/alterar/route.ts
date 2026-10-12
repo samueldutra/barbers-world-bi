@@ -22,7 +22,7 @@ const schema = z.object({
         id_variante: z.number().int().positive(),
         sku_anterior: z.string().max(100).nullable(),
         sku_novo: z.string().trim().min(1).max(100),
-        origem: z.enum(['sugestao', 'manual', 'ajuste', 'escolha']),
+        origem: z.enum(['sugestao', 'manual', 'ajuste', 'escolha', 'pedidos']),
       })
     )
     .min(1)

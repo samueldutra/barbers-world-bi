@@ -428,6 +428,17 @@ def processar_loja(loja: dict, schema: str, desde: datetime) -> tuple:
     return len(linhas_pedidos), len(linhas_itens)
 
 
+def atualizar_pares_bling(schema: str):
+    """Recalcula os pares Bling x Nuvemshop por ID (pedido do Bling casado com o da Nuvemshop pelo número; itens
+    pareados) usados pelo módulo Vínculo de SKU. ~10 s. Falha aqui não derruba o ETL: só deixa os pares como estavam."""
+    try:
+        # O helper envia "Prefer: return=minimal": a resposta vem sem corpo, então só confirmamos que não deu erro.
+        rpc_supabase_com_retry("atualizar_pares_id_bling_nuvemshop", {"p_schema_name": schema}, context="pares")
+        log("Pares Bling x Nuvemshop atualizados.")
+    except Exception as e:
+        log(f"[AVISO] Não foi possível atualizar os pares Bling x Nuvemshop: {e}")
+
+
 def executar_etl(cliente_id: str, data_inicial_str: Optional[str], alterados_horas: Optional[int]) -> tuple:
     configs = obter_configuracoes_clientes()
     config_cliente = configs.get(cliente_id)
@@ -460,6 +471,8 @@ def executar_etl(cliente_id: str, data_inicial_str: Optional[str], alterados_hor
             log(f"[ERRO] Loja {loja['store_id']}: {e}")
             traceback.print_exc()
             falhas.append(f"loja {loja['store_id']}: {e}")
+
+    atualizar_pares_bling(schema)
 
     log(f"ETL concluído: {total_pedidos} pedidos, {total_itens} itens em {len(lojas)} loja(s).")
     if falhas:

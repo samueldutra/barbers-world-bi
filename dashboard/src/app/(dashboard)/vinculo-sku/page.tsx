@@ -8,16 +8,22 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { VinculoSkuTabela, type AlteracaoSkuPendente } from '@/components/vinculo-sku/vinculo-sku-tabela'
+import { DivergenciasSkuPedidosDialog } from '@/components/vinculo-sku/divergencias-sku-pedidos-dialog'
 import { EscolherProdutoBlingDialog, type ProdutoBlingBusca } from '@/components/vinculo-sku/escolher-produto-bling-dialog'
 import { ConfirmarAlteracoesSkuDialog, type AlteracaoSkuConfirmada } from '@/components/vinculo-sku/confirmar-alteracoes-sku-dialog'
 import type { ResultadoAlteracaoSku } from '@/app/api/vinculo-sku/alterar/route'
 import {
+  buscarParesConfirmados,
   buscarTodasLinhasVinculo,
+  parUtilizavel,
+  useParesConfirmados,
+  type DivergenciaSkuPedidos,
   useResumoVinculoSku,
   useVinculoSku,
   type FiltroStatusVinculo,
   type LinhaVinculo,
   type OrdenarVinculoPor,
+  type ParConfirmado,
 } from '@/hooks/use-vinculo-sku'
 import { cn } from 'cn'
 import { formatarNumero } from '@/lib/formatters'
@@ -68,6 +74,7 @@ export default function VinculoSkuPage() {
 
   const [alteracoes, setAlteracoes] = useState<Map<number, AlteracaoSkuPendente>>(new Map())
   const [linhaEscolhendo, setLinhaEscolhendo] = useState<LinhaVinculo | null>(null)
+  const [divergenciasAbertas, setDivergenciasAbertas] = useState(false)
   const [dialogAberto, setDialogAberto] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [progresso, setProgresso] = useState({ feitos: 0, total: 0 })
@@ -77,6 +84,7 @@ export default function VinculoSkuPage() {
     status, busca, apenasPublicados, apenasComEstoque, ordenarPor, ordenarDirecao, pagina, tamanhoPagina: TAMANHO_PAGINA,
   })
   const { resumo } = useResumoVinculoSku(apenasPublicados, apenasComEstoque, gatilhoResumo)
+  const pares = useParesConfirmados(linhas, gatilhoResumo)
 
   const comReset = <T,>(setter: (v: T) => void) => (v: T) => {
     setPagina(1)
@@ -106,9 +114,12 @@ export default function VinculoSkuPage() {
     })
   }
 
-  const novaSelecao = (linha: LinhaVinculo): AlteracaoSkuPendente => {
-    const alvo = skuAlvo(linha)
-    const nomeBling = alvo.origem === 'ajuste' ? linha.nome_bling : alvo.origem === 'sugestao' ? linha.sugestao_nome : null
+  const novaSelecao = (linha: LinhaVinculo, parDado?: ParConfirmado): AlteracaoSkuPendente => {
+    const par = parDado ?? (linha.id_variante !== null ? pares.get(linha.id_variante) : undefined)
+    const parOk = parUtilizavel(par) ? par : null
+    const alvo = skuAlvo(linha, parOk)
+    const nomeBling =
+      alvo.origem === 'pedidos' ? parOk?.nome : alvo.origem === 'ajuste' ? linha.nome_bling : alvo.origem === 'sugestao' ? linha.sugestao_nome : null
     return { linha, sku: alvo.sku, origem: alvo.origem, nomeBling }
   }
 
@@ -140,6 +151,23 @@ export default function VinculoSkuPage() {
     })
 
   /** Seleção rápida (todas as páginas do filtro "com problema"): as de maior segurança. */
+  /** Divergência SKU × pedidos: troca o SKU da variante pelo código do produto que as vendas mostram. */
+  const handleCorrigirDivergencia = (d: DivergenciaSkuPedidos) => {
+    const linha: LinhaVinculo = {
+      visao: 'nuvemshop', store_id: d.store_id, id_produto_ns: d.id_produto_ns, id_variante: d.id_variante,
+      nome_ns: d.nome_ns, variacao_ns: d.variacao_ns, sku_ns: d.sku_ns, publicado: d.publicado,
+      preco_ns: null, preco_promocional_ns: null, estoque_ns: d.estoque_ns, url_ns: null, imagem_url: null,
+      id_produto_bling: d.sku_id_produto_bling, codigo_bling: d.sku_codigo, nome_bling: d.sku_nome, preco_bling: null,
+      formato_bling: null, qtd_bling: 1, status: 'vinculado',
+      sugestao_id_produto_bling: null, sugestao_codigo: null, sugestao_nome: null, sugestao_preco: null, sugestao_score: null,
+      total_registros: 0,
+    }
+    atualizarAlteracoes((m) => {
+      m.set(d.id_variante, { linha, sku: d.vendas_codigo ?? '', origem: 'pedidos', nomeBling: d.vendas_nome, erro: null })
+    })
+    toast.success('Adicionada à seleção. Revise e grave pelo botão "Revisar e corrigir".')
+  }
+
   /** Produto escolhido no seletor: seleciona a variante (se ainda não estava) e já preenche o SKU novo. */
   const handleEscolher = (linha: LinhaVinculo, produto: ProdutoBlingBusca) => {
     atualizarAlteracoes((m) => {
@@ -148,19 +176,24 @@ export default function VinculoSkuPage() {
     setLinhaEscolhendo(null)
   }
 
-  const handleSelecionarRapido = async (tipo: 'identicas' | 'provaveis' | 'ajustes') => {
+  const handleSelecionarRapido = async (tipo: 'pedidos' | 'identicas' | 'provaveis' | 'ajustes') => {
     setSelecionando(true)
     try {
-      const todas = await buscarTodasLinhasVinculo({ status: 'problemas', busca: '', apenasPublicados, apenasComEstoque, ordenarPor: 'status', ordenarDirecao: 'asc' })
-      const alvo = todas.filter((l) =>
-        tipo === 'ajustes'
-          ? l.status === 'vinculado_ajustar'
-          : (l.status === 'sem_correspondencia' || l.status === 'sem_sku') &&
-            l.sugestao_score !== null &&
-            Number(l.sugestao_score) >= (tipo === 'identicas' ? 0.999 : 0.8)
-      )
+      const [todas, todosPares] = await Promise.all([
+        buscarTodasLinhasVinculo({ status: 'problemas', busca: '', apenasPublicados, apenasComEstoque, ordenarPor: 'status', ordenarDirecao: 'asc' }),
+        buscarParesConfirmados(),
+      ])
+      const mapaPares = new Map(todosPares.map((p) => [p.id_variante, p]))
+      const parDe = (l: LinhaVinculo) => (l.id_variante === null ? undefined : mapaPares.get(l.id_variante))
+      const semVinculo = (l: LinhaVinculo) => l.status === 'sem_correspondencia' || l.status === 'sem_sku'
+      const alvo = todas.filter((l) => {
+        if (tipo === 'ajustes') return l.status === 'vinculado_ajustar'
+        // Confirmados por pedidos: o par por ID, sem empate, ativo e com código livre (inclui SKU duplicado).
+        if (tipo === 'pedidos') return (semVinculo(l) || l.status === 'sku_duplicado') && parUtilizavel(parDe(l))
+        return semVinculo(l) && l.sugestao_score !== null && Number(l.sugestao_score) >= (tipo === 'identicas' ? 0.999 : 0.8)
+      })
       atualizarAlteracoes((m) => {
-        for (const l of alvo) if (l.id_variante !== null && !m.has(l.id_variante)) m.set(l.id_variante, novaSelecao(l))
+        for (const l of alvo) if (l.id_variante !== null && !m.has(l.id_variante)) m.set(l.id_variante, novaSelecao(l, parDe(l)))
       })
       toast.success(`${formatarNumero(alvo.length)} variante(s) selecionada(s).`)
     } catch (e) {
@@ -344,6 +377,9 @@ export default function VinculoSkuPage() {
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Seleção rápida:</span>
+        <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('pedidos')}>
+          Confirmados por pedidos
+        </Button>
         <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('identicas')}>
           Sugestões de nome idêntico
         </Button>
@@ -352,6 +388,9 @@ export default function VinculoSkuPage() {
         </Button>
         <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('ajustes')}>
           Ajustes de espaço/maiúscula
+        </Button>
+        <Button variant="ghost" size="sm" disabled={aplicando} onClick={() => setDivergenciasAbertas(true)}>
+          Divergências SKU × pedidos
         </Button>
       </div>
 
@@ -396,7 +435,15 @@ export default function VinculoSkuPage() {
         onToggleTodos={handleToggleTodos}
         onSkuChange={handleSkuChange}
         onEscolher={setLinhaEscolhendo}
+        pares={pares}
         desabilitado={aplicando}
+      />
+
+      <DivergenciasSkuPedidosDialog
+        aberto={divergenciasAbertas}
+        onOpenChange={setDivergenciasAbertas}
+        selecionadas={new Set(alteracoes.keys())}
+        onCorrigir={handleCorrigirDivergencia}
       />
 
       <EscolherProdutoBlingDialog linha={linhaEscolhendo} onOpenChange={(aberto) => !aberto && setLinhaEscolhendo(null)} onEscolher={handleEscolher} />
