@@ -29,13 +29,14 @@ export const SCORE_CONFIANCA_MINIMA = 0.8
 
 /** Alteração que merece conferência extra: digitada à mão, ou sugestão por nome com pouca similaridade. */
 export function exigeAtencao(item: AlteracaoSkuConfirmada): boolean {
-  if (item.origem === 'ajuste' || item.origem === 'escolha') return false
+  if (item.origem === 'ajuste' || item.origem === 'escolha' || item.origem === 'pedidos') return false
   if (item.origem === 'manual') return true
   return item.linha.sugestao_score === null || Number(item.linha.sugestao_score) < SCORE_CONFIANCA_MINIMA
 }
 
 function criterio(item: AlteracaoSkuConfirmada): { label: string; classe: string } {
   if (item.origem === 'ajuste') return { label: 'Só espaço/maiúscula', classe: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' }
+  if (item.origem === 'pedidos') return { label: 'Confirmado por pedidos', classe: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' }
   if (item.origem === 'escolha') return { label: 'Escolhido por você', classe: 'bg-sky-500/10 text-sky-700 dark:text-sky-400' }
   if (item.origem === 'manual') return { label: 'Digitado', classe: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' }
   return confiancaSugestao(Number(item.linha.sugestao_score ?? 0))

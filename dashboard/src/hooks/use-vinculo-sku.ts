@@ -163,3 +163,94 @@ export async function buscarTodasLinhasVinculo(f: Omit<FiltrosVinculo, 'pagina' 
   }
   return todas
 }
+
+/** Par Bling × Nuvemshop confirmado por ID a partir dos pedidos (o produto do Bling mais frequente nas vendas da variante). */
+export interface ParConfirmado {
+  id_variante: number
+  id_produto_bling: number
+  codigo: string
+  nome: string
+  preco: number | null
+  /** Produto ativo no cadastro do Bling. */
+  ativo: boolean
+  /** Pedidos distintos que sustentam o par. */
+  pedidos: number
+  pedidos_unicos: number
+  /** > 1: a variante também apareceu em pedidos com outros produtos do Bling. */
+  produtos_distintos: number
+  /** Empate no topo: não dá pra apontar um produto só. */
+  ambiguo: boolean
+  /** Quantas OUTRAS variantes da Nuvemshop já usam o código deste produto. */
+  qtd_variantes_ns: number
+}
+
+/** O par pode ser usado direto: ativo, sem empate e sem outra variante usando o código (senão o servidor recusa). */
+export function parUtilizavel(par: ParConfirmado | undefined): par is ParConfirmado {
+  return !!par && par.ativo && !par.ambiguo && par.qtd_variantes_ns === 0 && par.codigo.trim() !== ''
+}
+
+/** Pares confirmados das variantes informadas (ou de todas, sem argumento). */
+export async function buscarParesConfirmados(variantes?: number[]): Promise<ParConfirmado[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('obter_pares_confirmados_nuvemshop', {
+    p_schema_name: TENANT_SCHEMA,
+    p_variantes: variantes ?? null,
+  })
+  if (error) throw error
+  return (data as ParConfirmado[]) ?? []
+}
+
+/** Pares confirmados das variantes da página atual (mapa por id_variante). */
+export function useParesConfirmados(linhas: LinhaVinculo[], gatilho: number) {
+  const [pares, setPares] = useState<Map<number, ParConfirmado>>(new Map())
+  const ids = linhas.filter((l) => l.visao === 'nuvemshop' && l.id_variante !== null).map((l) => l.id_variante as number)
+  const chave = ids.join(',')
+
+  useEffect(() => {
+    if (ids.length === 0) {
+      setPares(new Map())
+      return
+    }
+    let ativo = true
+    buscarParesConfirmados(ids)
+      .then((lista) => {
+        if (ativo) setPares(new Map(lista.map((p) => [p.id_variante, p])))
+      })
+      .catch((err) => console.error('Erro ao carregar os pares confirmados por pedidos:', err))
+    return () => {
+      ativo = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chave, gatilho])
+
+  return pares
+}
+
+export interface DivergenciaSkuPedidos {
+  store_id: number
+  id_produto_ns: number
+  id_variante: number
+  nome_ns: string | null
+  variacao_ns: string | null
+  sku_ns: string | null
+  publicado: boolean | null
+  estoque_ns: number | null
+  sku_id_produto_bling: number
+  sku_codigo: string | null
+  sku_nome: string | null
+  vendas_id_produto_bling: number
+  vendas_codigo: string | null
+  vendas_nome: string | null
+  vendas_ativo: boolean
+  pedidos: number
+  produtos_distintos: number
+  qtd_variantes_ns: number
+}
+
+/** Variantes já vinculadas por SKU cujo produto do Bling pelo SKU difere do produto que as vendas mostram. */
+export async function buscarDivergenciasSkuPedidos(): Promise<DivergenciaSkuPedidos[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('obter_divergencias_sku_pedidos', { p_schema_name: TENANT_SCHEMA })
+  if (error) throw error
+  return (data as DivergenciaSkuPedidos[]) ?? []
+}

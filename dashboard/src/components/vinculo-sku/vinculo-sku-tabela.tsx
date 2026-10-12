@@ -11,7 +11,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { cn } from 'cn'
 import { formatarMoeda, formatarNumero } from '@/lib/formatters'
 import { confiancaSugestao, infoStatusVinculo, linhaCorrigivel, type OrigemAlteracaoSku } from '@/lib/vinculo-sku'
-import type { LinhaVinculo, OrdenarDirecao, OrdenarVinculoPor } from '@/hooks/use-vinculo-sku'
+import type { LinhaVinculo, OrdenarDirecao, OrdenarVinculoPor, ParConfirmado } from '@/hooks/use-vinculo-sku'
 
 export interface AlteracaoSkuPendente {
   linha: LinhaVinculo
@@ -39,6 +39,8 @@ interface Props {
   onToggleTodos: (marcar: boolean) => void
   onSkuChange: (linha: LinhaVinculo, texto: string) => void
   onEscolher: (linha: LinhaVinculo) => void
+  /** Pares confirmados por pedidos, por id_variante. */
+  pares: Map<number, ParConfirmado>
   desabilitado: boolean
 }
 
@@ -53,33 +55,71 @@ function SkuTexto({ sku }: { sku: string | null }) {
   )
 }
 
-function Sugestao({ linha }: { linha: LinhaVinculo }) {
-  if (linha.sugestao_score === null || !linha.sugestao_codigo) return <span className="text-muted-foreground">—</span>
-  const conf = confiancaSugestao(Number(linha.sugestao_score))
-  const copiar = () => {
+function Sugestao({ linha, par }: { linha: LinhaVinculo; par?: ParConfirmado }) {
+  const temSugestao = linha.sugestao_score !== null && !!linha.sugestao_codigo
+  // A sugestão por nome só aparece se for de OUTRO produto que o confirmado (senão seria repetição).
+  const sugestaoRepetida = !!par && par.id_produto_bling === linha.sugestao_id_produto_bling
+  const mostrarSugestao = temSugestao && !sugestaoRepetida
+  if (!par && !temSugestao) return <span className="text-muted-foreground">—</span>
+
+  const copiar = (codigo: string) => {
     navigator.clipboard
-      .writeText(linha.sugestao_codigo ?? '')
+      .writeText(codigo)
       .then(() => toast.success('SKU do Bling copiado.'))
       .catch(() => toast.error('Não foi possível copiar.'))
   }
+  const conf = temSugestao ? confiancaSugestao(Number(linha.sugestao_score)) : null
+
   return (
-    <div className="min-w-0">
-      <p className="max-w-64 truncate text-sm" title={linha.sugestao_nome ?? undefined}>
-        {linha.sugestao_nome}
-      </p>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        <SkuTexto sku={linha.sugestao_codigo} />
-        <button type="button" onClick={copiar} aria-label="Copiar SKU sugerido" className="text-muted-foreground hover:text-foreground">
-          <Copy className="h-3.5 w-3.5" />
-        </button>
-        <span
-          title={`Similaridade de nome: ${Math.round(Number(linha.sugestao_score) * 100)}%`}
-          className={cn('inline-flex h-5 items-center rounded-4xl px-2 text-xs font-medium whitespace-nowrap', conf.classe)}
-        >
-          {conf.label}
-        </span>
-      </div>
-      {linha.sugestao_preco !== null && <p className="mt-1 text-xs text-muted-foreground">Bling: {formatarMoeda(Number(linha.sugestao_preco))}</p>}
+    <div className="min-w-0 space-y-2">
+      {par && (
+        <div className="min-w-0 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+            Confirmado por pedidos · {par.pedidos} pedido{par.pedidos > 1 ? 's' : ''}
+          </p>
+          <p className="max-w-64 truncate text-sm" title={par.nome}>
+            {par.nome}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <SkuTexto sku={par.codigo} />
+            <button type="button" onClick={() => copiar(par.codigo)} aria-label="Copiar SKU confirmado" className="text-muted-foreground hover:text-foreground">
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+            {par.preco !== null && <span className="text-xs text-muted-foreground">{formatarMoeda(Number(par.preco))}</span>}
+          </div>
+          {par.ambiguo && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Empate com outro produto nas vendas — confira.</p>}
+          {!par.ambiguo && par.produtos_distintos > 1 && (
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+              Esta variante também saiu com outros {par.produtos_distintos - 1} produto(s) do Bling em pedidos — o mais frequente é este.
+            </p>
+          )}
+          {par.pedidos === 1 && !par.ambiguo && <p className="mt-1 text-xs text-muted-foreground">Evidência de um único pedido.</p>}
+          {par.qtd_variantes_ns > 0 && (
+            <p className="mt-1 text-xs text-destructive">Este código já é usado por outra variante da Nuvemshop.</p>
+          )}
+        </div>
+      )}
+      {mostrarSugestao && conf && (
+        <div className="min-w-0">
+          {par && <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Por nome</p>}
+          <p className="max-w-64 truncate text-sm" title={linha.sugestao_nome ?? undefined}>
+            {linha.sugestao_nome}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <SkuTexto sku={linha.sugestao_codigo} />
+            <button type="button" onClick={() => copiar(linha.sugestao_codigo ?? '')} aria-label="Copiar SKU sugerido" className="text-muted-foreground hover:text-foreground">
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+            <span
+              title={`Similaridade de nome: ${Math.round(Number(linha.sugestao_score) * 100)}%`}
+              className={cn('inline-flex h-5 items-center rounded-4xl px-2 text-xs font-medium whitespace-nowrap', conf.classe)}
+            >
+              {conf.label}
+            </span>
+          </div>
+          {linha.sugestao_preco !== null && <p className="mt-1 text-xs text-muted-foreground">Bling: {formatarMoeda(Number(linha.sugestao_preco))}</p>}
+        </div>
+      )}
     </div>
   )
 }
@@ -99,6 +139,7 @@ export function VinculoSkuTabela({
   onToggleTodos,
   onSkuChange,
   onEscolher,
+  pares,
   desabilitado,
 }: Props) {
   const totalPaginas = Math.max(1, Math.ceil(totalRegistros / tamanhoPagina))
@@ -219,7 +260,7 @@ export function VinculoSkuTabela({
                         )}
                       </TableCell>
                       <TableCell>
-                        <Sugestao linha={linha} />
+                        <Sugestao linha={linha} par={linha.id_variante === null || !corrigivel ? undefined : pares.get(linha.id_variante)} />
                         {corrigivel && (
                           <Button
                             variant="outline"
