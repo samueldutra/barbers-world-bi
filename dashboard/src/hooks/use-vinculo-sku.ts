@@ -44,6 +44,8 @@ export interface FiltrosVinculo {
   status: FiltroStatusVinculo
   busca: string
   apenasPublicados: boolean
+  /** Só variantes com estoque > 0 na Nuvemshop (estoque não controlado fica de fora). */
+  apenasComEstoque: boolean
   ordenarPor: OrdenarVinculoPor
   ordenarDirecao: OrdenarDirecao
   pagina: number
@@ -56,6 +58,7 @@ export function parametrosVinculo(f: FiltrosVinculo) {
     p_status: f.status,
     p_busca: f.busca.trim() || null,
     p_apenas_publicados: f.apenasPublicados,
+    p_apenas_com_estoque: f.apenasComEstoque,
     p_ordenar_por: f.ordenarPor,
     p_ordenar_direcao: f.ordenarDirecao,
     p_pagina: f.pagina,
@@ -70,7 +73,7 @@ export function useVinculoSku(filtros: FiltrosVinculo) {
   const [error, setError] = useState<string | null>(null)
   const [gatilho, setGatilho] = useState(0)
 
-  const { status, busca, apenasPublicados, ordenarPor, ordenarDirecao, pagina, tamanhoPagina } = filtros
+  const { status, busca, apenasPublicados, apenasComEstoque, ordenarPor, ordenarDirecao, pagina, tamanhoPagina } = filtros
 
   useEffect(() => {
     let ativo = true
@@ -83,7 +86,7 @@ export function useVinculoSku(filtros: FiltrosVinculo) {
       Promise.resolve(
         supabase.rpc(
           'obter_vinculo_sku_nuvemshop',
-          parametrosVinculo({ status, busca, apenasPublicados, ordenarPor, ordenarDirecao, pagina, tamanhoPagina })
+          parametrosVinculo({ status, busca, apenasPublicados, apenasComEstoque, ordenarPor, ordenarDirecao, pagina, tamanhoPagina })
         )
       )
         .then(({ data, error }) => {
@@ -106,13 +109,13 @@ export function useVinculoSku(filtros: FiltrosVinculo) {
       ativo = false
       clearTimeout(timer)
     }
-  }, [status, busca, apenasPublicados, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
+  }, [status, busca, apenasPublicados, apenasComEstoque, ordenarPor, ordenarDirecao, pagina, tamanhoPagina, gatilho])
 
   return { linhas, totalRegistros, loading, error, recarregar: () => setGatilho((g) => g + 1) }
 }
 
 /** Contagem por status (cartões do topo). */
-export function useResumoVinculoSku(apenasPublicados: boolean, gatilho: number) {
+export function useResumoVinculoSku(apenasPublicados: boolean, apenasComEstoque: boolean, gatilho: number) {
   const [resumo, setResumo] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
@@ -124,6 +127,7 @@ export function useResumoVinculoSku(apenasPublicados: boolean, gatilho: number) 
       supabase.rpc('obter_resumo_vinculo_sku_nuvemshop', {
         p_schema_name: TENANT_SCHEMA,
         p_apenas_publicados: apenasPublicados,
+        p_apenas_com_estoque: apenasComEstoque,
       })
     )
       .then(({ data, error }) => {
@@ -140,7 +144,7 @@ export function useResumoVinculoSku(apenasPublicados: boolean, gatilho: number) 
     return () => {
       ativo = false
     }
-  }, [apenasPublicados, gatilho])
+  }, [apenasPublicados, apenasComEstoque, gatilho])
 
   return { resumo, loading }
 }

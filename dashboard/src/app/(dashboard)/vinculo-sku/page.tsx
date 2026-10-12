@@ -59,6 +59,7 @@ export default function VinculoSkuPage() {
   const [status, setStatus] = useState<FiltroStatusVinculo>('problemas')
   const [busca, setBusca] = useState('')
   const [apenasPublicados, setApenasPublicados] = useState(true)
+  const [apenasComEstoque, setApenasComEstoque] = useState(false)
   const [ordenarPor, setOrdenarPor] = useState<OrdenarVinculoPor>('status')
   const [ordenarDirecao, setOrdenarDirecao] = useState<'asc' | 'desc'>('asc')
   const [pagina, setPagina] = useState(1)
@@ -73,9 +74,9 @@ export default function VinculoSkuPage() {
   const [selecionando, setSelecionando] = useState(false)
 
   const { linhas, totalRegistros, loading, error, recarregar } = useVinculoSku({
-    status, busca, apenasPublicados, ordenarPor, ordenarDirecao, pagina, tamanhoPagina: TAMANHO_PAGINA,
+    status, busca, apenasPublicados, apenasComEstoque, ordenarPor, ordenarDirecao, pagina, tamanhoPagina: TAMANHO_PAGINA,
   })
-  const { resumo } = useResumoVinculoSku(apenasPublicados, gatilhoResumo)
+  const { resumo } = useResumoVinculoSku(apenasPublicados, apenasComEstoque, gatilhoResumo)
 
   const comReset = <T,>(setter: (v: T) => void) => (v: T) => {
     setPagina(1)
@@ -150,7 +151,7 @@ export default function VinculoSkuPage() {
   const handleSelecionarRapido = async (tipo: 'identicas' | 'provaveis' | 'ajustes') => {
     setSelecionando(true)
     try {
-      const todas = await buscarTodasLinhasVinculo({ status: 'problemas', busca: '', apenasPublicados, ordenarPor: 'status', ordenarDirecao: 'asc' })
+      const todas = await buscarTodasLinhasVinculo({ status: 'problemas', busca: '', apenasPublicados, apenasComEstoque, ordenarPor: 'status', ordenarDirecao: 'asc' })
       const alvo = todas.filter((l) =>
         tipo === 'ajustes'
           ? l.status === 'vinculado_ajustar'
@@ -243,7 +244,7 @@ export default function VinculoSkuPage() {
   const handleExportar = async () => {
     setExportando(true)
     try {
-      const todas = await buscarTodasLinhasVinculo({ status, busca, apenasPublicados, ordenarPor, ordenarDirecao })
+      const todas = await buscarTodasLinhasVinculo({ status, busca, apenasPublicados, apenasComEstoque, ordenarPor, ordenarDirecao })
       const url = URL.createObjectURL(new Blob([gerarCsv(todas)], { type: 'text/csv;charset=utf-8' }))
       const a = document.createElement('a')
       a.href = url
@@ -333,6 +334,10 @@ export default function VinculoSkuPage() {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={apenasPublicados} onCheckedChange={(v) => comReset(setApenasPublicados)(v === true)} />
             Só produtos publicados na Nuvemshop
+          </label>
+          <label className="flex items-center gap-2 text-sm" title="Estoque maior que zero na Nuvemshop. Variantes sem controle de estoque ficam de fora.">
+            <Checkbox checked={apenasComEstoque} onCheckedChange={(v) => comReset(setApenasComEstoque)(v === true)} />
+            Só com estoque positivo na Nuvemshop
           </label>
         </div>
       </div>

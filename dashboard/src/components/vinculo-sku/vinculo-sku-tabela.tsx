@@ -242,6 +242,9 @@ export function VinculoSkuTabela({
                               {formatarMoeda(Number(linha.preco_ns))}
                             </p>
                             {linha.preco_promocional_ns !== null && <p className="font-medium">{formatarMoeda(Number(linha.preco_promocional_ns))}</p>}
+                            <p className="text-xs text-muted-foreground">
+                              {linha.estoque_ns === null ? 'estoque não controlado' : `estoque ${formatarNumero(Number(linha.estoque_ns))}`}
+                            </p>
                           </>
                         )}
                       </TableCell>
