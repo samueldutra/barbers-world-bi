@@ -17,6 +17,11 @@ on:
         description: 'Recarregar pedidos EMITIDOS desde esta data (AAAA-MM-DD). Vazio = últimos 5 dias'
         required: false
         default: ''
+      apenas_nuvemshop:
+        description: 'Pular os passos do Bling e rodar só os da Nuvemshop (ex.: backfill de pedidos com alterados_horas=8760)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   etl:
@@ -77,6 +82,7 @@ jobs:
       # data de emissão). Sem o segundo, mudança de situação em pedido antigo (ex.: Em
       # aberto → Atendido depois de uma semana) nunca chega ao BI. Upsert cuida de duplicata.
       - name: Vendas (emitidos nos últimos 5 dias + alterados recentemente)
+        if: ${{ !inputs.apenas_nuvemshop }}
         env:
           INPUT_DATA_INICIAL: ${{ inputs.data_inicial }}
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -85,9 +91,11 @@ jobs:
           python etl-bling-pedidos-vendas.py
 
       - name: Clientes (contatos pendentes de sincronizar)
+        if: ${{ !inputs.apenas_nuvemshop }}
         run: python sync-clientes-bling.py
 
       - name: Produtos (listagem de ativos — preço atual; detalhe roda local)
+        if: ${{ !inputs.apenas_nuvemshop }}
         env:
           SYNC_PRODUTOS_SO_LISTAGEM: 'true'
         run: python sync-produtos-bling.py
@@ -96,11 +104,13 @@ jobs:
       # loja.id) ganha nome no BI sozinha. Integração recriada que precisa juntar com a
       # antiga: ver etl-bling-pedidos-vendas/sql/create_table_canais_venda_de_para.sql.
       - name: Canais de venda (catálogo do Bling)
+        if: ${{ !inputs.apenas_nuvemshop }}
         run: python sync-canais-venda-bling.py
 
       # Nomes das situações de pedido (inclui as personalizadas, ex.: "CARRO RODRIGO") —
       # 1 request ao Bling. Por último pra uma falha aqui não atrasar os passos acima.
       - name: Situações de pedido (nomes do catálogo do Bling)
+        if: ${{ !inputs.apenas_nuvemshop }}
         run: python sync-situacoes-bling.py
 
       # Pedidos da Nuvemshop (lojas conectadas no módulo Canais de Venda do dashboard). Sem loja
