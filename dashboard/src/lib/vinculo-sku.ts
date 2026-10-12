@@ -75,7 +75,7 @@ export function confiancaSugestao(score: number): ConfiancaSugestao {
   return { label: 'Fraca — conferir', classe: 'bg-muted text-muted-foreground' }
 }
 
-export type OrigemAlteracaoSku = 'sugestao' | 'manual' | 'ajuste'
+export type OrigemAlteracaoSku = 'sugestao' | 'manual' | 'ajuste' | 'escolha'
 
 /** Status que dá pra corrigir pela tela (o resto — vinculado e só no Bling — não tem o que ajustar). */
 const STATUS_CORRIGIVEIS: StatusVinculo[] = ['sem_sku', 'sem_correspondencia', 'sku_duplicado', 'vinculado_ajustar']
