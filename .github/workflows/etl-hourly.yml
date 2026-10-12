@@ -21,6 +21,11 @@ on:
         description: 'SOMENTE LEITURA: ids de produto do Bling (separados por vírgula) para inspecionar o vínculo produto x loja ("ID na loja"). Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
         default: ''
+      sync_vinculos_lojas:
+        description: 'Sincronizar os vínculos produto x loja do Bling (ID na loja) para barbers.produtos_lojas — só lê o Bling (~2 min). Use com apenas_nuvemshop marcado'
+        required: false
+        type: boolean
+        default: false
       apenas_nuvemshop:
         description: 'Pular os passos do Bling e rodar só os da Nuvemshop (ex.: backfill de pedidos com alterados_horas=8760)'
         required: false
@@ -121,7 +126,7 @@ jobs:
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
       - name: Nuvemshop (pedidos alterados recentemente)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas }}
         working-directory: etl-nuvemshop-pedidos
         env:
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -132,7 +137,7 @@ jobs:
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas }}
         working-directory: etl-nuvemshop-produtos
         run: |
           pip install -r requirements.txt
@@ -144,3 +149,8 @@ jobs:
         env:
           EXPLORAR_IDS: ${{ inputs.explorar_vinculos_lojas }}
         run: python explorar-vinculos-lojas-bling.py
+
+      # Vínculos produto x loja do Bling -> barbers.produtos_lojas (somente leitura no Bling). Só no disparo manual.
+      - name: Bling (vínculos produto x loja — sincronização)
+        if: ${{ inputs.sync_vinculos_lojas }}
+        run: python sync-vinculos-lojas-bling.py
