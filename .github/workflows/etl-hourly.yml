@@ -17,6 +17,10 @@ on:
         description: 'Recarregar pedidos EMITIDOS desde esta data (AAAA-MM-DD). Vazio = últimos 5 dias'
         required: false
         default: ''
+      explorar_vinculos_lojas:
+        description: 'SOMENTE LEITURA: ids de produto do Bling (separados por vírgula) para inspecionar o vínculo produto x loja ("ID na loja"). Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
       apenas_nuvemshop:
         description: 'Pular os passos do Bling e rodar só os da Nuvemshop (ex.: backfill de pedidos com alterados_horas=8760)'
         required: false
@@ -117,7 +121,7 @@ jobs:
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
       - name: Nuvemshop (pedidos alterados recentemente)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' }}
         working-directory: etl-nuvemshop-pedidos
         env:
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -128,8 +132,15 @@ jobs:
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' }}
         working-directory: etl-nuvemshop-produtos
         run: |
           pip install -r requirements.txt
           python etl-nuvemshop-produtos.py
+
+      # Exploração SOMENTE LEITURA do vínculo produto x loja do Bling ("ID na loja"). Só no disparo manual.
+      - name: Bling (explorar vínculos produto x loja — somente leitura)
+        if: ${{ inputs.explorar_vinculos_lojas != '' }}
+        env:
+          EXPLORAR_IDS: ${{ inputs.explorar_vinculos_lojas }}
+        run: python explorar-vinculos-lojas-bling.py
