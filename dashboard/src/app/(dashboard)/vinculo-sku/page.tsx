@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { VinculoSkuTabela, type AlteracaoSkuPendente } from '@/components/vinculo-sku/vinculo-sku-tabela'
+import { EscolherProdutoBlingDialog, type ProdutoBlingBusca } from '@/components/vinculo-sku/escolher-produto-bling-dialog'
 import { ConfirmarAlteracoesSkuDialog, type AlteracaoSkuConfirmada } from '@/components/vinculo-sku/confirmar-alteracoes-sku-dialog'
 import type { ResultadoAlteracaoSku } from '@/app/api/vinculo-sku/alterar/route'
 import {
@@ -65,6 +66,7 @@ export default function VinculoSkuPage() {
   const [gatilhoResumo, setGatilhoResumo] = useState(0)
 
   const [alteracoes, setAlteracoes] = useState<Map<number, AlteracaoSkuPendente>>(new Map())
+  const [linhaEscolhendo, setLinhaEscolhendo] = useState<LinhaVinculo | null>(null)
   const [dialogAberto, setDialogAberto] = useState(false)
   const [aplicando, setAplicando] = useState(false)
   const [progresso, setProgresso] = useState({ feitos: 0, total: 0 })
@@ -105,7 +107,8 @@ export default function VinculoSkuPage() {
 
   const novaSelecao = (linha: LinhaVinculo): AlteracaoSkuPendente => {
     const alvo = skuAlvo(linha)
-    return { linha, sku: alvo.sku, origem: alvo.origem }
+    const nomeBling = alvo.origem === 'ajuste' ? linha.nome_bling : alvo.origem === 'sugestao' ? linha.sugestao_nome : null
+    return { linha, sku: alvo.sku, origem: alvo.origem, nomeBling }
   }
 
   const handleToggle = (linha: LinhaVinculo) =>
@@ -131,18 +134,29 @@ export default function VinculoSkuPage() {
       const alvo = skuAlvo(linha)
       // Voltou a ser exatamente o valor sugerido → mantém a origem original; qualquer outra coisa é digitada.
       const origem = texto.trim() !== '' && texto.trim() === alvo.sku ? alvo.origem : 'manual'
-      m.set(id, { linha: atual?.linha ?? linha, sku: texto, origem, erro: null })
+      // Mexeu no texto à mão: o nome do produto escolhido/sugerido deixa de valer.
+      m.set(id, { linha: atual?.linha ?? linha, sku: texto, origem, nomeBling: origem === 'manual' ? null : atual?.nomeBling, erro: null })
     })
 
   /** Seleção rápida (todas as páginas do filtro "com problema"): as de maior segurança. */
-  const handleSelecionarRapido = async (tipo: 'identicas' | 'ajustes') => {
+  /** Produto escolhido no seletor: seleciona a variante (se ainda não estava) e já preenche o SKU novo. */
+  const handleEscolher = (linha: LinhaVinculo, produto: ProdutoBlingBusca) => {
+    atualizarAlteracoes((m) => {
+      m.set(linha.id_variante as number, { linha, sku: produto.codigo, origem: 'escolha', nomeBling: produto.nome, erro: null })
+    })
+    setLinhaEscolhendo(null)
+  }
+
+  const handleSelecionarRapido = async (tipo: 'identicas' | 'provaveis' | 'ajustes') => {
     setSelecionando(true)
     try {
       const todas = await buscarTodasLinhasVinculo({ status: 'problemas', busca: '', apenasPublicados, ordenarPor: 'status', ordenarDirecao: 'asc' })
       const alvo = todas.filter((l) =>
         tipo === 'ajustes'
           ? l.status === 'vinculado_ajustar'
-          : (l.status === 'sem_correspondencia' || l.status === 'sem_sku') && l.sugestao_score !== null && Number(l.sugestao_score) >= 0.999
+          : (l.status === 'sem_correspondencia' || l.status === 'sem_sku') &&
+            l.sugestao_score !== null &&
+            Number(l.sugestao_score) >= (tipo === 'identicas' ? 0.999 : 0.8)
       )
       atualizarAlteracoes((m) => {
         for (const l of alvo) if (l.id_variante !== null && !m.has(l.id_variante)) m.set(l.id_variante, novaSelecao(l))
@@ -166,7 +180,7 @@ export default function VinculoSkuPage() {
       const sku = alt.sku.trim()
       if (!sku) semSku++
       else if (sku === (alt.linha.sku_ns ?? '')) iguais++
-      else prontos.push({ linha: alt.linha, skuNovo: sku, origem: alt.origem })
+      else prontos.push({ linha: alt.linha, skuNovo: sku, origem: alt.origem, nomeBling: alt.nomeBling })
     }
     return { prontos, semSku, iguais }
   }, [alteracoes])
@@ -328,6 +342,9 @@ export default function VinculoSkuPage() {
         <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('identicas')}>
           Sugestões de nome idêntico
         </Button>
+        <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('provaveis')}>
+          Sugestões prováveis (≥ 80%)
+        </Button>
         <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('ajustes')}>
           Ajustes de espaço/maiúscula
         </Button>
@@ -373,8 +390,11 @@ export default function VinculoSkuPage() {
         onToggle={handleToggle}
         onToggleTodos={handleToggleTodos}
         onSkuChange={handleSkuChange}
+        onEscolher={setLinhaEscolhendo}
         desabilitado={aplicando}
       />
+
+      <EscolherProdutoBlingDialog linha={linhaEscolhendo} onOpenChange={(aberto) => !aberto && setLinhaEscolhendo(null)} onEscolher={handleEscolher} />
 
       <ConfirmarAlteracoesSkuDialog
         aberto={dialogAberto}

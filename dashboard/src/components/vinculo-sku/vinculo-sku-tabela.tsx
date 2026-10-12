@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, ExternalLink, Copy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, ExternalLink, Copy, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,6 +19,8 @@ export interface AlteracaoSkuPendente {
   sku: string
   /** Origem do valor pré-preenchido; vira 'manual' assim que a pessoa edita o campo. */
   origem: OrigemAlteracaoSku
+  /** Nome do produto do Bling (sugestão ou escolhido no seletor). */
+  nomeBling?: string | null
   erro?: string | null
 }
 
@@ -36,6 +38,7 @@ interface Props {
   onToggle: (linha: LinhaVinculo) => void
   onToggleTodos: (marcar: boolean) => void
   onSkuChange: (linha: LinhaVinculo, texto: string) => void
+  onEscolher: (linha: LinhaVinculo) => void
   desabilitado: boolean
 }
 
@@ -95,6 +98,7 @@ export function VinculoSkuTabela({
   onToggle,
   onToggleTodos,
   onSkuChange,
+  onEscolher,
   desabilitado,
 }: Props) {
   const totalPaginas = Math.max(1, Math.ceil(totalRegistros / tamanhoPagina))
@@ -216,6 +220,18 @@ export function VinculoSkuTabela({
                       </TableCell>
                       <TableCell>
                         <Sugestao linha={linha} />
+                        {corrigivel && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 h-7 px-2 text-xs"
+                            disabled={desabilitado}
+                            onClick={() => onEscolher(linha)}
+                          >
+                            <Search className="h-3.5 w-3.5" />
+                            {alteracao?.origem === 'escolha' ? 'Trocar produto' : 'Escolher produto'}
+                          </Button>
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {linha.preco_ns === null ? (
@@ -243,6 +259,11 @@ export function VinculoSkuTabela({
                               aria-invalid={!!alteracao.erro}
                               className="h-8 w-44 font-mono text-xs"
                             />
+                            {alteracao.nomeBling && !alteracao.erro && (
+                              <p className="mt-1 max-w-44 truncate text-xs text-muted-foreground" title={alteracao.nomeBling}>
+                                {alteracao.nomeBling}
+                              </p>
+                            )}
                             {alteracao.erro && <p className="mt-1 max-w-44 text-xs text-destructive">{alteracao.erro}</p>}
                           </>
                         )}
