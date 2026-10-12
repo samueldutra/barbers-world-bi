@@ -113,6 +113,7 @@ AS $$
 $$;
 
 DROP FUNCTION IF EXISTS obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER, BOOLEAN);
 
 CREATE OR REPLACE FUNCTION obter_vinculo_sku_nuvemshop(
     p_schema_name TEXT,
@@ -123,7 +124,8 @@ CREATE OR REPLACE FUNCTION obter_vinculo_sku_nuvemshop(
     p_ordenar_por TEXT DEFAULT 'status',    -- 'status' | 'nome' | 'sku'
     p_ordenar_direcao TEXT DEFAULT 'asc',
     p_pagina INTEGER DEFAULT 1,
-    p_tamanho_pagina INTEGER DEFAULT 50
+    p_tamanho_pagina INTEGER DEFAULT 50,
+    p_apenas_com_estoque BOOLEAN DEFAULT FALSE -- só variantes com estoque > 0 na Nuvemshop (NULL = não controlado fica fora; não afeta 'so_bling')
 )
 RETURNS TABLE(
     visao TEXT,
@@ -193,6 +195,7 @@ BEGIN
                     ELSE t.status = %L
                   END
               AND (NOT %L OR t.visao = 'bling' OR t.publicado IS TRUE)
+              AND (NOT %L OR t.visao = 'bling' OR t.estoque_ns > 0)
               AND (%L::TEXT IS NULL OR t.nome_ns ILIKE %L OR t.sku_ns ILIKE %L
                    OR t.nome_bling ILIKE %L OR t.codigo_bling ILIKE %L)
         ),
@@ -224,16 +227,18 @@ BEGIN
         ) s ON s.score >= 0.4
         ORDER BY p.rn
     $q$, public.vinculo_sku_nuvemshop_sql(p_schema_name),
-         v_ordem, v_direcao, p_status, p_status, p_apenas_publicados,
+         v_ordem, v_direcao, p_status, p_status, p_apenas_publicados, p_apenas_com_estoque,
          v_busca, v_busca, v_busca, v_busca, v_busca,
          v_offset, v_offset + v_limite, p_schema_name, p_schema_name);
 END;
 $$;
 
 -- Contagem por status pros cartões do topo da tela.
+DROP FUNCTION IF EXISTS obter_resumo_vinculo_sku_nuvemshop(TEXT, BOOLEAN);
 CREATE OR REPLACE FUNCTION obter_resumo_vinculo_sku_nuvemshop(
     p_schema_name TEXT,
-    p_apenas_publicados BOOLEAN DEFAULT TRUE
+    p_apenas_publicados BOOLEAN DEFAULT TRUE,
+    p_apenas_com_estoque BOOLEAN DEFAULT FALSE
 )
 RETURNS TABLE(status TEXT, quantidade BIGINT)
 LANGUAGE plpgsql
@@ -245,13 +250,14 @@ BEGIN
         SELECT t.status, count(*)::BIGINT
         FROM (%s) t
         WHERE (NOT %L OR t.visao = 'bling' OR t.publicado IS TRUE)
+          AND (NOT %L OR t.visao = 'bling' OR t.estoque_ns > 0)
         GROUP BY t.status
-    $q$, public.vinculo_sku_nuvemshop_sql(p_schema_name), p_apenas_publicados);
+    $q$, public.vinculo_sku_nuvemshop_sql(p_schema_name), p_apenas_publicados, p_apenas_com_estoque);
 END;
 $$;
 
 REVOKE ALL ON FUNCTION public.vinculo_sku_nuvemshop_sql(TEXT) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION obter_resumo_vinculo_sku_nuvemshop(TEXT, BOOLEAN) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION obter_resumo_vinculo_sku_nuvemshop(TEXT, BOOLEAN) TO authenticated;
+REVOKE ALL ON FUNCTION obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER, BOOLEAN) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION obter_resumo_vinculo_sku_nuvemshop(TEXT, BOOLEAN, BOOLEAN) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, INTEGER, INTEGER, BOOLEAN) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_resumo_vinculo_sku_nuvemshop(TEXT, BOOLEAN, BOOLEAN) TO authenticated;
