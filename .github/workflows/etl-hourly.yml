@@ -25,6 +25,10 @@ on:
         description: 'ESCRITA NO BLING (lote): quantos produtos processar neste disparo (ex.: 20). Cria/corrige o vínculo produto x loja (ID na loja) dos candidatos de obter_vinculos_a_gravar, sem alterar preços. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
         default: ''
+      atualizar_estoque_lote:
+        description: 'ESCRITA NA NUVEMSHOP (lote): quantas variantes processar neste disparo (ex.: 20). Grava o saldo do Bling no estoque (zera/reabre/negativo=0), sem tocar em preço. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
       atualizar_estoque_nuvemshop:
         description: 'ESCRITA NA NUVEMSHOP (teste, 1 variante): ID_PRODUTO_BLING:ID_VARIANTE_NS:ESTOQUE_ATUAL_NS:SALDO_BLING — grava o saldo do Bling no estoque da variante, sem tocar em preço. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
@@ -143,7 +147,7 @@ jobs:
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
       - name: Nuvemshop (pedidos alterados recentemente)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' }}
         working-directory: etl-nuvemshop-pedidos
         env:
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -154,7 +158,7 @@ jobs:
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' }}
         working-directory: etl-nuvemshop-produtos
         run: |
           pip install -r requirements.txt
@@ -197,3 +201,10 @@ jobs:
         env:
           LOTE_LIMITE: ${{ inputs.vincular_lote }}
         run: python vincular-lote-loja-bling.py
+
+      # ESCRITA de estoque na Nuvemshop (lote, saldo do Bling = fonte da verdade): travas ao vivo, releitura e auditoria. Só no disparo manual.
+      - name: Estoque (gravar saldo do Bling na Nuvemshop — lote)
+        if: ${{ inputs.atualizar_estoque_lote != '' }}
+        env:
+          ESTOQUE_LOTE: ${{ inputs.atualizar_estoque_lote }}
+        run: python sync-estoque-bling-nuvemshop.py

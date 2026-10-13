@@ -8,14 +8,21 @@ Modo "aplicar" (ESCRITA na Nuvemshop, 1 variante por execução — teste): grav
 (PUT /products/{id}/variants/{id} só com `stock`), com travas e releitura. Campo do workflow atualizar_estoque_nuvemshop =
 "ID_PRODUTO_BLING:ID_VARIANTE_NS:ESTOQUE_ATUAL_NS:SALDO_BLING". REGRA: preços NUNCA mudam; só o estoque da Nuvemshop segue o Bling.
 
+Modo "lote" (ESCRITA na Nuvemshop, ESTOQUE_LOTE = quantas variantes processar): para as variantes pareadas por SKU idêntico, grava na Nuvemshop o
+saldo virtual do Bling (negativo vira 0) onde o estoque difere — inclui ZERAR e REABRIR e as variantes sem controle de estoque (decisão do
+usuário: o saldo do Bling é a fonte da verdade). Só o campo `stock` é gravado: preço, promoção e SKU nunca. Por variante, AO VIVO: lê o saldo do
+Bling e a variante na Nuvemshop; pula se já está igual, se o SKU difere, se tem mais de um local de estoque ou se o saldo é fracionado; relê e
+confere (estoque novo; preço, promoção e SKU intactos). Auditoria em barbers.estoque_nuvemshop_alteracoes. 3 erros seguidos interrompem.
+
 Reaproveita a sessão/OAuth de sync-canais-venda-bling.py (duplicação de infraestrutura já é a convenção desta pasta).
-Roda pelo disparo manual do etl-hourly.yml (campo comparar_estoque).
+Roda pelo disparo manual do etl-hourly.yml (campos comparar_estoque, atualizar_estoque_nuvemshop e atualizar_estoque_lote).
 """
 
 import importlib.util
 import json
 import os
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 
@@ -80,15 +87,28 @@ def token_nuvemshop(store_id: int) -> str:
     return linhas[0]["access_token"]
 
 
+_ultima_chamada_ns = [0.0]
+
+
 def nuvemshop(metodo: str, token: str, path: str, corpo: dict = None):
-    resp = base.get_http_session().request(
-        metodo, f"{NUVEMSHOP_API}{path}",
-        headers={"Authentication": f"bearer {token}", "User-Agent": NUVEMSHOP_UA, "Accept": "application/json", "Content-Type": "application/json"},
-        data=json.dumps(corpo) if corpo is not None else None, timeout=60)
-    try:
-        return resp.status_code, resp.json()
-    except ValueError:
-        return resp.status_code, resp.text[:500]
+    """Chamada à Nuvemshop com limitador (~1,4 req/s; balde de 40, vaza 2/s) e espera no 429."""
+    for tentativa in range(5):
+        espera = _ultima_chamada_ns[0] + 0.7 - time.time()
+        if espera > 0:
+            time.sleep(espera)
+        _ultima_chamada_ns[0] = time.time()
+        resp = base.get_http_session().request(
+            metodo, f"{NUVEMSHOP_API}{path}",
+            headers={"Authentication": f"bearer {token}", "User-Agent": NUVEMSHOP_UA, "Accept": "application/json", "Content-Type": "application/json"},
+            data=json.dumps(corpo) if corpo is not None else None, timeout=60)
+        if resp.status_code == 429:
+            time.sleep(min(float(resp.headers.get("x-rate-limit-reset", 2000)) / 1000.0 + 0.5, 20))
+            continue
+        try:
+            return resp.status_code, resp.json()
+        except ValueError:
+            return resp.status_code, resp.text[:500]
+    return 429, "429 repetido"
 
 
 def norm(sku) -> str:
@@ -175,6 +195,99 @@ def aplicar_um(cliente: str, conta: str, schema: str, bruto: str):
         sys.exit(3)
 
 
+def processar_estoque(cliente, c, token, caminho_base, saldo_vivo):
+    """Uma variante. Devolve (resultado, motivo, estoque_anterior, estoque_novo)."""
+    id_bling, id_variante, id_produto_ns = int(c["id_produto_bling"]), int(c["id_variante"]), int(c["id_produto_ns"])
+    saldo = saldo_vivo.get(id_bling)
+    if saldo is None:
+        return "pulado", "sem saldo de estoque no Bling", None, None
+    alvo = max(saldo, 0.0)
+    if abs(alvo - round(alvo)) > 0.0005:
+        return "pulado", f"saldo fracionado no Bling ({saldo})", None, None
+    caminho = f"{caminho_base}/{id_produto_ns}/variants/{id_variante}"
+    status, antes = nuvemshop("GET", token, caminho)
+    if status != 200:
+        return "erro", f"GET variante falhou ({status}): {str(antes)[:200]}", None, None
+    anterior = None if antes.get("stock") is None else float(antes["stock"])
+    if norm(antes.get("sku")) != norm(c["codigo_bling"]):
+        return "pulado", f"SKU da variante ({antes.get('sku')}) difere do SKU do Bling ({c['codigo_bling']})", anterior, None
+    if len(antes.get("inventory_levels") or []) > 1:
+        return "pulado", "mais de um local de estoque na variante", anterior, None
+    if anterior is not None and abs(anterior - alvo) < 0.0005:
+        return "pulado", "já está igual ao saldo do Bling", anterior, alvo
+    status, resposta = nuvemshop("PUT", token, caminho, {"stock": int(round(alvo))})
+    if status >= 400:
+        return "erro", f"PUT recusado ({status}): {json.dumps(resposta, ensure_ascii=False)[:250]}", anterior, alvo
+    status, depois = nuvemshop("GET", token, caminho)
+    if status != 200:
+        return "erro", f"GET de conferência falhou ({status})", anterior, alvo
+    if depois.get("stock") is None or abs(float(depois["stock"]) - alvo) > 0.0005:
+        return "erro", f"estoque não ficou como esperado: {depois.get('stock')} (esperado {alvo})", anterior, alvo
+    if depois.get("price") != antes.get("price") or depois.get("promotional_price") != antes.get("promotional_price") or depois.get("sku") != antes.get("sku"):
+        return "erro", (f"PREÇO/PROMOÇÃO/SKU MUDOU: preço {antes.get('price')}->{depois.get('price')} promo {antes.get('promotional_price')}->"
+                        f"{depois.get('promotional_price')} sku {antes.get('sku')!r}->{depois.get('sku')!r}"), anterior, alvo
+    return "sucesso", None, anterior, alvo
+
+
+def aplicar_lote(cliente, conta, schema, limite):
+    base.log("=" * 60)
+    base.log(f"ESTOQUE BLING -> NUVEMSHOP — LOTE (ESCRITA) | limite {limite} | saldo do Bling é a fonte da verdade (zera e reabre; negativo = 0)")
+    base.log("=" * 60)
+    candidatos = []
+    while True:
+        pagina = rpc_json("obter_estoques_a_gravar", {"p_schema_name": schema, "p_offset": len(candidatos), "p_limite": 1000})
+        candidatos.extend(pagina)
+        if len(pagina) < 1000:
+            break
+    por_caso = {}
+    for c in candidatos:
+        por_caso[c["caso"]] = por_caso.get(c["caso"], 0) + 1
+    base.log(f"{len(candidatos)} variante(s) com estoque diferente do Bling: {por_caso}; este disparo processa {min(limite, len(candidatos))}.")
+    lote = candidatos[:limite]
+    if not lote:
+        base.log("Nada a fazer.")
+        return
+    saldos = ler_saldos(cliente, conta, sorted({int(c["id_produto_bling"]) for c in lote}))
+    tokens = {}
+    contagem, pulados, auditoria, seguidos, inicio = {"sucesso": 0, "pulado": 0, "erro": 0}, {}, [], 0, time.time()
+
+    def gravar_auditoria():
+        if auditoria:
+            base.rpc_supabase_com_retry("registrar_estoque_nuvemshop_alteracoes", {"p_data_json": list(auditoria), "p_schema_name": schema})
+            auditoria.clear()
+
+    try:
+        for n, c in enumerate(lote, 1):
+            try:
+                store = int(c["store_id"])
+                if store not in tokens:
+                    tokens[store] = token_nuvemshop(store)
+                resultado, motivo, anterior, novo = processar_estoque(cliente, c, tokens[store], f"/{store}/products", saldos)
+            except Exception as e:  # erro inesperado numa variante não derruba o lote
+                resultado, motivo, anterior, novo = "erro", f"exceção: {e}", None, None
+            contagem[resultado] += 1
+            if resultado == "pulado":
+                pulados.setdefault(motivo, []).append(c["sku_ns"])
+            seguidos = seguidos + 1 if resultado == "erro" else 0
+            base.log(f"[{n}/{len(lote)}] {c['sku_ns']} ({c['caso']}) NS {anterior} -> {novo if novo is not None else c['estoque_alvo']}: "
+                     f"{resultado.upper()}{' — ' + motivo if motivo else ''}")
+            auditoria.append({"id_variante": int(c["id_variante"]), "id_produto_bling": int(c["id_produto_bling"]), "sku": c["sku_ns"], "caso": c["caso"],
+                              "estoque_anterior": anterior, "estoque_novo": novo, "resultado": resultado, "motivo": motivo})
+            if len(auditoria) >= 20:
+                gravar_auditoria()
+            if seguidos >= 3:
+                base.log("INTERROMPIDO: 3 erros seguidos.")
+                break
+    finally:
+        gravar_auditoria()
+    base.log("=" * 60)
+    base.log(f"RESUMO: gravados {contagem['sucesso']} | pulados {contagem['pulado']} | erros {contagem['erro']} | {time.time() - inicio:.0f}s")
+    for motivo, skus in pulados.items():
+        base.log(f"  pulados ({len(skus)}): {motivo} -> {', '.join(skus[:12])}{' …' if len(skus) > 12 else ''}")
+    if contagem["erro"]:
+        sys.exit(2)
+
+
 def main():
     cliente = os.getenv("ETL_CLIENTE")
     if not cliente:
@@ -185,6 +298,11 @@ def main():
         base.log(f"[ERRO] Cliente '{cliente}' não encontrado")
         sys.exit(1)
     schema, conta = config["schema"], config.get("conta_bling", cliente)
+
+    lote = os.getenv("ESTOQUE_LOTE", "").strip()
+    if lote:
+        aplicar_lote(cliente, conta, schema, int(lote))
+        return
 
     aplicar = os.getenv("ESTOQUE_APLICAR", "").strip()
     if aplicar:
