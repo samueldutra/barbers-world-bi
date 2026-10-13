@@ -23,12 +23,15 @@ LOJA_PADRAO = os.getenv("EXPLORAR_LOJA", "206304549")  # NUVEMSHOP BARBERS WORLD
 LIMITE_LOG = 3000
 
 
-def sondar(cliente: str, conta: str, titulo: str, path: str, params: dict = None):
+def sondar(cliente: str, conta: str, titulo: str, path: str, params: dict = None, limite: int = LIMITE_LOG):
     base.log(f"--- {titulo}: GET {path} {params or ''}")
     try:
         corpo = base._bling_get(cliente, conta, path, params)
         texto = json.dumps(corpo, ensure_ascii=False)
-        base.log(f"    OK ({len(texto)} bytes): {texto[:LIMITE_LOG]}{' …(cortado)' if len(texto) > LIMITE_LOG else ''}")
+        if limite >= len(texto):
+            base.log(f"    OK ({len(texto)} bytes): {texto}")
+        else:
+            base.log(f"    OK ({len(texto)} bytes): {texto[:limite]} …(cortado)")
     except Exception as e:  # o _bling_get já inclui status e corpo da resposta na mensagem
         base.log(f"    ERRO: {str(e)[:LIMITE_LOG]}")
 
@@ -52,8 +55,11 @@ def main():
         sondar(cliente, conta, f"produto {pid}: vínculos", "/produtos/lojas", {"idProduto": pid})
         sondar(cliente, conta, f"produto {pid}: vínculos nesta loja", "/produtos/lojas", {"idProduto": pid, "idLojaVirtual": LOJA_PADRAO})
         sondar(cliente, conta, f"produto {pid}: sub-recurso", f"/produtos/{pid}/lojas")
-    # Cadastro do produto: só pra ver se traz algo de loja e conferir preço/estoque de referência.
-    sondar(cliente, conta, f"produto {ids[0]}: cadastro", f"/produtos/{ids[0]}")
+    # Cadastro COMPLETO do primeiro produto (sem cortar) + o que o Bling guarda em recursos vizinhos.
+    sondar(cliente, conta, f"produto {ids[0]}: cadastro COMPLETO", f"/produtos/{ids[0]}", limite=100000)
+    sondar(cliente, conta, f"produto {ids[0]}: saldos de estoque por depósito", "/estoques/saldos", {"idsProdutos[]": ids[0]}, limite=100000)
+    sondar(cliente, conta, "depósitos", "/depositos", {"limite": 20})
+    sondar(cliente, conta, "categorias de produtos", "/categorias/produtos", {"limite": 5})
 
 
 if __name__ == "__main__":
