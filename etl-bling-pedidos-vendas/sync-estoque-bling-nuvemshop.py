@@ -198,9 +198,10 @@ def aplicar_um(cliente: str, conta: str, schema: str, bruto: str):
 def processar_estoque(cliente, c, token, caminho_base, saldo_vivo):
     """Uma variante. Devolve (resultado, motivo, estoque_anterior, estoque_novo)."""
     id_bling, id_variante, id_produto_ns = int(c["id_produto_bling"]), int(c["id_variante"]), int(c["id_produto_ns"])
-    saldo = saldo_vivo.get(id_bling)
-    if saldo is None:
+    par_saldo = saldo_vivo.get(id_bling)  # (saldo_virtual, saldo_fisico) — ler_saldos devolve o par
+    if par_saldo is None:
         return "pulado", "sem saldo de estoque no Bling", None, None
+    saldo = par_saldo[0]
     alvo = max(saldo, 0.0)
     if abs(alvo - round(alvo)) > 0.0005:
         return "pulado", f"saldo fracionado no Bling ({saldo})", None, None
