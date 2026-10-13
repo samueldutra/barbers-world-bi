@@ -17,6 +17,36 @@ on:
         description: 'Recarregar pedidos EMITIDOS desde esta data (AAAA-MM-DD). Vazio = últimos 5 dias'
         required: false
         default: ''
+      explorar_vinculos_lojas:
+        description: 'SOMENTE LEITURA: ids de produto do Bling (separados por vírgula) para inspecionar o vínculo produto x loja ("ID na loja"). Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
+      vincular_lote:
+        description: 'ESCRITA NO BLING (lote): quantos produtos processar neste disparo (ex.: 20). Cria/corrige o vínculo produto x loja (ID na loja) dos candidatos de obter_vinculos_a_gravar, sem alterar preços. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
+      atualizar_estoque_lote:
+        description: 'ESCRITA NA NUVEMSHOP (lote): quantas variantes processar neste disparo (ex.: 20). Grava o saldo do Bling no estoque (zera/reabre/negativo=0), sem tocar em preço. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
+      atualizar_estoque_nuvemshop:
+        description: 'ESCRITA NA NUVEMSHOP (teste, 1 variante): ID_PRODUTO_BLING:ID_VARIANTE_NS:ESTOQUE_ATUAL_NS:SALDO_BLING — grava o saldo do Bling no estoque da variante, sem tocar em preço. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
+      comparar_estoque:
+        description: 'SOMENTE LEITURA: compara o saldo do Bling com o estoque da Nuvemshop (SKU idêntico) e grava os saldos em barbers.estoque_saldos_bling. Use com apenas_nuvemshop marcado'
+        required: false
+        type: boolean
+        default: false
+      vincular_produto_loja:
+        description: 'ESCRITA NO BLING (teste, 1 produto): ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO_CADASTRO:PRECO_VINCULO:ESTOQUE_ESPERADO — cria o vínculo produto x loja SEM alterar preços. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
+      sync_vinculos_lojas:
+        description: 'Sincronizar os vínculos produto x loja do Bling (ID na loja) para barbers.produtos_lojas — só lê o Bling (~2 min). Use com apenas_nuvemshop marcado'
+        required: false
+        type: boolean
+        default: false
       apenas_nuvemshop:
         description: 'Pular os passos do Bling e rodar só os da Nuvemshop (ex.: backfill de pedidos com alterados_horas=8760)'
         required: false
@@ -117,7 +147,7 @@ jobs:
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
       - name: Nuvemshop (pedidos alterados recentemente)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' }}
         working-directory: etl-nuvemshop-pedidos
         env:
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -128,8 +158,53 @@ jobs:
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' }}
         working-directory: etl-nuvemshop-produtos
         run: |
           pip install -r requirements.txt
           python etl-nuvemshop-produtos.py
+
+      # Exploração SOMENTE LEITURA do vínculo produto x loja do Bling ("ID na loja"). Só no disparo manual.
+      - name: Bling (explorar vínculos produto x loja — somente leitura)
+        if: ${{ inputs.explorar_vinculos_lojas != '' }}
+        env:
+          EXPLORAR_IDS: ${{ inputs.explorar_vinculos_lojas }}
+        run: python explorar-vinculos-lojas-bling.py
+
+      # Vínculos produto x loja do Bling -> barbers.produtos_lojas (somente leitura no Bling). Só no disparo manual.
+      - name: Bling (vínculos produto x loja — sincronização)
+        if: ${{ inputs.sync_vinculos_lojas }}
+        run: python sync-vinculos-lojas-bling.py
+
+      # ESCRITA no Bling: cria o vínculo produto x loja de UM produto (teste), com travas e releitura. Só no disparo manual.
+      - name: Bling (vincular produto x loja — escrita, 1 produto)
+        if: ${{ inputs.vincular_produto_loja != '' }}
+        env:
+          VINCULAR: ${{ inputs.vincular_produto_loja }}
+        run: python vincular-produto-loja-bling.py
+
+      # Compara o saldo do Bling (fonte da verdade) com o estoque da Nuvemshop — SOMENTE LEITURA. Só no disparo manual.
+      - name: Estoque (comparar saldo do Bling x estoque da Nuvemshop — somente leitura)
+        if: ${{ inputs.comparar_estoque }}
+        run: python sync-estoque-bling-nuvemshop.py
+
+      # ESCRITA de estoque na Nuvemshop (saldo do Bling = fonte da verdade): UMA variante por execução (teste). Só no disparo manual.
+      - name: Estoque (gravar saldo do Bling na Nuvemshop — escrita, 1 variante)
+        if: ${{ inputs.atualizar_estoque_nuvemshop != '' }}
+        env:
+          ESTOQUE_APLICAR: ${{ inputs.atualizar_estoque_nuvemshop }}
+        run: python sync-estoque-bling-nuvemshop.py
+
+      # ESCRITA no Bling (lote): cria/corrige o vínculo produto x loja dos candidatos, com travas por produto, releitura e auditoria. Só no disparo manual.
+      - name: Bling (vincular produto x loja — lote)
+        if: ${{ inputs.vincular_lote != '' }}
+        env:
+          LOTE_LIMITE: ${{ inputs.vincular_lote }}
+        run: python vincular-lote-loja-bling.py
+
+      # ESCRITA de estoque na Nuvemshop (lote, saldo do Bling = fonte da verdade): travas ao vivo, releitura e auditoria. Só no disparo manual.
+      - name: Estoque (gravar saldo do Bling na Nuvemshop — lote)
+        if: ${{ inputs.atualizar_estoque_lote != '' }}
+        env:
+          ESTOQUE_LOTE: ${{ inputs.atualizar_estoque_lote }}
+        run: python sync-estoque-bling-nuvemshop.py
