@@ -188,7 +188,7 @@ export default function VinculoSkuPage() {
       const semVinculo = (l: LinhaVinculo) => l.status === 'sem_correspondencia' || l.status === 'sem_sku'
       const alvo = todas.filter((l) => {
         if (tipo === 'ajustes') return l.status === 'vinculado_ajustar'
-        // Confirmados por pedidos: o par por ID, sem empate, ativo e com código livre (inclui SKU duplicado).
+        // Confirmados por ID (vínculo do Bling e/ou pedidos): o par sem empate, ativo e com código livre (inclui SKU duplicado).
         if (tipo === 'pedidos') return (semVinculo(l) || l.status === 'sku_duplicado') && parUtilizavel(parDe(l))
         return semVinculo(l) && l.sugestao_score !== null && Number(l.sugestao_score) >= (tipo === 'identicas' ? 0.999 : 0.8)
       })
@@ -378,7 +378,7 @@ export default function VinculoSkuPage() {
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Seleção rápida:</span>
         <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('pedidos')}>
-          Confirmados por pedidos
+          Confirmados pelo Bling (ID)
         </Button>
         <Button variant="outline" size="sm" disabled={selecionando || aplicando} onClick={() => handleSelecionarRapido('identicas')}>
           Sugestões de nome idêntico

@@ -143,6 +143,12 @@ jobs:
         if: ${{ !inputs.apenas_nuvemshop }}
         run: python sync-situacoes-bling.py
 
+      # Vínculos produto x loja do Bling ("ID na loja") -> barbers.produtos_lojas. SOMENTE LEITURA no Bling (~50 requisições, ~30 s).
+      # Alimenta o "Confirmado pelo vínculo do Bling" da tela Vínculo de SKU. Fica antes dos passos da Nuvemshop pra eles rodarem mesmo se falhar.
+      - name: Vínculos produto x loja do Bling (ID na loja)
+        if: ${{ !inputs.apenas_nuvemshop }}
+        run: python sync-vinculos-lojas-bling.py
+
       # Pedidos da Nuvemshop (lojas conectadas no módulo Canais de Venda do dashboard). Sem loja
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).

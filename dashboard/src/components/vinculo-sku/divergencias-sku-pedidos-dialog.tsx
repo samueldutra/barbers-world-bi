@@ -51,9 +51,9 @@ export function DivergenciasSkuPedidosDialog({ aberto, onOpenChange, selecionada
         <DialogHeader>
           <DialogTitle>Divergências SKU × pedidos</DialogTitle>
           <DialogDescription>
-            Variantes já vinculadas por SKU, mas cujos pedidos mostram <strong>outro</strong> produto do Bling. Confira cada uma: pode ser SKU
-            apontando para o produto errado — ou um erro de pareamento (principalmente quando só 1 pedido sustenta). Corrigir grava o código do
-            produto das vendas na variante da Nuvemshop; o Bling não é alterado.
+            Variantes já vinculadas por SKU, mas em que o vínculo do Bling (&quot;ID na loja&quot;) ou os pedidos mostram <strong>outro</strong> produto
+            do Bling. Confira cada uma: pode ser SKU apontando para o produto errado — ou um erro de pareamento (principalmente quando só 1 pedido
+            sustenta). Corrigir grava o código do outro produto na variante da Nuvemshop; o Bling não é alterado.
           </DialogDescription>
         </DialogHeader>
 
@@ -73,8 +73,8 @@ export function DivergenciasSkuPedidosDialog({ aberto, onOpenChange, selecionada
                 <TableRow>
                   <TableHead>Produto na Nuvemshop</TableHead>
                   <TableHead>Bling pelo SKU</TableHead>
-                  <TableHead>Bling pelas vendas</TableHead>
-                  <TableHead className="text-right">Pedidos</TableHead>
+                  <TableHead>Bling pelo vínculo / vendas</TableHead>
+                  <TableHead className="text-right">Evidência</TableHead>
                   <TableHead className="w-44" />
                 </TableRow>
               </TableHeader>
@@ -82,11 +82,11 @@ export function DivergenciasSkuPedidosDialog({ aberto, onOpenChange, selecionada
                 {lista.map((d) => {
                   const semCodigo = !d.vendas_codigo || d.vendas_codigo.trim() === ''
                   const bloqueio = semCodigo
-                    ? 'O produto das vendas não tem código no Bling.'
+                    ? 'O outro produto não tem código no Bling.'
                     : d.qtd_variantes_ns > 0
                       ? 'Esse código já é usado por outra variante da Nuvemshop.'
                       : !d.vendas_ativo
-                        ? 'O produto das vendas está inativo no Bling.'
+                        ? 'O outro produto está inativo no Bling.'
                         : null
                   const jaAdicionada = selecionadas.has(d.id_variante)
                   return (
@@ -112,8 +112,8 @@ export function DivergenciasSkuPedidosDialog({ aberto, onOpenChange, selecionada
                         <Sku valor={d.vendas_codigo} />
                       </TableCell>
                       <TableCell className="text-right text-sm tabular-nums">
-                        {d.pedidos}
-                        {d.pedidos === 1 && <p className="text-xs text-amber-700 dark:text-amber-400">fraca</p>}
+                        {d.fonte === 'pedidos' ? `${d.pedidos} pedido${d.pedidos === 1 ? '' : 's'}` : d.fonte === 'vinculo' ? 'vínculo' : `vínculo + ${d.pedidos} ped.`}
+                        {d.fonte === 'pedidos' && d.pedidos === 1 && <p className="text-xs text-amber-700 dark:text-amber-400">fraca</p>}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -123,7 +123,7 @@ export function DivergenciasSkuPedidosDialog({ aberto, onOpenChange, selecionada
                           title={bloqueio ?? undefined}
                           onClick={() => onCorrigir(d)}
                         >
-                          {jaAdicionada ? 'Na seleção' : 'Usar produto das vendas'}
+                          {jaAdicionada ? 'Na seleção' : 'Usar este produto'}
                         </Button>
                         {bloqueio && <p className="mt-1 text-xs text-muted-foreground">{bloqueio}</p>}
                       </TableCell>

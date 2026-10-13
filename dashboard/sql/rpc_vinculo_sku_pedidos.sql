@@ -87,13 +87,18 @@ $$;
 REVOKE ALL ON FUNCTION atualizar_pares_id_bling_nuvemshop(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION atualizar_pares_id_bling_nuvemshop(TEXT) TO service_role;
 
--- Par confirmado de cada variante (o produto do Bling mais frequente nas vendas). Sem p_variantes devolve todas.
--- ambiguo = empate no topo; produtos_distintos > 1 = a variante apareceu em pedidos com mais de um produto do Bling.
+-- Par confirmado de cada variante, por ID (nunca por SKU nem nome). Duas fontes, em ordem de força:
+--   1) 'vinculo': o vínculo produto x loja do PRÓPRIO BLING ("ID na loja", barbers.produtos_lojas) — em qualquer loja do grupo Nuvemshop —
+--      cujo `codigo` é o ID da variante (produto com várias variantes) ou o ID do produto (produto de variante única) e cujo produto do
+--      Bling está ATIVO. Cobre o catálogo inteiro, inclusive o que nunca vendeu. Mais de um produto ativo apontando = ambíguo.
+--   2) 'pedidos': o produto do Bling mais frequente nas vendas da variante (pares_id_bling_nuvemshop). Só usado quando não há vínculo.
+-- fonte = 'vinculo+pedidos' quando as duas concordam. ambiguo = empate/mais de um candidato; produtos_distintos > 1 = a variante
+-- apareceu em pedidos com mais de um produto. Sem p_variantes devolve todas.
 DROP FUNCTION IF EXISTS obter_pares_confirmados_nuvemshop(TEXT, BIGINT[]);
 CREATE OR REPLACE FUNCTION obter_pares_confirmados_nuvemshop(p_schema_name TEXT, p_variantes BIGINT[] DEFAULT NULL)
 RETURNS TABLE(
     id_variante BIGINT, id_produto_bling BIGINT, codigo TEXT, nome TEXT, preco NUMERIC, ativo BOOLEAN,
-    pedidos INTEGER, pedidos_unicos INTEGER, produtos_distintos INTEGER, ambiguo BOOLEAN, qtd_variantes_ns INTEGER
+    pedidos INTEGER, pedidos_unicos INTEGER, produtos_distintos INTEGER, ambiguo BOOLEAN, qtd_variantes_ns INTEGER, fonte TEXT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -101,7 +106,21 @@ SET search_path = public
 AS $$
 BEGIN
     RETURN QUERY EXECUTE format('
-        WITH por_par AS (
+        WITH nsv AS (
+            SELECT n.id_variante, n.id_produto, count(*) OVER (PARTITION BY n.id_produto) AS variantes_do_produto
+            FROM %1$I.nuvemshop_produtos n
+            WHERE ($1::BIGINT[] IS NULL OR n.id_variante = ANY($1))
+        ),
+        lojas_ns AS (SELECT id_loja FROM %1$I.canais_venda WHERE grupo = ''Nuvemshop''),
+        vl AS (   -- fonte 1: vínculo do Bling apontando pra variante/produto, só produto ATIVO do Bling
+            SELECT DISTINCT v.id_variante, l.id_produto AS id_produto_bling
+            FROM nsv v
+            JOIN %1$I.produtos_lojas l ON l.id_loja IN (SELECT id_loja FROM lojas_ns)
+                 AND (l.codigo = v.id_variante::TEXT OR (v.variantes_do_produto = 1 AND l.codigo = v.id_produto::TEXT))
+            JOIN %1$I.produtos pr ON pr.id_produto = l.id_produto AND pr.situacao = ''A''
+        ),
+        vl_agg AS (SELECT id_variante, count(*)::INTEGER AS qtd, min(id_produto_bling) AS id_produto_bling FROM vl GROUP BY id_variante),
+        por_par AS (   -- fonte 2: pedidos
             SELECT v.id_variante, v.id_produto_bling,
                    count(DISTINCT v.id_pedido_bling)::INTEGER AS pedidos,
                    (count(*) FILTER (WHERE v.nivel = ''unico''))::INTEGER AS pedidos_unicos
@@ -109,11 +128,6 @@ BEGIN
             WHERE ($1::BIGINT[] IS NULL OR v.id_variante = ANY($1))
             GROUP BY v.id_variante, v.id_produto_bling
         ),
-        skus AS MATERIALIZED (   -- SKU normalizado de cada variante (uma linha por id_variante)
-            SELECT n.id_variante, public.normalizar_sku(n.sku) AS c FROM %1$I.nuvemshop_produtos n
-            WHERE public.normalizar_sku(n.sku) IS NOT NULL
-        ),
-        sk_cnt AS MATERIALIZED (SELECT c, count(*)::INTEGER AS n FROM skus GROUP BY c),
         rk AS (
             SELECT pp.*,
                    row_number() OVER (PARTITION BY id_variante ORDER BY pedidos DESC, pedidos_unicos DESC, id_produto_bling) AS r,
@@ -121,17 +135,35 @@ BEGIN
                    lead(pedidos) OVER (PARTITION BY id_variante ORDER BY pedidos DESC, pedidos_unicos DESC, id_produto_bling) AS pedidos_segundo
             FROM por_par pp
         ),
+        pe AS (SELECT * FROM rk WHERE r = 1),
+        escolha AS (   -- vínculo tem prioridade; sem ele, pedidos
+            SELECT COALESCE(a.id_variante, e.id_variante) AS id_variante,
+                   CASE WHEN a.id_variante IS NOT NULL THEN a.id_produto_bling ELSE e.id_produto_bling END AS id_produto_bling,
+                   CASE WHEN a.id_variante IS NOT NULL AND e.id_variante IS NOT NULL AND a.id_produto_bling = e.id_produto_bling THEN ''vinculo+pedidos''
+                        WHEN a.id_variante IS NOT NULL THEN ''vinculo'' ELSE ''pedidos'' END AS fonte,
+                   CASE WHEN a.id_variante IS NOT NULL THEN a.qtd > 1
+                        ELSE (e.pedidos_segundo IS NOT NULL AND e.pedidos_segundo = e.pedidos) END AS ambiguo,
+                   COALESCE(e.produtos_distintos, 0) AS produtos_distintos
+            FROM vl_agg a FULL JOIN pe e ON e.id_variante = a.id_variante
+        ),
+        skus AS MATERIALIZED (
+            SELECT n.id_variante, public.normalizar_sku(n.sku) AS c FROM %1$I.nuvemshop_produtos n
+            WHERE public.normalizar_sku(n.sku) IS NOT NULL
+        ),
+        sk_cnt AS MATERIALIZED (SELECT c, count(*)::INTEGER AS n FROM skus GROUP BY c),
         -- MATERIALIZED: sem isso o planejador embute normalizar_sku() na junção e a recalcula por linha (~3,5 s).
         topo AS MATERIALIZED (
-            SELECT rk.*, p.codigo AS p_codigo, p.nome AS p_nome, p.preco AS p_preco, p.situacao AS p_situacao,
-                   public.normalizar_sku(p.codigo) AS cod_norm
-            FROM rk JOIN %1$I.produtos p ON p.id_produto = rk.id_produto_bling
-            WHERE rk.r = 1
+            SELECT e.*, p.codigo AS p_codigo, p.nome AS p_nome, p.preco AS p_preco, p.situacao AS p_situacao,
+                   public.normalizar_sku(p.codigo) AS cod_norm,
+                   COALESCE(pp.pedidos, 0) AS pedidos, COALESCE(pp.pedidos_unicos, 0) AS pedidos_unicos
+            FROM escolha e
+            JOIN %1$I.produtos p ON p.id_produto = e.id_produto_bling
+            LEFT JOIN por_par pp ON pp.id_variante = e.id_variante AND pp.id_produto_bling = e.id_produto_bling
         )
         SELECT t.id_variante, t.id_produto_bling, t.p_codigo::TEXT, t.p_nome::TEXT, t.p_preco::NUMERIC, (t.p_situacao = ''A''),
-               t.pedidos, t.pedidos_unicos, t.produtos_distintos,
-               (t.pedidos_segundo IS NOT NULL AND t.pedidos_segundo = t.pedidos),
-               (COALESCE(sc.n, 0) - CASE WHEN s2.id_variante IS NOT NULL THEN 1 ELSE 0 END)::INTEGER
+               t.pedidos, t.pedidos_unicos, t.produtos_distintos, t.ambiguo,
+               (COALESCE(sc.n, 0) - CASE WHEN s2.id_variante IS NOT NULL THEN 1 ELSE 0 END)::INTEGER,
+               t.fonte
         FROM topo t
         LEFT JOIN sk_cnt sc ON sc.c = t.cod_norm
         LEFT JOIN skus s2 ON s2.id_variante = t.id_variante AND s2.c = t.cod_norm
@@ -139,8 +171,8 @@ BEGIN
 END;
 $$;
 
--- Divergências: variantes JÁ vinculadas por SKU cujo produto do Bling pelo SKU é diferente do produto que as vendas
--- mostram (o par confirmado, sem empate). Pra revisão: o SKU pode estar apontando pro produto errado.
+-- Divergências: variantes JÁ vinculadas por SKU cujo produto do Bling pelo SKU é diferente do produto que o par confirmado
+-- aponta (vínculo do Bling e/ou pedidos, sem empate). Pra revisão: o SKU pode estar apontando pro produto errado.
 DROP FUNCTION IF EXISTS obter_divergencias_sku_pedidos(TEXT);
 CREATE OR REPLACE FUNCTION obter_divergencias_sku_pedidos(p_schema_name TEXT)
 RETURNS TABLE(
@@ -148,7 +180,7 @@ RETURNS TABLE(
     publicado BOOLEAN, estoque_ns NUMERIC,
     sku_id_produto_bling BIGINT, sku_codigo TEXT, sku_nome TEXT,
     vendas_id_produto_bling BIGINT, vendas_codigo TEXT, vendas_nome TEXT, vendas_ativo BOOLEAN,
-    pedidos INTEGER, produtos_distintos INTEGER, qtd_variantes_ns INTEGER
+    pedidos INTEGER, produtos_distintos INTEGER, qtd_variantes_ns INTEGER, fonte TEXT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -158,7 +190,7 @@ BEGIN
     RETURN QUERY EXECUTE format('
         SELECT t.store_id, t.id_produto_ns, t.id_variante, t.nome_ns, t.variacao_ns, t.sku_ns, t.publicado, t.estoque_ns,
                t.id_produto_bling, t.codigo_bling, t.nome_bling,
-               c.id_produto_bling, c.codigo, c.nome, c.ativo, c.pedidos, c.produtos_distintos, c.qtd_variantes_ns
+               c.id_produto_bling, c.codigo, c.nome, c.ativo, c.pedidos, c.produtos_distintos, c.qtd_variantes_ns, c.fonte
         FROM (%2$s) t
         JOIN public.obter_pares_confirmados_nuvemshop(%1$L) c ON c.id_variante = t.id_variante
         WHERE t.visao = ''nuvemshop'' AND t.status = ''vinculado''

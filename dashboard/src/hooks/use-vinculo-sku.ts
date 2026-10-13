@@ -164,7 +164,10 @@ export async function buscarTodasLinhasVinculo(f: Omit<FiltrosVinculo, 'pagina' 
   return todas
 }
 
-/** Par Bling × Nuvemshop confirmado por ID a partir dos pedidos (o produto do Bling mais frequente nas vendas da variante). */
+/** De onde vem a confirmação: 'vinculo' = o vínculo do próprio Bling ("ID na loja"); 'pedidos' = vendas; 'vinculo+pedidos' = as duas concordam. */
+export type FontePar = 'vinculo' | 'pedidos' | 'vinculo+pedidos'
+
+/** Par Bling × Nuvemshop confirmado por ID: o vínculo do Bling (preferido) ou, sem ele, o produto mais frequente nas vendas da variante. */
 export interface ParConfirmado {
   id_variante: number
   id_produto_bling: number
@@ -173,8 +176,9 @@ export interface ParConfirmado {
   preco: number | null
   /** Produto ativo no cadastro do Bling. */
   ativo: boolean
-  /** Pedidos distintos que sustentam o par. */
+  /** Pedidos distintos que sustentam o par (0 quando a única fonte é o vínculo do Bling). */
   pedidos: number
+  fonte: FontePar
   pedidos_unicos: number
   /** > 1: a variante também apareceu em pedidos com outros produtos do Bling. */
   produtos_distintos: number
@@ -245,6 +249,7 @@ export interface DivergenciaSkuPedidos {
   pedidos: number
   produtos_distintos: number
   qtd_variantes_ns: number
+  fonte: FontePar
 }
 
 /** Variantes já vinculadas por SKU cujo produto do Bling pelo SKU difere do produto que as vendas mostram. */
