@@ -140,6 +140,34 @@ Ver `.env.example`. Resumo:
 | Memória | 512-1024 MB |
 | Variáveis de ambiente | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `DISCORD_WEBHOOK_URL` |
 
+## Vínculo produto x loja e estoque Bling -> Nuvemshop (execução manual)
+
+Scripts de **disparo manual** (Actions → Run workflow em `etl-hourly.yml`, sempre com `apenas_nuvemshop` marcado; nos agendamentos nada
+disso roda). **Regras de negócio** (decisão do usuário, 13/10/2026): o **SKU do Bling** pareia produto e variante e o **saldo do Bling**
+é a verdade do estoque; os **preços (cadastro do Bling e loja) divergem de propósito e NUNCA são alterados** — o vínculo só grava o ID, e o
+preço do vínculo espelha o que a loja já pratica (`preco` = preço da Nuvemshop, `precoPromocional` = promoção da loja ou 0).
+
+O "ID na loja" (`codigo` em `GET/POST/PUT /produtos/lojas`) é o ID do **produto** na Nuvemshop; em produto com **várias variantes** o Bling
+guarda o ID da **variante**. A loja atual é `206304549` (NUVEMSHOP BARBERS WORLD); a antiga (`205291049`) ficou com os vínculos da integração
+anterior. O vínculo **não** faz o Bling empurrar estoque na hora — por isso o estoque é gravado direto na Nuvemshop.
+
+| Campo do workflow | Script | O que faz |
+|---|---|---|
+| `explorar_vinculos_lojas` (ids de produto) | `explorar-vinculos-lojas-bling.py` | SÓ LEITURA: mostra vínculos, cadastro completo, saldos, depósitos e categorias de produtos |
+| `sync_vinculos_lojas` | `sync-vinculos-lojas-bling.py` | SÓ LEITURA no Bling: lê todos os vínculos (~5.000, ~30 s) -> `barbers.produtos_lojas` |
+| `comparar_estoque` | `sync-estoque-bling-nuvemshop.py` | SÓ LEITURA: saldo do Bling x estoque da Nuvemshop -> `barbers.estoque_saldos_bling` |
+| `vincular_produto_loja` (`ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO_CADASTRO:PRECO_VINCULO:ESTOQUE`) | `vincular-produto-loja-bling.py` | ESCRITA no Bling, 1 produto (teste), com travas e releitura |
+| `vincular_lote` (quantos) | `vincular-lote-loja-bling.py` | ESCRITA no Bling: cria/corrige o vínculo dos candidatos de `obter_vinculos_a_gravar()`; auditoria em `vinculos_lojas_alteracoes` |
+| `atualizar_estoque_nuvemshop` (`ID_BLING:ID_VARIANTE:ESTOQUE_ATUAL:SALDO`) | `sync-estoque-bling-nuvemshop.py` | ESCRITA na Nuvemshop, 1 variante (teste) |
+| `atualizar_estoque_lote` (quantas) | `sync-estoque-bling-nuvemshop.py` | ESCRITA na Nuvemshop: `stock` = saldo virtual do Bling (negativo = 0; zera, reabre, controla as ilimitadas); auditoria em `estoque_nuvemshop_alteracoes` |
+
+Boas práticas que valeram: **teste com 1 produto antes do lote** (o usuário confere manualmente), travas ao vivo por item (produto ativo, SKU
+ainda idêntico, estado esperado do vínculo/estoque), **releitura depois de gravar**, 3 erros seguidos interrompem, auditoria de cada tentativa e
+comparação da loja inteira antes x depois (preço/promoção/SKU/publicação não podem mudar). O job tem `timeout-minutes: 35`: ~5 s por vínculo no
+Bling, então lotes de vínculo grandes devem ser divididos (ex.: 250 por disparo). Resultado de 13/10/2026: 762 vínculos criados/corrigidos
+(1.764 de 1.764 SKUs idênticos vinculados) e 381 estoques alinhados, 0 erros, 0 mudanças de preço. SQL: `sql/create_table_produtos_lojas.sql`,
+`sql/rpc_processar_carga_produtos_lojas.sql`, `sql/rpc_vinculos_lote_loja.sql`, `sql/rpc_estoque_bling_nuvemshop.sql`.
+
 ## Segurança (acesso às funções do banco)
 
 Desde 09/10/2026 as funções `processar_carga_*`, `inativar_produtos_fora_listagem`,

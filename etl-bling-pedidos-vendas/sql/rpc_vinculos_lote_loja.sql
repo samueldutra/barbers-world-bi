@@ -39,6 +39,8 @@ BEGIN
 END;
 $$;
 
+-- ID na loja: produto simples = ID do PRODUTO na Nuvemshop; produto com várias variantes (variações) = ID da VARIANTE (convenção do
+-- Bling, confirmada nos vínculos existentes) — por isso 'ok' aceita os dois e produtos com várias variantes nunca são 'corrigidos'.
 -- Candidatos a gravar: produto ATIVO do Bling com SKU idêntico (normalizado) ao de uma variante da Nuvemshop, SEM vínculo na loja
 -- ('criar') ou com ID 0/inexistente na Nuvemshop ('corrigir'), que ainda não tiveram sucesso na auditoria, e que NÃO caem nos casos
 -- que pedem decisão: produto da Nuvemshop com várias variantes, estoque sem controle na loja, saldo negativo no Bling, item que a
@@ -64,7 +66,7 @@ BEGIN
             SELECT p.id_produto_bling, p.codigo_bling, p.store_id, p.id_produto_ns, p.id_variante, p.sku_ns, p.estoque_ns,
                    n.preco AS preco_ns, n.preco_promocional AS promo_ns, s.saldo_virtual, l.id_vinculo, l.codigo AS codigo_vinculo,
                    CASE WHEN l.id_produto IS NULL THEN ''criar''
-                        WHEN l.codigo = p.id_produto_ns::TEXT THEN ''ok''
+                        WHEN l.codigo IN (p.id_produto_ns::TEXT, p.id_variante::TEXT) THEN ''ok''
                         WHEN l.codigo IN (''0'', '''') OR l.codigo IS NULL THEN ''corrigir''
                         WHEN NOT EXISTS (SELECT 1 FROM ns_ids i WHERE i.id = l.codigo) THEN ''corrigir''
                         ELSE ''outro_produto'' END AS acao
