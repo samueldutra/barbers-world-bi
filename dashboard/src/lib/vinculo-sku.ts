@@ -1,6 +1,7 @@
 /** Status do cruzamento SKU Nuvemshop × Bling (ver sql/rpc_vinculo_sku_nuvemshop.sql). */
 export type StatusVinculo =
   | 'vinculado'
+  | 'vinculado_excluido'
   | 'vinculado_ajustar'
   | 'sku_duplicado'
   | 'sem_correspondencia'
@@ -21,6 +22,11 @@ export const STATUS_VINCULO: Record<StatusVinculo, InfoStatusVinculo> = {
     descricao: 'O SKU é idêntico ao de um único produto ativo do Bling.',
     classe: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   },
+  vinculado_excluido: {
+    label: 'Vinculado (excluído no Bling)',
+    descricao: 'O SKU casa com um produto que foi excluído no Bling — conta como correspondência, não é problema.',
+    classe: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  },
   vinculado_ajustar: {
     label: 'Ajustar SKU',
     descricao: 'Casa com o Bling só depois de ignorar espaços e maiúsculas/minúsculas — corrigir o SKU na Nuvemshop.',
@@ -33,7 +39,7 @@ export const STATUS_VINCULO: Record<StatusVinculo, InfoStatusVinculo> = {
   },
   sem_correspondencia: {
     label: 'Sem correspondência',
-    descricao: 'SKU preenchido, mas não existe produto ativo com esse código no Bling.',
+    descricao: 'SKU preenchido, mas não existe produto (ativo ou excluído) com esse código no Bling.',
     classe: 'bg-destructive/10 text-destructive',
   },
   sem_sku: {
@@ -51,6 +57,7 @@ export const STATUS_VINCULO: Record<StatusVinculo, InfoStatusVinculo> = {
 /** Ordem dos cartões/opções: do que está certo ao que mais precisa de atenção. */
 export const ORDEM_STATUS_VINCULO: StatusVinculo[] = [
   'vinculado',
+  'vinculado_excluido',
   'vinculado_ajustar',
   'sku_duplicado',
   'sem_correspondencia',
