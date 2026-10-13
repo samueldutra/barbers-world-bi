@@ -22,7 +22,7 @@ on:
         required: false
         default: ''
       vincular_produto_loja:
-        description: 'ESCRITA NO BLING (teste, 1 produto): ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO:ESTOQUE_ESPERADO — cria o vínculo produto x loja. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        description: 'ESCRITA NO BLING (teste, 1 produto): ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO_CADASTRO:PRECO_VINCULO:ESTOQUE_ESPERADO — cria o vínculo produto x loja SEM alterar preços. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
         default: ''
       sync_vinculos_lojas:

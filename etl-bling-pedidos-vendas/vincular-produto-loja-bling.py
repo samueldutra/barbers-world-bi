@@ -2,15 +2,18 @@
 TESTE DE ESCRITA — cria o vínculo produto x loja virtual do Bling para UM produto: o campo "ID na loja" (`codigo`, na
 Nuvemshop = ID do PRODUTO na Nuvemshop) mais os preços da loja. Grava via POST /produtos/lojas (ou PUT /produtos/lojas/{id}
 se a loja já estiver marcada com ID 0) e RELÊ tudo no Bling pra conferir. Roda pelo disparo manual do etl-hourly.yml
-(campo vincular_produto_loja = "ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO:ESTOQUE_ESPERADO").
+(campo vincular_produto_loja = "ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO_CADASTRO:PRECO_VINCULO:ESTOQUE_ESPERADO").
+
+REGRA: os preços NÃO mudam. O cadastro do produto no Bling é só conferido (e relido no fim); o preço do vínculo é o que a loja já
+pratica hoje (o preço da Nuvemshop), pra o Bling não ter motivo de alterar o preço da loja. Só o ID na loja é gravado de novo.
 
 Travas (aborta SEM gravar se qualquer uma falhar):
   - só a loja NUVEMSHOP BARBERS WORLD (206304549);
-  - o produto existe, está ativo e o preço atual do cadastro é o PRECO informado;
+  - o produto existe, está ativo e o preço atual do cadastro é o PRECO_CADASTRO informado;
   - ainda não tem vínculo nessa loja (ou tem com ID 0);
   - o saldo de estoque no Bling é igual ao ESTOQUE_ESPERADO (o da Nuvemshop): com o vínculo ativo o Bling pode passar a
     enviar o estoque dele pra loja, então saldo diferente = a loja mudaria de estoque.
-Depois de gravar: confere `codigo`, preço e promoção do vínculo e que o saldo de estoque não mudou.
+Depois de gravar: confere `codigo`, preço e promoção do vínculo, que o preço do cadastro e o saldo de estoque não mudaram.
 
 Reaproveita a sessão/OAuth de sync-canais-venda-bling.py (duplicação de infraestrutura já é a convenção desta pasta).
 """
@@ -70,13 +73,13 @@ def main():
     cliente = os.getenv("ETL_CLIENTE")
     bruto = os.getenv("VINCULAR", "")
     try:
-        id_produto, id_loja, id_na_loja, preco, estoque_esperado = bruto.split(":")
+        id_produto, id_loja, id_na_loja, preco_cadastro, preco_vinculo, estoque_esperado = bruto.split(":")
         id_produto, id_loja = int(id_produto), int(id_loja)
-        preco, estoque_esperado = float(preco), float(estoque_esperado)
+        preco_cadastro, preco_vinculo, estoque_esperado = float(preco_cadastro), float(preco_vinculo), float(estoque_esperado)
         if not id_na_loja.isdigit() or id_na_loja == "0":
             raise ValueError("ID na loja inválido")
     except ValueError as e:
-        base.log(f"[ERRO] Formato esperado ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO:ESTOQUE_ESPERADO — recebido '{bruto}' ({e})")
+        base.log(f"[ERRO] Formato esperado ID_PRODUTO:ID_LOJA:ID_NA_LOJA:PRECO_CADASTRO:PRECO_VINCULO:ESTOQUE_ESPERADO — recebido '{bruto}' ({e})")
         sys.exit(1)
     if not cliente:
         base.log("[ERRO] ETL_CLIENTE não definido")
@@ -85,7 +88,7 @@ def main():
     conta = config.get("conta_bling", cliente)
 
     base.log("=" * 60)
-    base.log(f"VINCULAR PRODUTO x LOJA (BLING) — ESCRITA | produto {id_produto} | loja {id_loja} | ID na loja {id_na_loja} | preço {preco} | estoque esperado {estoque_esperado}")
+    base.log(f"VINCULAR PRODUTO x LOJA (BLING) — ESCRITA | produto {id_produto} | loja {id_loja} | ID na loja {id_na_loja} | preço do cadastro {preco_cadastro} (não muda) | preço do vínculo {preco_vinculo} | estoque esperado {estoque_esperado}")
     base.log("=" * 60)
 
     try:
@@ -97,8 +100,8 @@ def main():
         base.log(f"Produto: {produto.get('codigo')} | {produto.get('nome')} | situação {produto.get('situacao')} | preço {produto.get('preco')}")
         if produto.get("situacao") != "A":
             raise Abortar("Produto não está ativo.")
-        if abs(float(produto.get("preco") or 0) - preco) > 0.005:
-            raise Abortar(f"Preço do cadastro ({produto.get('preco')}) difere do esperado ({preco}).")
+        if abs(float(produto.get("preco") or 0) - preco_cadastro) > 0.005:
+            raise Abortar(f"Preço do cadastro ({produto.get('preco')}) difere do esperado ({preco_cadastro}).")
 
         # 2) Vínculo atual na loja.
         vinculos = ler(cliente, conta, "/produtos/lojas", {"idProduto": id_produto}).get("data") or []
@@ -122,7 +125,7 @@ def main():
         # 4) Grava.
         corpo = {
             "codigo": id_na_loja,
-            "preco": preco,
+            "preco": preco_vinculo,
             "precoPromocional": 0,
             "produto": {"id": id_produto},
             "loja": {"id": id_loja},
@@ -145,7 +148,7 @@ def main():
         novo = [v for v in depois if (v.get("loja") or {}).get("id") == id_loja]
         base.log(f"Vínculos DEPOIS na loja alvo: {json.dumps(novo, ensure_ascii=False)}")
         ok = (len(novo) == 1 and str(novo[0].get("codigo")) == id_na_loja
-              and abs(float(novo[0].get("preco") or 0) - preco) < 0.005 and float(novo[0].get("precoPromocional") or 0) == 0)
+              and abs(float(novo[0].get("preco") or 0) - preco_vinculo) < 0.005 and float(novo[0].get("precoPromocional") or 0) == 0)
         virtual_depois, fisico_depois = saldo_estoque(cliente, conta, id_produto)
         produto_depois = ler(cliente, conta, f"/produtos/{id_produto}")["data"]
         base.log(f"Saldo no Bling depois: virtual {virtual_depois} | físico {fisico_depois} (antes {virtual_antes}/{fisico_antes})")
