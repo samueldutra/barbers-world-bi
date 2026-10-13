@@ -72,7 +72,12 @@ def main():
     base.log("ESTOQUE BLING x NUVEMSHOP — COMPARAÇÃO (somente leitura)")
     base.log("=" * 60)
 
-    pares = rpc_json("obter_pares_sku_estoque", {"p_schema_name": schema})
+    pares = []
+    while True:  # o Supabase corta RPC em 1000 linhas: pagina até vir menos que o tamanho da página
+        pagina = rpc_json("obter_pares_sku_estoque", {"p_schema_name": schema, "p_offset": len(pares), "p_limite": 1000})
+        pares.extend(pagina)
+        if len(pagina) < 1000:
+            break
     ids = sorted({int(p["id_produto_bling"]) for p in pares})
     base.log(f"{len(pares)} variante(s) da Nuvemshop com SKU idêntico ao de {len(ids)} produto(s) do Bling.")
 

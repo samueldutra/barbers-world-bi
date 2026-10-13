@@ -36,7 +36,9 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION obter_pares_sku_estoque(p_schema_name TEXT)
+DROP FUNCTION IF EXISTS obter_pares_sku_estoque(TEXT);
+-- Paginada: o Supabase corta RPC em 1000 linhas.
+CREATE OR REPLACE FUNCTION obter_pares_sku_estoque(p_schema_name TEXT, p_offset INTEGER DEFAULT 0, p_limite INTEGER DEFAULT 1000)
 RETURNS TABLE(
     store_id BIGINT, id_produto_ns BIGINT, id_variante BIGINT, sku_ns TEXT, nome_ns TEXT, publicado BOOLEAN, estoque_ns NUMERIC,
     id_produto_bling BIGINT, codigo_bling TEXT
@@ -51,11 +53,13 @@ BEGIN
                t.id_produto_bling, t.codigo_bling
         FROM (%s) t
         WHERE t.visao = ''nuvemshop'' AND t.status IN (''vinculado'', ''vinculado_ajustar'')
-    ', public.vinculo_sku_nuvemshop_sql(p_schema_name));
+        ORDER BY t.id_variante
+        OFFSET %L LIMIT %L
+    ', public.vinculo_sku_nuvemshop_sql(p_schema_name), GREATEST(p_offset, 0), GREATEST(LEAST(p_limite, 1000), 1));
 END;
 $$;
 
 REVOKE ALL ON FUNCTION processar_carga_estoque_saldos_bling(JSONB, TEXT) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION obter_pares_sku_estoque(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION obter_pares_sku_estoque(TEXT, INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION processar_carga_estoque_saldos_bling(JSONB, TEXT) TO service_role;
-GRANT EXECUTE ON FUNCTION obter_pares_sku_estoque(TEXT) TO service_role;
+GRANT EXECUTE ON FUNCTION obter_pares_sku_estoque(TEXT, INTEGER, INTEGER) TO service_role;
