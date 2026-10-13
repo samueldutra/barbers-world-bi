@@ -9,7 +9,9 @@
 --   vinculado           SKU idêntico a exatamente 1 produto ativo do Bling
 --   vinculado_ajustar   casa com 1 produto do Bling só depois de normalizar (espaço/maiúscula) — corrigir o SKU
 --   sku_duplicado       o SKU aparece em mais de uma variante da Nuvemshop OU em mais de um produto do Bling
---   sem_correspondencia SKU preenchido, mas não existe produto ativo com esse código no Bling
+--   vinculado_excluido  não há produto ativo com esse código, mas há um EXCLUÍDO (situação 'E') no Bling: conta como
+--                       correspondência (o produto existe, só foi excluído) e NÃO entra em "problemas"
+--   sem_correspondencia SKU preenchido, mas não existe produto (ativo ou excluído) com esse código no Bling
 --   sem_sku             variante sem SKU
 -- Lado Bling:
 --   so_bling            produto ativo do Bling sem nenhuma variante na Nuvemshop
@@ -66,6 +68,13 @@ AS $$
             SELECT cod_norm, count(*) AS qtd, min(id_produto) AS id_produto
             FROM bl WHERE cod_norm IS NOT NULL GROUP BY cod_norm
         ),
+        -- Excluídos (situação 'E'): só valem como correspondência quando não há produto ativo com o código.
+        bl_exc AS (
+            SELECT public.normalizar_sku(p.codigo) AS cod_norm, count(*) AS qtd, min(p.id_produto) AS id_produto
+            FROM %1$I.produtos p
+            WHERE p.situacao = 'E' AND public.normalizar_sku(p.codigo) IS NOT NULL
+            GROUP BY 1
+        ),
         ns_agg AS (
             SELECT store_id, sku_norm, count(*) AS qtd
             FROM ns WHERE sku_norm IS NOT NULL GROUP BY store_id, sku_norm
@@ -78,12 +87,14 @@ AS $$
                 n.publicado, n.preco::NUMERIC AS preco_ns, n.preco_promocional::NUMERIC AS preco_promocional_ns,
                 n.estoque::NUMERIC AS estoque_ns, n.url AS url_ns,
                 COALESCE(n.imagem_url, b.imagem_url)::TEXT AS imagem_url,
-                b.id_produto AS id_produto_bling, b.codigo::TEXT AS codigo_bling, b.nome::TEXT AS nome_bling,
-                b.preco::NUMERIC AS preco_bling, b.formato::TEXT AS formato_bling,
-                COALESCE(ba.qtd, 0)::INTEGER AS qtd_bling,
+                COALESCE(b.id_produto, pe.id_produto) AS id_produto_bling,
+                COALESCE(b.codigo, pe.codigo)::TEXT AS codigo_bling, COALESCE(b.nome, pe.nome)::TEXT AS nome_bling,
+                COALESCE(b.preco, pe.preco)::NUMERIC AS preco_bling, COALESCE(b.formato, pe.formato)::TEXT AS formato_bling,
+                COALESCE(ba.qtd, be.qtd, 0)::INTEGER AS qtd_bling,
                 CASE
                     WHEN n.sku_norm IS NULL THEN 'sem_sku'
                     WHEN na.qtd > 1 THEN 'sku_duplicado'
+                    WHEN ba.qtd IS NULL AND be.qtd IS NOT NULL THEN 'vinculado_excluido'
                     WHEN ba.qtd IS NULL THEN 'sem_correspondencia'
                     WHEN ba.qtd > 1 THEN 'sku_duplicado'
                     WHEN n.sku IS DISTINCT FROM b.codigo THEN 'vinculado_ajustar'
@@ -92,6 +103,8 @@ AS $$
             FROM ns n
             LEFT JOIN bl_agg ba ON ba.cod_norm = n.sku_norm
             LEFT JOIN bl b ON b.id_produto = ba.id_produto
+            LEFT JOIN bl_exc be ON ba.qtd IS NULL AND be.cod_norm = n.sku_norm
+            LEFT JOIN %1$I.produtos pe ON pe.id_produto = be.id_produto
             LEFT JOIN ns_agg na ON na.store_id = n.store_id AND na.sku_norm = n.sku_norm
         ),
         lado_bling AS (
@@ -117,7 +130,7 @@ DROP FUNCTION IF EXISTS obter_vinculo_sku_nuvemshop(TEXT, TEXT, TEXT, BOOLEAN, T
 
 CREATE OR REPLACE FUNCTION obter_vinculo_sku_nuvemshop(
     p_schema_name TEXT,
-    p_status TEXT DEFAULT 'todos',          -- 'todos' (todas as variantes da Nuvemshop) | 'problemas' (todas menos 'vinculado')
+    p_status TEXT DEFAULT 'todos',          -- 'todos' (todas as variantes da Nuvemshop) | 'problemas' (todas menos 'vinculado' e 'vinculado_excluido')
                                             -- | um status específico (inclui 'so_bling')
     p_busca TEXT DEFAULT NULL,              -- nome ou SKU, de qualquer um dos lados
     p_apenas_publicados BOOLEAN DEFAULT TRUE, -- só variantes de produto publicado na Nuvemshop (não afeta 'so_bling')
@@ -171,7 +184,8 @@ BEGIN
         WHEN 'nome' THEN 'COALESCE(nome_ns, nome_bling)'
         WHEN 'sku' THEN 'COALESCE(sku_ns, codigo_bling)'
         ELSE 'CASE status WHEN ''sem_sku'' THEN 1 WHEN ''sku_duplicado'' THEN 2 WHEN ''sem_correspondencia'' THEN 3
-                          WHEN ''vinculado_ajustar'' THEN 4 WHEN ''vinculado'' THEN 5 ELSE 6 END'
+                          WHEN ''vinculado_ajustar'' THEN 4 WHEN ''vinculado'' THEN 5
+                          WHEN ''vinculado_excluido'' THEN 6 ELSE 7 END'
     END;
     v_direcao := CASE lower(p_ordenar_direcao) WHEN 'desc' THEN 'DESC' ELSE 'ASC' END;
     v_busca := CASE WHEN p_busca IS NULL OR btrim(p_busca) = '' THEN NULL ELSE '%' || btrim(p_busca) || '%' END;
@@ -191,7 +205,7 @@ BEGIN
             FROM base t
             WHERE CASE %L
                     WHEN 'todos' THEN t.visao = 'nuvemshop'
-                    WHEN 'problemas' THEN t.visao = 'nuvemshop' AND t.status <> 'vinculado'
+                    WHEN 'problemas' THEN t.visao = 'nuvemshop' AND t.status NOT IN ('vinculado', 'vinculado_excluido')
                     ELSE t.status = %L
                   END
               AND (NOT %L OR t.visao = 'bling' OR t.publicado IS TRUE)
