@@ -75,7 +75,11 @@ function Sugestao({ linha, par }: { linha: LinhaVinculo; par?: ParConfirmado }) 
       {par && (
         <div className="min-w-0 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2">
           <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-            Confirmado por pedidos · {par.pedidos} pedido{par.pedidos > 1 ? 's' : ''}
+            {par.fonte === 'pedidos'
+              ? `Confirmado por pedidos · ${par.pedidos} pedido${par.pedidos > 1 ? 's' : ''}`
+              : par.fonte === 'vinculo+pedidos'
+                ? `Confirmado pelo vínculo do Bling e por ${par.pedidos} pedido${par.pedidos > 1 ? 's' : ''}`
+                : 'Confirmado pelo vínculo do Bling'}
           </p>
           <p className="max-w-64 truncate text-sm" title={par.nome}>
             {par.nome}
@@ -88,12 +92,12 @@ function Sugestao({ linha, par }: { linha: LinhaVinculo; par?: ParConfirmado }) 
             {par.preco !== null && <span className="text-xs text-muted-foreground">{formatarMoeda(Number(par.preco))}</span>}
           </div>
           {par.ambiguo && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Empate com outro produto nas vendas — confira.</p>}
-          {!par.ambiguo && par.produtos_distintos > 1 && (
+          {!par.ambiguo && par.pedidos > 0 && par.produtos_distintos > 1 && (
             <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
               Esta variante também saiu com outros {par.produtos_distintos - 1} produto(s) do Bling em pedidos — o mais frequente é este.
             </p>
           )}
-          {par.pedidos === 1 && !par.ambiguo && <p className="mt-1 text-xs text-muted-foreground">Evidência de um único pedido.</p>}
+          {par.fonte === 'pedidos' && par.pedidos === 1 && !par.ambiguo && <p className="mt-1 text-xs text-muted-foreground">Evidência de um único pedido.</p>}
           {par.qtd_variantes_ns > 0 && (
             <p className="mt-1 text-xs text-destructive">Este código já é usado por outra variante da Nuvemshop.</p>
           )}
