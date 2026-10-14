@@ -29,6 +29,14 @@ on:
         description: 'ESCRITA NA NUVEMSHOP (lote): quantas variantes processar neste disparo (ex.: 20). Grava o saldo do Bling no estoque (zera/reabre/negativo=0), sem tocar em preço. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
         default: ''
+      aplicar_titulos_maquinas:
+        description: 'ESCRITA (só o nome do produto): quantos produtos das máquinas gravar neste disparo, por sistema (1 = teste). Grava os títulos APROVADOS de barbers.titulos_propostas na Nuvemshop e/ou no Bling (campo titulos_sistema), sem tocar em preço, estoque, SKU, categoria ou marca. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
+      titulos_sistema:
+        description: 'Para aplicar_titulos_maquinas: nuvemshop, bling ou ambos (padrão: ambos)'
+        required: false
+        default: 'ambos'
       remover_categorias_nuvemshop:
         description: 'EXCLUSÃO NA NUVEMSHOP (categorias vazias): ID_CATEGORIA:NOME_ESPERADO separados por | — só apaga a categoria que, ao vivo, tem o nome esperado, nenhuma subcategoria e nenhum produto. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
@@ -173,7 +181,7 @@ jobs:
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
       - name: Nuvemshop (pedidos alterados recentemente)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' && inputs.aplicar_titulos_maquinas == '' }}
         working-directory: etl-nuvemshop-pedidos
         env:
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -184,7 +192,7 @@ jobs:
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' && inputs.aplicar_titulos_maquinas == '' }}
         working-directory: etl-nuvemshop-produtos
         run: |
           pip install -r requirements.txt
@@ -227,6 +235,14 @@ jobs:
         env:
           LOTE_LIMITE: ${{ inputs.vincular_lote }}
         run: python vincular-lote-loja-bling.py
+
+      # ESCRITA dos títulos padronizados das máquinas (Nuvemshop e/ou Bling; só o nome), com travas ao vivo e auditoria. Só no disparo manual.
+      - name: Títulos das máquinas (gravar nome padronizado)
+        if: ${{ inputs.aplicar_titulos_maquinas != '' }}
+        env:
+          TITULOS_LIMITE: ${{ inputs.aplicar_titulos_maquinas }}
+          TITULOS_SISTEMA: ${{ inputs.titulos_sistema }}
+        run: python aplicar-titulos-maquinas.py
 
       # EXCLUSÃO de categorias vazias da Nuvemshop (com travas ao vivo). Só no disparo manual.
       - name: Nuvemshop (remover categorias vazias)
