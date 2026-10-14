@@ -159,8 +159,17 @@ export async function POST(request: NextRequest) {
 
       if (envio.marca !== undefined || envio.categoriasIds !== undefined) {
         // 3) Grava (só marca e/ou categorias) e confere o que a Nuvemshop devolveu.
-        const gravado = await alterarMarcaCategoriasProduto(loja.token, String(item.store_id), item.id_produto_ns, envio)
+        let gravado = await alterarMarcaCategoriasProduto(loja.token, String(item.store_id), item.id_produto_ns, envio)
         gravou = true
+        // A resposta imediata do PUT nem sempre traz as categorias já atualizadas (visto em produção: veio vazia e a
+        // loja ficou certa). Se não conferir, confirma com uma LEITURA nova (até 3 vezes), que é o estado real da loja.
+        if (envio.categoriasIds !== undefined && !categoriasConferem(envio.categoriasIds, gravado.categoriasIds, paiDe)) {
+          for (let tentativa = 0; tentativa < 3; tentativa++) {
+            await new Promise((r) => setTimeout(r, 1000))
+            gravado = await buscarMarcaCategoriasProduto(loja.token, String(item.store_id), item.id_produto_ns)
+            if (categoriasConferem(envio.categoriasIds, gravado.categoriasIds, paiDe)) break
+          }
+        }
         novaMarca = gravado.marca
         novasCategorias = gravado.categoriasIds
         if (envio.marca !== undefined && normalizar(gravado.marca) !== normalizar(envio.marca)) {
