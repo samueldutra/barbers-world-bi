@@ -20,7 +20,8 @@ BEGIN
     EXECUTE format('
         INSERT INTO %I.nuvemshop_produtos (
             store_id, id_produto, id_variante, id_canal, nome, variacao, sku, codigo_barras, publicado,
-            preco, preco_promocional, estoque, url, imagem_url, criado_em, atualizado_em, data_sincronizacao
+            preco, preco_promocional, estoque, url, imagem_url, criado_em, atualizado_em, data_sincronizacao,
+            marca, categorias_ids
         )
         SELECT
             (i->>''store_id'')::BIGINT, (i->>''id_produto'')::BIGINT, (i->>''id_variante'')::BIGINT,
@@ -28,14 +29,16 @@ BEGIN
             (i->>''publicado'')::BOOLEAN, (i->>''preco'')::DECIMAL, (i->>''preco_promocional'')::DECIMAL,
             (i->>''estoque'')::DECIMAL, i->>''url'', i->>''imagem_url'',
             (i->>''criado_em'')::TIMESTAMPTZ, (i->>''atualizado_em'')::TIMESTAMPTZ,
-            (i->>''data_sincronizacao'')::TIMESTAMPTZ
+            (i->>''data_sincronizacao'')::TIMESTAMPTZ,
+            NULLIF(i->>''marca'', ''''),
+            COALESCE((SELECT array_agg(c::BIGINT) FROM jsonb_array_elements_text(COALESCE(i->''categorias_ids'', ''[]''::jsonb)) AS c), ARRAY[]::BIGINT[])
         FROM jsonb_array_elements($1) AS i
         ON CONFLICT (store_id, id_produto, id_variante) DO UPDATE SET
             id_canal = EXCLUDED.id_canal, nome = EXCLUDED.nome, variacao = EXCLUDED.variacao, sku = EXCLUDED.sku,
             codigo_barras = EXCLUDED.codigo_barras, publicado = EXCLUDED.publicado, preco = EXCLUDED.preco,
             preco_promocional = EXCLUDED.preco_promocional, estoque = EXCLUDED.estoque, url = EXCLUDED.url,
             imagem_url = EXCLUDED.imagem_url, criado_em = EXCLUDED.criado_em, atualizado_em = EXCLUDED.atualizado_em,
-            data_sincronizacao = EXCLUDED.data_sincronizacao
+            data_sincronizacao = EXCLUDED.data_sincronizacao, marca = EXCLUDED.marca, categorias_ids = EXCLUDED.categorias_ids
     ', p_schema_name) USING p_data_json;
 END;
 $$;
