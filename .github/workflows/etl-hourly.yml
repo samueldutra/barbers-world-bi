@@ -29,6 +29,10 @@ on:
         description: 'ESCRITA NA NUVEMSHOP (lote): quantas variantes processar neste disparo (ex.: 20). Grava o saldo do Bling no estoque (zera/reabre/negativo=0), sem tocar em preço. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
         default: ''
+      remover_categorias_nuvemshop:
+        description: 'EXCLUSÃO NA NUVEMSHOP (categorias vazias): ID_CATEGORIA:NOME_ESPERADO separados por | — só apaga a categoria que, ao vivo, tem o nome esperado, nenhuma subcategoria e nenhum produto. Vazio = não roda. Use com apenas_nuvemshop marcado'
+        required: false
+        default: ''
       gravar_marca_nuvemshop:
         description: 'ESCRITA NA NUVEMSHOP (marca): PRODUTO_NS:MARCA_ATUAL_ESPERADA:MARCA_NOVA separados por | — grava só o campo brand (só se a marca atual for a esperada), com releitura e auditoria. Vazio = não roda. Use com apenas_nuvemshop marcado'
         required: false
@@ -169,7 +173,7 @@ jobs:
       # conectada, só avisa e termina. Roda mesmo se um passo do Bling falhou (fontes independentes).
       # Execução manual: o campo "alterados_horas" também vale aqui (ex.: 720 = últimos 30 dias).
       - name: Nuvemshop (pedidos alterados recentemente)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' }}
         working-directory: etl-nuvemshop-pedidos
         env:
           ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
@@ -180,7 +184,7 @@ jobs:
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
-        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' }}
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' }}
         working-directory: etl-nuvemshop-produtos
         run: |
           pip install -r requirements.txt
@@ -223,6 +227,13 @@ jobs:
         env:
           LOTE_LIMITE: ${{ inputs.vincular_lote }}
         run: python vincular-lote-loja-bling.py
+
+      # EXCLUSÃO de categorias vazias da Nuvemshop (com travas ao vivo). Só no disparo manual.
+      - name: Nuvemshop (remover categorias vazias)
+        if: ${{ inputs.remover_categorias_nuvemshop != '' }}
+        env:
+          CATEGORIAS_PLANO: ${{ inputs.remover_categorias_nuvemshop }}
+        run: python remover-categorias-nuvemshop.py
 
       # ESCRITA da marca de produtos da Nuvemshop (correção pontual/restauração): só o campo brand, com travas e auditoria. Só no disparo manual.
       - name: Nuvemshop (gravar marca de produto)
