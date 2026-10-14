@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -48,6 +48,17 @@ export function AplicarEmMassaDialog({ aberto, onOpenChange, produtos, marcas, c
   const [progresso, setProgresso] = useState({ feitos: 0, total: 0 })
   const [resumo, setResumo] = useState<ResumoAplicacao | null>(null)
 
+  // Cada vez que o diálogo abre começa do zero: uma escolha antiga (ex.: "definir a marca X") não pode voltar sozinha.
+  useEffect(() => {
+    if (!aberto) return
+    setModoMarca('nao')
+    setMarcaTexto('')
+    setModoCat('nao')
+    setCatIds(new Set())
+    setBuscaCat('')
+    setResumo(null)
+  }, [aberto])
+
   const unicas = useMemo(() => marcasUnicas(marcas), [marcas])
   const marcaDigitada = marcaTexto.trim().replace(/\s+/g, ' ')
   const marcaExistente = unicas.find((m) => normalizarTexto(m.nome) === normalizarTexto(marcaDigitada))
@@ -69,6 +80,16 @@ export function AplicarEmMassaDialog({ aberto, onOpenChange, produtos, marcas, c
   const nomesCategoriasEscolhidas = categorias.filter((c) => catIds.has(c.id_categoria)).map((c) => c.nome.trim())
   // A marca digitada com grafia diferente de uma existente usa a grafia existente (evita criar "Wahl" ao lado de "WAHL").
   const marcaFinal = marcaExistente ? marcaExistente.nome : marcaDigitada
+
+  // Quantos dos selecionados perdem algo que já tinham (marca diferente / categorias existentes).
+  const marcasSobrescritas =
+    modoMarca === 'definir' && marcaDigitada
+      ? produtos.filter((p) => p.marca && normalizarTexto(p.marca) !== normalizarTexto(marcaFinal))
+      : modoMarca === 'limpar'
+        ? produtos.filter((p) => p.marca)
+        : []
+  const categoriasTrocadas =
+    modoCat === 'substituir' || modoCat === 'limpar' ? produtos.filter((p) => p.categorias.length > 0) : []
 
   const descricao: string[] = []
   if (modoMarca === 'definir') descricao.push(`marca definida como "${marcaFinal}"${marcaExistente ? '' : ' (marca nova)'}`)
@@ -286,6 +307,23 @@ export function AplicarEmMassaDialog({ aberto, onOpenChange, produtos, marcas, c
                 <span>
                   Em {formatarNumero(produtos.length)} produto(s): {descricao.join('; ')}.
                   {produtos.length > 1 && ' Dica: confira o resultado em 1 produto antes de aplicar nos demais.'}
+                </span>
+              </div>
+            )}
+
+            {(marcasSobrescritas.length > 0 || categoriasTrocadas.length > 0) && (
+              <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  {marcasSobrescritas.length > 0 && (
+                    <>
+                      {formatarNumero(marcasSobrescritas.length)} produto(s) selecionado(s) já têm marca e ela será {modoMarca === 'limpar' ? 'removida' : 'trocada'}
+                      {' '}(ex.: &quot;{marcasSobrescritas[0].marca}&quot; em &quot;{marcasSobrescritas[0].nome}&quot;).{' '}
+                    </>
+                  )}
+                  {categoriasTrocadas.length > 0 && (
+                    <>{formatarNumero(categoriasTrocadas.length)} produto(s) já têm categorias que serão {modoCat === 'limpar' ? 'removidas' : 'substituídas'}.</>
+                  )}
                 </span>
               </div>
             )}
