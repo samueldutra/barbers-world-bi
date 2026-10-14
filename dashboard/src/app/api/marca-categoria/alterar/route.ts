@@ -46,6 +46,27 @@ export interface ResultadoMarcaCategoria {
 const normalizar = (t: string | null) => (t ?? '').trim().replace(/\s+/g, ' ').toUpperCase()
 const mesmoConjunto = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x))
 
+/** A Nuvemshop acrescenta sozinha as categorias PAI de uma subcategoria atribuída (ex.: ao dar "GOLAS HIGIÊNICAS" o produto
+ * fica também com "ACESSÓRIOS DESCARTÁVEIS" e "ACESSÓRIOS"). Por isso a conferência aceita o que foi pedido MAIS os ancestrais. */
+function ancestrais(ids: number[], paiDe: Map<number, number | null>): Set<number> {
+  const resultado = new Set<number>()
+  for (const id of ids) {
+    let atual = paiDe.get(id) ?? null
+    for (let nivel = 0; atual !== null && !resultado.has(atual) && nivel < 10; nivel++) {
+      resultado.add(atual)
+      atual = paiDe.get(atual) ?? null
+    }
+  }
+  return resultado
+}
+
+/** Pedido ⊆ gravado ⊆ pedido + ancestrais. Pedido vazio exige gravado vazio. */
+function categoriasConferem(pedido: number[], gravado: number[], paiDe: Map<number, number | null>): boolean {
+  if (pedido.length === 0) return gravado.length === 0
+  const permitido = new Set([...pedido, ...ancestrais(pedido, paiDe)])
+  return pedido.every((id) => gravado.includes(id)) && gravado.every((id) => permitido.has(id))
+}
+
 export async function POST(request: NextRequest) {
   const { erro, user } = await autorizarModulo(MODULO, 'Sem acesso ao módulo de marca e categoria.')
   if (erro) return erro
@@ -82,6 +103,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const paiDe = new Map<number, number | null>()
+  if (categorias) {
+    const { data: lista } = await admin.rpc('obter_categorias_nuvemshop', { p_schema_name: TENANT_SCHEMA })
+    for (const c of (lista ?? []) as { id_categoria: number; id_pai: number | null }[]) {
+      paiDe.set(Number(c.id_categoria), c.id_pai === null ? null : Number(c.id_pai))
+    }
+  }
+
   const resultados: ResultadoMarcaCategoria[] = []
   // Sequencial de propósito: respeita o limite da Nuvemshop e dá a cada produto o seu resultado (um erro não derruba o lote).
   for (const [i, item] of itens.entries()) {
@@ -90,7 +119,8 @@ export async function POST(request: NextRequest) {
     let anterior: { marca: string | null; categoriasIds: number[] } | null = null
     let novaMarca: string | null = null
     let novasCategorias: number[] = []
-    let alterado = false
+    /** A Nuvemshop JÁ recebeu a alteração (mesmo que a conferência depois reclame): o espelho e a auditoria refletem o que ela devolveu. */
+    let gravou = false
     let mensagemErro: string | null = null
 
     try {
@@ -130,6 +160,9 @@ export async function POST(request: NextRequest) {
       if (envio.marca !== undefined || envio.categoriasIds !== undefined) {
         // 3) Grava (só marca e/ou categorias) e confere o que a Nuvemshop devolveu.
         const gravado = await alterarMarcaCategoriasProduto(loja.token, String(item.store_id), item.id_produto_ns, envio)
+        gravou = true
+        novaMarca = gravado.marca
+        novasCategorias = gravado.categoriasIds
         if (envio.marca !== undefined && normalizar(gravado.marca) !== normalizar(envio.marca)) {
           throw new Error(
             envio.marca === null
@@ -137,19 +170,16 @@ export async function POST(request: NextRequest) {
               : `A marca não ficou como esperado (a Nuvemshop devolveu "${gravado.marca ?? 'vazia'}").`
           )
         }
-        if (envio.categoriasIds !== undefined && !mesmoConjunto(gravado.categoriasIds, envio.categoriasIds)) {
-          throw new Error('As categorias não ficaram como esperado depois da gravação.')
+        if (envio.categoriasIds !== undefined && !categoriasConferem(envio.categoriasIds, gravado.categoriasIds, paiDe)) {
+          throw new Error('As categorias não ficaram como esperado depois da gravação. Confira o produto na Nuvemshop.')
         }
-        novaMarca = gravado.marca
-        novasCategorias = gravado.categoriasIds
-        alterado = true
       }
     } catch (e) {
       mensagemErro = e instanceof Error ? e.message : 'Erro desconhecido ao alterar na Nuvemshop.'
     }
 
     const sucesso = mensagemErro === null
-    if (sucesso && alterado) {
+    if (gravou) {
       const { error: erroEspelho } = await admin.rpc('espelhar_marca_categoria_nuvemshop', {
         p_schema_name: TENANT_SCHEMA, p_store_id: item.store_id, p_id_produto: item.id_produto_ns,
         p_atualizar_marca: marca !== undefined, p_marca: novaMarca,
@@ -159,18 +189,18 @@ export async function POST(request: NextRequest) {
       if (erroEspelho) console.error('[marca-categoria] Falha ao espelhar:', item.id_produto_ns, erroEspelho)
     }
     // Auditoria: toda tentativa fica registrada (sucesso, recusa da Nuvemshop ou recusa de validação). Produto que já estava assim não gera linha.
-    if (!sucesso || alterado) {
+    if (!sucesso || gravou) {
       const { error: erroRegistro } = await admin.rpc('registrar_alteracao_marca_categoria', {
         p_schema_name: TENANT_SCHEMA, p_store_id: item.store_id, p_id_produto_ns: item.id_produto_ns,
         p_marca_anterior: anterior?.marca ?? null, p_marca_nova: novaMarca,
-        p_categorias_anteriores: anterior?.categoriasIds ?? null, p_categorias_novas: sucesso ? novasCategorias : null,
+        p_categorias_anteriores: anterior?.categoriasIds ?? null, p_categorias_novas: gravou ? novasCategorias : null,
         p_sucesso: sucesso, p_erro: mensagemErro, p_usuario_id: user.id, p_usuario_email: user.email ?? null,
       })
       if (erroRegistro) console.error('[marca-categoria] Falha ao registrar alteração:', item.id_produto_ns, erroRegistro)
     }
 
     resultados.push({
-      id_produto_ns: item.id_produto_ns, sucesso, alterado: sucesso && alterado,
+      id_produto_ns: item.id_produto_ns, sucesso, alterado: gravou,
       marca: novaMarca, categorias_ids: novasCategorias, erro: mensagemErro,
     })
   }
