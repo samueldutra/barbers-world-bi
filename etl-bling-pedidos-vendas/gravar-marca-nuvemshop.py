@@ -84,8 +84,15 @@ def main():
                 categorias_novas = ids_categorias(depois)
                 if depois.get("brand") != nova:
                     raise RuntimeError(f"a marca não ficou como esperado: {depois.get('brand')!r} (esperado {nova!r})")
-                if categorias_novas != ids_categorias(antes) or depois.get("published") != antes.get("published"):
-                    raise RuntimeError("CATEGORIAS/PUBLICAÇÃO MUDARAM durante a gravação")
+                # A Nuvemshop completa sozinha a cadeia de categorias-pai de um produto a qualquer gravação (ex.: acrescenta "MARCAS"
+                # a quem tinha só "WAHL"). Isso é aceito e avisado; REMOVER categoria ou mudar a publicação continua sendo erro.
+                categorias_antes = ids_categorias(antes)
+                removidas = sorted(set(categorias_antes) - set(categorias_novas))
+                if removidas or depois.get("published") != antes.get("published"):
+                    raise RuntimeError(f"CATEGORIAS REMOVIDAS ({removidas}) OU PUBLICAÇÃO MUDOU durante a gravação")
+                acrescidas = sorted(set(categorias_novas) - set(categorias_antes))
+                if acrescidas:
+                    base.log(f"  [AVISO] a Nuvemshop acrescentou categorias-pai ao produto {pid}: {acrescidas}")
                 resultado = "sucesso"
         except Exception as e:
             motivo = str(e)
