@@ -36,6 +36,14 @@ antes de o app ter essa permissão: reconectar em Canais de Venda). Token recusa
    da loja com `limpar_nuvemshop_produtos_removidos` (apaga linhas com `data_sincronizacao` anterior ao início da
    execução). Catálogo vazio **não** apaga nada.
 
+## Marca e categorias (módulo Conferência de Marca e Categoria)
+
+O catálogo também traz a **marca** (`brand`, texto livre do produto) e as **categorias** (lista de ids) de cada produto —
+gravadas em todas as variantes do mesmo produto (`marca`, `categorias_ids`) — e o **cadastro de categorias** da loja
+(`GET /categories`, hierárquico: `id_pai`) em `barbers.nuvemshop_categorias`, carregado antes dos produtos
+(`processar_carga_nuvemshop_categorias` + `limpar_nuvemshop_categorias_removidas`; falha nas categorias só avisa, não derruba o
+catálogo). `barbers.nuvemshop_marcas` guarda as marcas criadas pelo BI que ainda não têm produto. SQL: `sql/marca_categoria.sql`.
+
 ## Banco
 
 `sql/create_table_nuvemshop_produtos.sql` e `sql/rpc_processar_carga_nuvemshop_produtos.sql` (aplicados em 11/10/2026).

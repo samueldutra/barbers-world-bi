@@ -261,7 +261,7 @@ def listar_produtos(loja: dict) -> List[dict]:
         params = {
             "per_page": POR_PAGINA,
             "page": pagina,
-            "fields": "id,name,published,canonical_url,images,variants,created_at,updated_at",
+            "fields": "id,name,brand,categories,published,canonical_url,images,variants,created_at,updated_at",
         }
         itens = _nuvemshop_get(loja, "/products", params)
         if not itens:
@@ -314,6 +314,41 @@ def _nome_variacao(variante: dict) -> Optional[str]:
     return " / ".join(p for p in partes if p) or None
 
 
+def _ids_categorias(categorias) -> List[int]:
+    """A Nuvemshop devolve as categorias do produto como objetos completos ({"id": 1, "name": {...}, ...})."""
+    ids = []
+    for c in categorias or []:
+        cid = c.get("id") if isinstance(c, dict) else c
+        if cid is not None:
+            ids.append(int(cid))
+    return ids
+
+
+def transformar_categoria(categoria: dict, loja: dict, data_sincronizacao: str) -> dict:
+    return {
+        "store_id": int(loja["store_id"]),
+        "id_categoria": int(categoria["id"]),
+        "nome": _txt(_texto_i18n(categoria.get("name")), 200) or f"Categoria {categoria['id']}",
+        "id_pai": int(categoria["parent"]) if categoria.get("parent") else None,
+        "data_sincronizacao": data_sincronizacao,
+    }
+
+
+def listar_categorias(loja: dict) -> List[dict]:
+    """Todas as categorias da loja (todas as páginas)."""
+    categorias: List[dict] = []
+    pagina = 1
+    while True:
+        itens = _nuvemshop_get(loja, "/categories", {"per_page": POR_PAGINA, "page": pagina, "fields": "id,name,parent"})
+        if not itens:
+            break
+        categorias.extend(itens)
+        if len(itens) < POR_PAGINA:
+            break
+        pagina += 1
+    return categorias
+
+
 def transformar_produto(produto: dict, loja: dict, data_sincronizacao: str) -> List[dict]:
     """Devolve uma linha por variante do produto. O SKU é gravado como está (sem trim): a
     normalização fica no banco, que assim consegue apontar o que precisa de ajuste."""
@@ -339,6 +374,8 @@ def transformar_produto(produto: dict, loja: dict, data_sincronizacao: str) -> L
             "estoque": _num(v.get("stock")),
             "url": _txt(produto.get("canonical_url")),
             "imagem_url": _txt(imagem),
+            "marca": _txt(_texto_i18n(produto.get("brand")), 200),
+            "categorias_ids": _ids_categorias(produto.get("categories")),
             "criado_em": _ts(v.get("created_at") or produto.get("created_at")),
             "atualizado_em": _ts(v.get("updated_at") or produto.get("updated_at")),
             "data_sincronizacao": data_sincronizacao,
@@ -378,6 +415,22 @@ def processar_loja(loja: dict, schema: str, inicio_execucao: datetime) -> tuple:
     linhas = remover_duplicatas(linhas, ("store_id", "id_produto", "id_variante"))
 
     contexto = f"loja {loja['store_id']}"
+    # Categorias da loja (módulo Conferência de Marca e Categoria). Falha aqui não derruba o catálogo.
+    try:
+        categorias = listar_categorias(loja)
+        if categorias:
+            linhas_cat = [transformar_categoria(c, loja, data_sincronizacao) for c in categorias if c.get("id") is not None]
+            enviar_em_lotes(linhas_cat, "processar_carga_nuvemshop_categorias", schema, context=contexto)
+            rpc_supabase_com_retry(
+                "limpar_nuvemshop_categorias_removidas",
+                {"p_schema_name": schema, "p_store_id": int(loja["store_id"]), "p_antes_de": data_sincronizacao},
+                context=contexto,
+            )
+        log(f"  Categorias: {len(categorias)}.")
+    except TokenInvalido:
+        raise
+    except Exception as e:
+        log(f"  [AVISO] Categorias não carregadas: {e}")
     enviar_em_lotes(linhas, "processar_carga_nuvemshop_produtos", schema, context=contexto)
     # Chegou até aqui = todas as páginas lidas e carregadas: o que não foi tocado nesta execução foi excluído.
     resp = rpc_supabase_com_retry(
