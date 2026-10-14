@@ -160,6 +160,7 @@ anterior. O vínculo **não** faz o Bling empurrar estoque na hora — por isso 
 | `vincular_lote` (quantos) | `vincular-lote-loja-bling.py` | ESCRITA no Bling: cria/corrige o vínculo dos candidatos de `obter_vinculos_a_gravar()`; auditoria em `vinculos_lojas_alteracoes` |
 | `atualizar_estoque_nuvemshop` (`ID_BLING:ID_VARIANTE:ESTOQUE_ATUAL:SALDO`) | `sync-estoque-bling-nuvemshop.py` | ESCRITA na Nuvemshop, 1 variante (teste) |
 | `atualizar_estoque_lote` (quantas) | `sync-estoque-bling-nuvemshop.py` | ESCRITA na Nuvemshop: `stock` = saldo virtual do Bling (negativo = 0; zera, reabre, controla as ilimitadas); auditoria em `estoque_nuvemshop_alteracoes` |
+| `aplicar_sku_lote` (quantas) + `aplicar_sku_plano` (`PRODUTO_NS:VARIANTE_NS:CODIGO_BLING` separados por `\|`) | `aplicar-sku-nuvemshop.py` | ESCRITA na Nuvemshop: grava o código exato do Bling no `sku` das variantes do plano (só o campo `sku`; relê e confere preço/promoção/estoque/publicação intactos); valida no banco que o código existe em 1 produto ativo e não é de outra variante; auditoria em `nuvemshop_alteracoes_sku` (origem `escolha`) |
 
 Boas práticas que valeram: **teste com 1 produto antes do lote** (o usuário confere manualmente), travas ao vivo por item (produto ativo, SKU
 ainda idêntico, estado esperado do vínculo/estoque), **releitura depois de gravar**, 3 erros seguidos interrompem, auditoria de cada tentativa e
