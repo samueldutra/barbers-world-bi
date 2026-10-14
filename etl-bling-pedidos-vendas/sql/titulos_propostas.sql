@@ -92,3 +92,92 @@ REVOKE ALL ON FUNCTION obter_titulos_a_aplicar(TEXT, TEXT, INTEGER) FROM PUBLIC,
 REVOKE ALL ON FUNCTION registrar_titulo_aplicado(TEXT, TEXT, BIGINT, BIGINT, BIGINT, TEXT, TEXT, BOOLEAN, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION obter_titulos_a_aplicar(TEXT, TEXT, INTEGER) TO service_role;
 GRANT EXECUTE ON FUNCTION registrar_titulo_aplicado(TEXT, TEXT, BIGINT, BIGINT, BIGINT, TEXT, TEXT, BOOLEAN, TEXT) TO service_role;
+
+-- ---------------------------------------------------------------------------------------------------------------------------
+-- GERAÇÃO DAS PROPOSTAS (regra "maquinas-v2"). Passo 1: função que normaliza um nome (maiúsculas, tipo com acento no começo,
+-- marca logo depois, cor em PT-BR no fim, CORDLESS e voltagem por último; só mantém o que já estava no título). Os passos 2 a 5
+-- foram aplicados como UPDATEs sobre barbers.titulos_propostas (descritos abaixo, na ordem em que rodaram).
+-- ---------------------------------------------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.titulo_maquina_proposto(p_nome TEXT, p_marca TEXT, p_familia TEXT)
+RETURNS TABLE(titulo TEXT, status TEXT, pendencias TEXT)
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+    t TEXT; tipo TEXT; marca TEXT; resto TEXT; ultimo TEXT; cordless BOOLEAN; volt TEXT := NULL;
+    pend TEXT[] := ARRAY[]::TEXT[]; rev BOOLEAN := FALSE; tem_tipo BOOLEAN; tem_marca BOOLEAN; antes TEXT;
+    cores CONSTANT JSONB := '{"BLACK":"PRETA","PRETA":"PRETA","PRETO":"PRETA","WHITE":"BRANCA","BRANCA":"BRANCA","BRANCO":"BRANCA","RED":"VERMELHA","VERMELHA":"VERMELHA","BLUE":"AZUL","AZUL":"AZUL","GREEN":"VERDE","VERDE":"VERDE","GRAY":"CINZA","GREY":"CINZA","CINZA":"CINZA","SILVER":"PRATA","PRATA":"PRATA","GOLD":"DOURADA","DOURADA":"DOURADA","ORANGE":"LARANJA","LARANJA":"LARANJA","PINK":"ROSA","ROSA":"ROSA","CYAN":"CIANO","LILAS":"LILÁS","LILÁS":"LILÁS","BORDO":"BORDÔ","BORDÔ":"BORDÔ","AMARELO":"AMARELA","AMARELA":"AMARELA","ROXA":"ROXA","ROXO":"ROXA"}';
+BEGIN
+    t := ' ' || regexp_replace(upper(btrim(p_nome)), '\s+', ' ', 'g') || ' ';
+    t := replace(t, 'S|C', ' STYLECRAFT ');
+    t := replace(replace(t, 'ESTYLE CRAFT', 'STYLECRAFT'), 'STYLE CRAFT', 'STYLECRAFT');
+    t := replace(t, 'EDITON', 'EDITION');
+    t := replace(t, 'PROFOILL', 'PROFOIL');
+    t := replace(t, ' MAQUINA ', ' MÁQUINA ');
+    t := replace(t, ' - ', ' ');
+    t := regexp_replace(t, '\s+', ' ', 'g');
+    tipo := CASE p_familia WHEN 'CORTE' THEN 'MÁQUINA DE CORTE' WHEN 'ACABAMENTO' THEN 'MÁQUINA DE ACABAMENTO' ELSE 'MÁQUINA SHAVER' END;
+    tem_tipo := t ~ ' MÁQUINA DE (CORTE|ACABAMENTO) ' OR t ~ ' MÁQUINA SHAVER ';
+    IF NOT tem_tipo THEN rev := TRUE; pend := array_append(pend, 'tipo da máquina inferido da categoria (não consta no título atual)'); END IF;
+    t := regexp_replace(t, ' MÁQUINA( DE)? ', ' ', 'g');
+    t := CASE p_familia WHEN 'CORTE' THEN replace(t, ' CORTE ', ' ') WHEN 'ACABAMENTO' THEN replace(t, ' ACABAMENTO ', ' ') ELSE replace(t, ' SHAVER ', ' ') END;
+    t := replace(t, ' COR ', ' ');
+    cordless := t ~ ' CORDLESS ';
+    t := replace(t, ' CORDLESS ', ' ');
+    IF t ~ ' BIVOLT ' THEN volt := 'BIVOLT'; t := replace(t, ' BIVOLT ', ' ');
+    ELSIF t ~ ' 110 ?V ' THEN volt := '110 V'; t := regexp_replace(t, ' 110 ?V ', ' ');
+    ELSIF t ~ ' 220 ?V ' THEN volt := '220 V'; t := regexp_replace(t, ' 220 ?V ', ' ');
+    END IF;
+    IF volt IS NULL THEN pend := array_append(pend, 'voltagem ausente no título (confirmar com o fabricante)'); END IF;
+    t := regexp_replace(t, ' VGR[ -]V?-?([0-9])', ' VGR V-\1', 'g');
+    t := regexp_replace(t, ' (GMT|HC|ZB) ([0-9])', ' \1-\2', 'g');
+    IF upper(p_marca) LIKE 'BABYLISS%' THEN
+        antes := t;
+        t := replace(t, ' LO PRO ', ' LO-PRO ');
+        t := replace(t, ' LOPROFX ', ' LO-PRO FX ');
+        t := replace(t, ' FX ONE ', ' FXONE ');
+        t := replace(t, ' SNAPFX ', ' SNAP FX ');
+        t := replace(t, ' COREFX ', ' CORE FX ');
+        t := replace(t, ' TOMB 45 ', ' TOMB45 ');
+        IF t <> antes THEN rev := TRUE; pend := array_append(pend, 'grafia do modelo BabylissPro padronizada (FXONE, LO-PRO, SNAP FX…): confirmar a grafia oficial'); END IF;
+    END IF;
+    IF t ~ ' STYLECRAFT ' THEN marca := 'STYLECRAFT';
+    ELSIF t ~ ' GAMMA\+? ' OR upper(p_marca) LIKE 'GAMMA%' THEN marca := 'GAMMA+';
+    ELSIF upper(p_marca) LIKE 'BABYLISS%' THEN marca := 'BABYLISSPRO';
+    ELSIF upper(p_marca) LIKE 'JUCAI%' THEN marca := 'JUCAI';
+    ELSE marca := upper(btrim(p_marca)); END IF;
+    IF marca IN ('STYLECRAFT','GAMMA+') THEN rev := TRUE; pend := array_append(pend, 'marca Gamma+ x StyleCraft a confirmar (linha de qual marca?)'); END IF;
+    tem_marca := CASE marca
+        WHEN 'BABYLISSPRO' THEN t ~ ' BABYLISS(PRO)? '
+        WHEN 'GAMMA+' THEN t ~ ' GAMMA\+? '
+        WHEN 'GA.MA ITALY' THEN t ~ ' GA\.MA ITALY '
+        ELSE position(' ' || marca || ' ' IN t) > 0 END;
+    IF NOT tem_marca THEN rev := TRUE; pend := array_append(pend, 'marca não constava no título (inserida a partir do cadastro)'); END IF;
+    t := CASE marca
+        WHEN 'BABYLISSPRO' THEN regexp_replace(t, ' BABYLISS(PRO)? ', ' ', 'g')
+        WHEN 'GAMMA+' THEN regexp_replace(t, ' GAMMA\+? ', ' ', 'g')
+        WHEN 'STYLECRAFT' THEN regexp_replace(regexp_replace(t, ' STYLECRAFT ', ' ', 'g'), ' GAMMA\+? ', ' ', 'g')
+        WHEN 'GA.MA ITALY' THEN regexp_replace(t, ' GA\.MA ITALY ', ' ', 'g')
+        ELSE replace(t, ' ' || marca || ' ', ' ') END;
+    t := regexp_replace(t, '\s+', ' ', 'g');
+    resto := btrim(t);
+    ultimo := (regexp_match(resto, '([^ ]+)$'))[1];
+    IF resto ~ '(^| )[A-ZÁ-Ú]+/[A-ZÁ-Ú]+$' THEN
+        rev := TRUE; pend := array_append(pend, 'duas cores (nome oficial do fabricante mantido)');
+    ELSIF ultimo IS NOT NULL AND cores ? ultimo AND resto <> ultimo THEN
+        resto := regexp_replace(resto, ' ' || ultimo || '$', ' ' || (cores ->> ultimo));
+    END IF;
+    titulo := btrim(regexp_replace(tipo || ' ' || marca || ' ' || resto || CASE WHEN cordless THEN ' CORDLESS' ELSE '' END || COALESCE(' ' || volt, ''), '\s+', ' ', 'g'));
+    status := CASE WHEN rev THEN 'REVISAR' ELSE 'APROVADO' END;
+    pendencias := array_to_string(pend, '; ');
+    RETURN NEXT;
+END;
+$$;
+
+-- Passo 2: INSERT ... SELECT da função sobre os produtos das categorias MÁQUINAS DE CORTE (41220764), DE ACABAMENTO (41220765)
+--          e SHAVER (41220766), com o nome normalizado em NFC (o catálogo tem acentos decompostos).
+-- Passo 3: Gamma+ x StyleCraft pela LINHA: Boosted, Boosted Up, Shorty, Golden Gun, Cyborg, X-Ergo = GAMMA+; as demais
+--          (Saber, Instinct, Rebel, Ergo, Ace, Absolute Hitter, Wireless Prodigy, Master Deluxe) = STYLECRAFT. Sugestão de marca em
+--          marca_sugerida (NÃO grava no cadastro). Só vira REVISAR se a marca do título mudou ou não constava, ou se não há confirmação externa.
+-- Passo 4: Cocco mantém a grafia original da marca (cores em inglês); BIVOLT acrescentado onde faltava voltagem (decisão do cliente).
+-- Passo 5: produto do Bling pelo SKU idêntico (id_produto_bling / titulo_bling_atual); status = APROVADO quando só resta a nota do BIVOLT.
