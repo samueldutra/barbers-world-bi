@@ -95,9 +95,20 @@ def aplicar_um_nuvemshop(store, token, r):
     return "sucesso", None, vivo
 
 
+def bling(cliente, conta, metodo, path, corpo=None):
+    """Chamada ao Bling que ESPERA e tenta de novo no 429 (limite de requisições) — 4 tentativas com espera crescente."""
+    for espera in (0, 4, 10, 25):
+        if espera:
+            time.sleep(espera)
+        status, resposta = vl.chamar(cliente, conta, metodo, path, corpo=corpo)
+        if status != 429:
+            break
+    return status, resposta
+
+
 def aplicar_um_bling(cliente, conta, r):
     pid = int(r["id_produto_bling"])
-    status, corpo = vl.chamar(cliente, conta, "GET", f"/produtos/{pid}")
+    status, corpo = bling(cliente, conta, "GET", f"/produtos/{pid}")
     if status != 200:
         return "erro", f"GET falhou ({status}): {str(corpo)[:200]}", None
     antes = corpo.get("data") or {}
@@ -106,10 +117,10 @@ def aplicar_um_bling(cliente, conta, r):
         return "pulado", "já está com o título proposto", vivo
     if r.get("titulo_bling_atual") and n(vivo) != n(r["titulo_bling_atual"]):
         return "pulado", f"o nome ao vivo ({vivo!r}) não é o da proposta — alguém mudou; não sobrescrevo", vivo
-    status, resposta = vl.chamar(cliente, conta, "PATCH", f"/produtos/{pid}", corpo={"nome": r["titulo_proposto"]})
+    status, resposta = bling(cliente, conta, "PATCH", f"/produtos/{pid}", corpo={"nome": r["titulo_proposto"]})
     if status >= 400:
         return "erro", f"PATCH recusado ({status}): {json.dumps(resposta, ensure_ascii=False)[:250]}", vivo
-    status, corpo2 = vl.chamar(cliente, conta, "GET", f"/produtos/{pid}")
+    status, corpo2 = bling(cliente, conta, "GET", f"/produtos/{pid}")
     if status != 200:
         return "erro", f"GET de conferência falhou ({status})", vivo
     depois = corpo2.get("data") or {}
@@ -129,6 +140,8 @@ def processar(sistema, schema, linhas, aplicar_um):
             resultado, motivo, vivo = "erro", f"exceção: {e}", None
         contagem[resultado] += 1
         seguidos = seguidos + 1 if resultado == "erro" else 0
+        if sistema == "bling":
+            time.sleep(1.0)  # o PATCH de produto no Bling tem limite próprio mais baixo que o geral
         base.log(f"[{sistema} {i}/{len(linhas)}] {vivo!r} -> {r['titulo_proposto']!r}: {resultado.upper()}{' — ' + motivo if motivo else ''}")
         if resultado != "pulado":
             try:
