@@ -128,3 +128,112 @@ export async function alterarSkuVariante(
   }
   throw new Error('A Nuvemshop está limitando as requisições; tente de novo em instantes.')
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Marca e categorias dos produtos (módulo "Conferência de Marca e Categoria"). Exige write_products.
+// Na Nuvemshop a marca é o texto do campo `brand` do produto (sem cadastro próprio); as categorias são cadastros
+// (/categories) e o produto guarda a lista de ids.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** Chamada genérica à API com espera no 429 (balde cheio). Devolve o status e o corpo já lido. */
+async function chamarApi(
+  accessToken: string,
+  storeId: string,
+  metodo: 'GET' | 'POST' | 'PUT',
+  caminho: string,
+  corpo?: unknown
+): Promise<{ status: number; json: unknown }> {
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const resp = await fetch(`${API_URL}/${storeId}${caminho}`, {
+      method: metodo,
+      headers: headersApi(accessToken),
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      cache: 'no-store',
+    })
+    if (resp.status === 429) {
+      const espera = Math.min(Number(resp.headers.get('x-rate-limit-reset') ?? 2000) / 1000 + 0.5, 10)
+      await new Promise((r) => setTimeout(r, espera * 1000))
+      continue
+    }
+    return { status: resp.status, json: await resp.json().catch(() => null) }
+  }
+  throw new Error('A Nuvemshop está limitando as requisições; tente de novo em instantes.')
+}
+
+function mensagemDeErro(status: number, json: unknown): string {
+  const corpo = json as { description?: unknown; message?: unknown; error?: unknown } | null
+  const detalhe = corpo?.description || corpo?.message || corpo?.error || `HTTP ${status}`
+  if (status === 401 || status === 403) {
+    return `A Nuvemshop recusou o acesso (${typeof detalhe === 'string' ? detalhe : JSON.stringify(detalhe)}). Reconecte o canal em Canais de Venda com a permissão de escrita em produtos.`
+  }
+  if (status === 404) return 'O produto ou a categoria não existe mais na Nuvemshop. Atualize os dados.'
+  return `A Nuvemshop recusou a alteração: ${typeof detalhe === 'string' ? detalhe : JSON.stringify(detalhe)}`
+}
+
+export interface MarcaCategoriasProduto {
+  /** null = produto sem marca. */
+  marca: string | null
+  categoriasIds: number[]
+}
+
+function lerMarcaCategorias(produto: unknown): MarcaCategoriasProduto {
+  const p = (produto ?? {}) as { brand?: unknown; categories?: unknown }
+  const marca =
+    typeof p.brand === 'string'
+      ? p.brand
+      : p.brand && typeof p.brand === 'object'
+        ? ((p.brand as Record<string, string>).pt ?? Object.values(p.brand as Record<string, string>)[0] ?? null)
+        : null
+  const categorias = Array.isArray(p.categories) ? p.categories : []
+  return {
+    marca: marca && marca.trim() !== '' ? marca : null,
+    categoriasIds: categorias
+      .map((c) => (typeof c === 'object' && c !== null ? (c as { id?: unknown }).id : c))
+      .filter((id): id is number => typeof id === 'number'),
+  }
+}
+
+/** Lê a marca e as categorias ATUAIS do produto direto na Nuvemshop (não confia no espelho do banco). */
+export async function buscarMarcaCategoriasProduto(
+  accessToken: string,
+  storeId: string,
+  idProduto: number
+): Promise<MarcaCategoriasProduto> {
+  const { status, json } = await chamarApi(accessToken, storeId, 'GET', `/products/${idProduto}?fields=id,brand,categories`)
+  if (status !== 200) throw new Error(mensagemDeErro(status, json))
+  return lerMarcaCategorias(json)
+}
+
+/** Altera SÓ a marca e/ou as categorias do produto (PUT parcial: preço, estoque, SKU e o resto ficam como estão).
+ * Devolve o que a Nuvemshop gravou, pra conferir. `marca: null` limpa a marca. */
+export async function alterarMarcaCategoriasProduto(
+  accessToken: string,
+  storeId: string,
+  idProduto: number,
+  alteracao: { marca?: string | null; categoriasIds?: number[] }
+): Promise<MarcaCategoriasProduto> {
+  const corpo: Record<string, unknown> = {}
+  if (alteracao.marca !== undefined) corpo.brand = alteracao.marca
+  if (alteracao.categoriasIds !== undefined) corpo.categories = alteracao.categoriasIds
+  const { status, json } = await chamarApi(accessToken, storeId, 'PUT', `/products/${idProduto}`, corpo)
+  if (status >= 400) throw new Error(mensagemDeErro(status, json))
+  return lerMarcaCategorias(json)
+}
+
+/** Cria uma categoria (nome em português; `idPai` null = categoria de topo). */
+export async function criarCategoriaNuvemshop(
+  accessToken: string,
+  storeId: string,
+  nome: string,
+  idPai: number | null
+): Promise<{ id: number; nome: string; idPai: number | null }> {
+  const corpo: Record<string, unknown> = { name: { pt: nome } }
+  if (idPai !== null) corpo.parent = idPai
+  const { status, json } = await chamarApi(accessToken, storeId, 'POST', '/categories', corpo)
+  const c = json as { id?: unknown; name?: unknown; parent?: unknown } | null
+  if (status >= 400 || typeof c?.id !== 'number') {
+    if (status === 422) throw new Error('A Nuvemshop recusou a categoria (nome em branco ou limite de 1.000 categorias da loja).')
+    throw new Error(mensagemDeErro(status, json))
+  }
+  return { id: c.id, nome, idPai: typeof c.parent === 'number' ? c.parent : idPai }
+}

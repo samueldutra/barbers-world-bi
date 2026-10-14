@@ -1,6 +1,7 @@
 import {
   IconDashboard,
   IconLink,
+  IconCategory,
   IconBuildingStore,
   IconMapPin,
   IconReportAnalytics,
@@ -35,6 +36,7 @@ export const navMain: NavItem[] = [
       { title: "Gerar SKU no Bling", url: "/vinculo-sku/gerar-sku" },
     ],
   },
+  { id: "marca-categoria", title: "Marca e Categoria", url: "/marca-categoria", icon: IconCategory },
   { id: "canais-venda", title: "Canais de Venda", url: "/canais-venda", icon: IconBuildingStore },
   {
     id: "prospeccao",
