@@ -4,7 +4,7 @@ Só o NOME do produto é alterado — preço, estoque, SKU, categorias, marca e 
 
 Entrada (disparo manual do etl-hourly.yml):
   TITULOS_LIMITE  = quantos produtos processar neste disparo (por sistema)        (1 = teste)
-  TITULOS_SISTEMA = nuvemshop | bling | ambos                                     (padrão: ambos)
+  TITULOS_SISTEMA = nuvemshop | bling | ambos | reverter-bling-cosmetico                                     (padrão: ambos)
 
 Travas por produto (nada é gravado se alguma falhar):
   - o nome AO VIVO no sistema ainda é o que a proposta tomou como "atual" (senão pula: alguém mudou o nome no meio tempo);
@@ -131,6 +131,63 @@ def aplicar_um_bling(cliente, conta, r):
     return "sucesso", None, vivo
 
 
+def reverter_um_bling(cliente, conta, r):
+    """Restaura o nome ORIGINAL do Bling (cosméticos ficam padronizados só na Nuvemshop)."""
+    pid = int(r["id_produto_bling"])
+    original, aplicado = r["titulo_original"], r["titulo_aplicado"]
+    if not original:
+        return "erro", "sem título original na auditoria", None
+    status, corpo = bling(cliente, conta, "GET", f"/produtos/{pid}")
+    if status != 200:
+        return "erro", f"GET falhou ({status}): {str(corpo)[:200]}", None
+    antes = corpo.get("data") or {}
+    vivo = antes.get("nome")
+    if vivo == original:
+        return "pulado", "já está com o nome original", vivo
+    if n(vivo) != n(aplicado):
+        return "pulado", f"o nome ao vivo ({vivo!r}) não é o gravado pelo BI — alguém mudou; não sobrescrevo", vivo
+    status, resposta = bling(cliente, conta, "PATCH", f"/produtos/{pid}", corpo={"nome": original})
+    if status >= 400:
+        return "erro", f"PATCH recusado ({status}): {json.dumps(resposta, ensure_ascii=False)[:250]}", vivo
+    status, corpo2 = bling(cliente, conta, "GET", f"/produtos/{pid}")
+    if status != 200:
+        return "erro", f"GET de conferência falhou ({status})", vivo
+    depois = corpo2.get("data") or {}
+    if depois.get("nome") != original:
+        return "erro", f"o nome não ficou como esperado: {depois.get('nome')!r}", vivo
+    if depois.get("codigo") != antes.get("codigo") or depois.get("preco") != antes.get("preco"):
+        return "erro", "CÓDIGO/PREÇO MUDARAM durante a reversão", vivo
+    return "sucesso", None, vivo
+
+
+def reverter_bling(cliente, schema, conta, familia, limite):
+    linhas = vl.rpc_json("obter_titulos_a_reverter_bling", {"p_schema_name": schema, "p_familia": familia, "p_limite": limite})
+    base.log(f"Bling (REVERSÃO {familia}): {len(linhas)} produto(s) a restaurar neste disparo.")
+    contagem, seguidos = {"sucesso": 0, "pulado": 0, "erro": 0}, 0
+    for i, r in enumerate(linhas, 1):
+        try:
+            resultado, motivo, vivo = reverter_um_bling(cliente, conta, r)
+        except Exception as e:
+            resultado, motivo, vivo = "erro", f"exceção: {e}", None
+        contagem[resultado] += 1
+        seguidos = seguidos + 1 if resultado == "erro" else 0
+        time.sleep(1.0)
+        base.log(f"[bling-rev {i}/{len(linhas)}] {vivo!r} -> {r['titulo_original']!r}: {resultado.upper()}{' — ' + motivo if motivo else ''}")
+        if resultado != "pulado":
+            try:
+                base.rpc_supabase_com_retry("registrar_titulo_revertido_bling", {
+                    "p_schema_name": schema, "p_store_id": r.get("store_id"), "p_id_produto_ns": r.get("id_produto_ns"),
+                    "p_id_produto_bling": r.get("id_produto_bling"), "p_anterior": vivo, "p_novo": r["titulo_original"],
+                    "p_sucesso": resultado == "sucesso", "p_erro": motivo})
+            except Exception as e:
+                base.log(f"  [AVISO] auditoria não gravada: {e}")
+        if seguidos >= ERROS_SEGUIDOS_MAX:
+            base.log("INTERROMPIDO: 3 erros seguidos.")
+            break
+    base.log(f"RESUMO reversão: restaurados {contagem['sucesso']} | pulados {contagem['pulado']} | erros {contagem['erro']}")
+    return contagem["erro"]
+
+
 def processar(sistema, schema, linhas, aplicar_um):
     contagem, seguidos = {"sucesso": 0, "pulado": 0, "erro": 0}, 0
     for i, r in enumerate(linhas, 1):
@@ -162,7 +219,7 @@ def main():
     cliente = os.getenv("ETL_CLIENTE")
     limite = int(os.getenv("TITULOS_LIMITE", "0") or 0)
     sistema = (os.getenv("TITULOS_SISTEMA", "ambos") or "ambos").strip().lower()
-    if not cliente or limite <= 0 or sistema not in ("nuvemshop", "bling", "ambos"):
+    if not cliente or limite <= 0 or sistema not in ("nuvemshop", "bling", "ambos", "reverter-bling-cosmetico"):
         base.log("[ERRO] ETL_CLIENTE, TITULOS_LIMITE (> 0) e TITULOS_SISTEMA (nuvemshop|bling|ambos) são obrigatórios")
         sys.exit(1)
     config = base.obter_configuracoes_clientes().get(cliente)
@@ -175,6 +232,10 @@ def main():
     base.log("=" * 60)
     erros = 0
     inicio = time.time()
+    if sistema == "reverter-bling-cosmetico":
+        erros = reverter_bling(cliente, schema, conta, "COSMETICO", limite)
+        base.log(f"{time.time() - inicio:.0f}s | erros {erros}")
+        sys.exit(2 if erros else 0)
     if sistema in ("nuvemshop", "ambos"):
         linhas = vl.rpc_json("obter_titulos_a_aplicar", {"p_schema_name": schema, "p_sistema": "nuvemshop", "p_limite": limite})
         base.log(f"Nuvemshop: {len(linhas)} produto(s) a gravar neste disparo.")
