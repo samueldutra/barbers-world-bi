@@ -47,6 +47,7 @@ cabeçalho com breadcrumb) dentro de `TooltipProvider` e `TvModeProvider`. Menu 
 |---|---|---|
 | `/dashboard` | `dashboard` | KPIs, evolução, vendas por canal, rankings; abas por canal; modo TV |
 | `/relatorio-produtos` | `relatorio-produtos` | Vendas por produto + curva ABC por categoria; ao abrir um produto, painel com **comparação de preços** da concorrência |
+| `/gestao-produtos` | `relatorio-produtos` | **Gestão de Produtos** (submenu de Produtos, mesmo módulo de acesso): catálogo dos produtos **ativos do Bling** com preço (e a última alteração), saldo de estoque (`estoque_saldos_bling`) e situação na Nuvemshop cruzada por SKU normalizado (publicado / despublicado / fora da loja); cartões-filtro (sem estoque, fora da Nuvemshop, despublicados, sem SKU/marca/categoria, preço alterado em 7 dias), busca, marca, categoria e exportação. Só leitura por enquanto; RPCs em `sql/rpc_gestao_produtos.sql` |
 | `/relatorio-clientes` | `relatorio-clientes` | Vendas por cliente + curva ABC |
 | `/conferencia-precos` | `conferencia-precos` | Preço de cadastro no Bling × preço cheio da última venda nos canais de referência; altera o preço no Bling |
 | `/prospeccao/mapeamento`, `/prospeccao/rotas/**` | `prospeccao` | Mapeia barbearias (Google Places) e monta rotas de visita |
@@ -89,7 +90,7 @@ Hooks: `use-profile.ts`, `use-authorized-modules.ts`, `use-user.ts`.
 
 Aplicar no SQL Editor do Supabase (ou pelo MCP). Cada tela tem o seu arquivo de RPCs:
 `rpc_dashboard_vendas.sql` (padrão de situações, KPIs, canais), `rpc_dashboard_produtos.sql`,
-`rpc_relatorio_produtos.sql`, `rpc_relatorio_clientes.sql`, `rpc_conferencia_precos.sql`, `rpc_comparacao_precos.sql`,
+`rpc_relatorio_produtos.sql`, `rpc_gestao_produtos.sql`, `rpc_relatorio_clientes.sql`, `rpc_conferencia_precos.sql`, `rpc_comparacao_precos.sql`,
 `rpc_vinculo_sku_nuvemshop.sql`, `rpc_vinculo_sku_alteracao.sql`, `rpc_sku_bling_propostas.sql`, `rpc_vinculo_sku_pedidos.sql`, `rpc_marca_categoria.sql`, `rpc_prospeccao_leads.sql`, `rpc_prospeccao_rotas.sql`, `rpc_prospeccao_cidades.sql`.
 
 **Segurança das funções** (`seguranca_revogar_acesso_publico.sql`, aplicado em 09/10/2026): as funções

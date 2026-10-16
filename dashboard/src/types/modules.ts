@@ -5,11 +5,13 @@ export interface SystemModule {
   id: string
   label: string
   url: string
+  /** Outras rotas protegidas pelo mesmo módulo (ex.: telas irmãs no submenu). */
+  urlsExtras?: string[]
 }
 
 export const SYSTEM_MODULES: SystemModule[] = [
   { id: 'dashboard', label: 'Dashboard', url: '/dashboard' },
-  { id: 'relatorio-produtos', label: 'Relatório de Vendas por Produto', url: '/relatorio-produtos' },
+  { id: 'relatorio-produtos', label: 'Produtos (relatório de vendas e gestão)', url: '/relatorio-produtos', urlsExtras: ['/gestao-produtos'] },
   { id: 'relatorio-clientes', label: 'Relatório de Vendas por Cliente', url: '/relatorio-clientes' },
   { id: 'conferencia-precos', label: 'Conferência de Preços', url: '/conferencia-precos' },
   { id: 'vinculo-sku', label: 'Vínculo de SKU', url: '/vinculo-sku' },
@@ -31,9 +33,10 @@ export function moduleLabel(id: string): string {
 /** Módulo pro caminho atual (prefixo mais específico primeiro), ou null se não mapeado
  * (rota fora da lista de módulos liberáveis — ex.: /usuarios, sempre exclusiva de super admin). */
 export function moduleForPath(pathname: string): SystemModule | null {
+  const casa = (url: string) => pathname === url || pathname.startsWith(`${url}/`)
   return (
-    SYSTEM_MODULES.filter((m) => pathname === m.url || pathname.startsWith(`${m.url}/`)).sort(
-      (a, b) => b.url.length - a.url.length
-    )[0] ?? null
+    SYSTEM_MODULES.map((m) => ({ m, url: [m.url, ...(m.urlsExtras ?? [])].filter(casa).sort((a, b) => b.length - a.length)[0] }))
+      .filter((x): x is { m: SystemModule; url: string } => !!x.url)
+      .sort((a, b) => b.url.length - a.url.length)[0]?.m ?? null
   )
 }
