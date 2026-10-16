@@ -23,7 +23,16 @@ export interface NavItem {
 
 export const navMain: NavItem[] = [
   { id: "dashboard", title: "Dashboard", url: "/dashboard", icon: IconDashboard },
-  { id: "relatorio-produtos", title: "Produtos", url: "/relatorio-produtos", icon: IconReportAnalytics },
+  {
+    id: "relatorio-produtos",
+    title: "Produtos",
+    url: "/relatorio-produtos",
+    icon: IconReportAnalytics,
+    items: [
+      { title: "Relatório de Vendas", url: "/relatorio-produtos" },
+      { title: "Gestão de Produtos", url: "/gestao-produtos" },
+    ],
+  },
   { id: "relatorio-clientes", title: "Clientes", url: "/relatorio-clientes", icon: IconUsersGroup },
   { id: "conferencia-precos", title: "Conferência de Preços", url: "/conferencia-precos", icon: IconTags },
   {
