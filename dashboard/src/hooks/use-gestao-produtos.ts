@@ -13,7 +13,8 @@ export type FiltroCatalogo =
   | 'sem_nuvemshop'
   | 'nuvemshop_despublicado'
   | 'preco_alterado'
-export type OrdenarCatalogoPor = 'nome' | 'preco' | 'estoque' | 'marca'
+  | 'sem_custo'
+export type OrdenarCatalogoPor = 'nome' | 'preco' | 'estoque' | 'marca' | 'custo' | 'margem'
 export type OrdenarDirecao = 'asc' | 'desc'
 
 /** Um produto ativo do Bling com o estoque e a situação na Nuvemshop (cruzada por SKU). */
@@ -25,6 +26,12 @@ export interface ProdutoCatalogo {
   categoria_descricao: string | null
   imagem_url: string | null
   preco: number | null
+  /** Custo no Bling (fornecedor.precoCusto); NULL = sem custo cadastrado. */
+  preco_custo: number | null
+  /** Preço de venda − custo (R$); NULL sem custo. */
+  margem_valor: number | null
+  /** Margem bruta sobre o preço de venda (%); NULL sem custo. */
+  margem_pct: number | null
   preco_anterior: number | null
   data_alteracao_preco: string | null
   saldo_virtual: number | null
@@ -48,6 +55,7 @@ export interface ResumoCatalogo {
   sem_nuvemshop: number
   nuvemshop_despublicado: number
   preco_alterado: number
+  sem_custo: number
 }
 
 export interface FiltrosCatalogo {
@@ -152,6 +160,7 @@ export function useResumoCatalogo(refreshToken: number) {
             sem_nuvemshop: Number(r.sem_nuvemshop),
             nuvemshop_despublicado: Number(r.nuvemshop_despublicado),
             preco_alterado: Number(r.preco_alterado),
+            sem_custo: Number(r.sem_custo),
           })
         }
       })

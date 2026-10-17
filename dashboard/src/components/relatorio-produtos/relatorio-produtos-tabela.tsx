@@ -30,8 +30,6 @@ interface Props {
   onPaginaChange: (p: number) => void
   onExportar: (formato: 'csv' | 'xlsx') => void
   exportando: boolean
-  /** Abrir o produto (painel com comparação de preços). Linhas sem id_produto não abrem. */
-  onAbrirProduto?: (linha: LinhaRelatorioProduto) => void
 }
 
 export function RelatorioProdutosTabela({
@@ -48,7 +46,6 @@ export function RelatorioProdutosTabela({
   onPaginaChange,
   onExportar,
   exportando,
-  onAbrirProduto,
 }: Props) {
   const totalPaginas = Math.max(1, Math.ceil(totalRegistros / tamanhoPagina))
   const inicio = totalRegistros === 0 ? 0 : (pagina - 1) * tamanhoPagina + 1
@@ -123,19 +120,7 @@ export function RelatorioProdutosTabela({
               </TableHeader>
               <TableBody>
                 {linhas.map((linha, index) => (
-                  <TableRow
-                    key={`${linha.id_produto ?? linha.codigo ?? 'produto'}-${index}`}
-                    className={linha.id_produto != null && onAbrirProduto ? 'cursor-pointer' : undefined}
-                    tabIndex={linha.id_produto != null && onAbrirProduto ? 0 : undefined}
-                    aria-label={linha.id_produto != null && onAbrirProduto ? `Abrir ${linha.nome || 'produto'}` : undefined}
-                    onClick={() => linha.id_produto != null && onAbrirProduto?.(linha)}
-                    onKeyDown={(e) => {
-                      if ((e.key === 'Enter' || e.key === ' ') && linha.id_produto != null && onAbrirProduto) {
-                        e.preventDefault()
-                        onAbrirProduto(linha)
-                      }
-                    }}
-                  >
+                  <TableRow key={`${linha.id_produto ?? linha.codigo ?? 'produto'}-${index}`}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <ProdutoImagem src={linha.imagem_url} alt={linha.nome || ''} tamanho={36} />

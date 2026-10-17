@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatarMoeda, formatarNumero } from '@/lib/formatters'
+import { formatarMoeda, formatarNumero, formatarPercentual } from '@/lib/formatters'
 import type { OrdenarCatalogoPor, OrdenarDirecao, ProdutoCatalogo } from '@/hooks/use-gestao-produtos'
 
 interface Props {
@@ -92,6 +92,8 @@ export function CatalogoTabela({
             <TableHead>{cabecalhoOrdenavel('Marca', 'marca')}</TableHead>
             <TableHead>Categoria</TableHead>
             <TableHead className="text-right">{cabecalhoOrdenavel('Preço', 'preco')}</TableHead>
+            <TableHead className="text-right">{cabecalhoOrdenavel('Custo', 'custo')}</TableHead>
+            <TableHead className="text-right">{cabecalhoOrdenavel('Margem bruta', 'margem')}</TableHead>
             <TableHead className="text-right">{cabecalhoOrdenavel('Estoque', 'estoque')}</TableHead>
             <TableHead>Nuvemshop</TableHead>
           </TableRow>
@@ -116,6 +118,21 @@ export function CatalogoTabela({
                   <p className="text-xs text-muted-foreground">
                     antes {formatarMoeda(Number(p.preco_anterior))} · {new Date(p.data_alteracao_preco).toLocaleDateString('pt-BR')}
                   </p>
+                )}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {p.preco_custo == null ? <span className="text-muted-foreground">—</span> : formatarMoeda(Number(p.preco_custo))}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {p.margem_pct == null ? (
+                  <span className="text-muted-foreground">—</span>
+                ) : (
+                  <>
+                    <p className={Number(p.margem_pct) < 0 ? 'font-medium text-destructive' : 'font-medium'}>
+                      {formatarPercentual(Number(p.margem_pct))}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{formatarMoeda(Number(p.margem_valor))}</p>
+                  </>
                 )}
               </TableCell>
               <TableCell className="text-right tabular-nums">

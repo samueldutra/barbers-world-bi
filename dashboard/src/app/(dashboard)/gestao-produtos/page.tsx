@@ -34,6 +34,7 @@ const CARTOES: { filtro: FiltroCatalogo; rotulo: string; campo: keyof ResumoCata
   { filtro: 'sem_estoque', rotulo: 'Sem estoque', campo: 'sem_estoque', alerta: true },
   { filtro: 'sem_nuvemshop', rotulo: 'Fora da Nuvemshop', campo: 'sem_nuvemshop', alerta: true },
   { filtro: 'nuvemshop_despublicado', rotulo: 'Despublicados na loja', campo: 'nuvemshop_despublicado', alerta: true },
+  { filtro: 'sem_custo', rotulo: 'Sem custo', campo: 'sem_custo', alerta: true },
   { filtro: 'sem_codigo', rotulo: 'Sem SKU', campo: 'sem_codigo', alerta: true },
   { filtro: 'sem_marca', rotulo: 'Sem marca', campo: 'sem_marca', alerta: true },
   { filtro: 'sem_categoria', rotulo: 'Sem categoria', campo: 'sem_categoria', alerta: true },
@@ -46,6 +47,9 @@ const COLUNAS_EXPORTACAO: ColunaExportavel<ProdutoCatalogo>[] = [
   { cabecalho: 'Marca', valor: (p) => p.marca || 'Sem marca', largura: 18 },
   { cabecalho: 'Categoria', valor: (p) => p.categoria_descricao || 'Sem categoria', largura: 22 },
   { cabecalho: 'Preço (R$)', valor: (p) => Number(p.preco ?? 0), largura: 14, formatoNumerico: '#,##0.00' },
+  { cabecalho: 'Custo (R$)', valor: (p) => (p.preco_custo == null ? '' : Number(p.preco_custo)), largura: 14, formatoNumerico: '#,##0.00' },
+  { cabecalho: 'Margem bruta (R$)', valor: (p) => (p.margem_valor == null ? '' : Number(p.margem_valor)), largura: 18, formatoNumerico: '#,##0.00' },
+  { cabecalho: 'Margem bruta (%)', valor: (p) => (p.margem_pct == null ? '' : Number(p.margem_pct)), largura: 16, formatoNumerico: '0.00' },
   { cabecalho: 'Estoque (Bling)', valor: (p) => (p.saldo_virtual == null ? '' : Number(p.saldo_virtual)), largura: 14 },
   {
     cabecalho: 'Nuvemshop',
@@ -109,7 +113,7 @@ export default function GestaoProdutosPage() {
       <div>
         <h1 className="text-2xl font-semibold">Gestão de Produtos</h1>
         <p className="text-sm text-muted-foreground">
-          Catálogo dos produtos ativos do Bling com estoque e situação na Nuvemshop (cruzados pelo SKU)
+          Catálogo dos produtos ativos do Bling com custo, margem bruta, estoque e situação na Nuvemshop (cruzada pelo SKU)
         </p>
       </div>
 
