@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 import { Download, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { CatalogoTabela } from '@/components/gestao-produtos/catalogo-tabela'
@@ -63,6 +65,7 @@ export default function GestaoProdutosPage() {
   const [busca, setBusca] = useState('')
   const [marca, setMarca] = useState<string | null>(null)
   const [categoria, setCategoria] = useState<string | null>(null)
+  const [apenasComEstoque, setApenasComEstoque] = useState(true)
   const [ordenarPor, setOrdenarPor] = useState<OrdenarCatalogoPor>('nome')
   const [ordenarDirecao, setOrdenarDirecao] = useState<'asc' | 'desc'>('asc')
   const [pagina, setPagina] = useState(1)
@@ -74,9 +77,9 @@ export default function GestaoProdutosPage() {
     return () => clearInterval(id)
   }, [])
 
-  const filtros: FiltrosCatalogo = { filtro, busca, marca, categoria, ordenarPor, ordenarDirecao, pagina, tamanhoPagina: TAMANHO_PAGINA }
+  const filtros: FiltrosCatalogo = { filtro, busca, marca, categoria, apenasComEstoque, ordenarPor, ordenarDirecao, pagina, tamanhoPagina: TAMANHO_PAGINA }
   const { linhas, totalRegistros, loading, error } = useCatalogoProdutos(filtros, refreshToken)
-  const resumo = useResumoCatalogo(refreshToken)
+  const resumo = useResumoCatalogo(apenasComEstoque, refreshToken)
   const { marcas, categorias } = useFiltrosProdutos()
 
   const handleOrdenarChange = (coluna: OrdenarCatalogoPor) => {
@@ -128,6 +131,8 @@ export default function GestaoProdutosPage() {
               onClick={() => {
                 setPagina(1)
                 setFiltro(c.filtro)
+                // "Sem estoque" é o oposto do filtro padrão: desmarca pra não zerar a lista.
+                if (c.filtro === 'sem_estoque') setApenasComEstoque(false)
               }}
               className={cn(
                 'rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50',
@@ -201,6 +206,19 @@ export default function GestaoProdutosPage() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="apenas-com-estoque"
+                checked={apenasComEstoque}
+                onCheckedChange={(v) => {
+                  setPagina(1)
+                  setApenasComEstoque(v === true)
+                }}
+              />
+              <Label htmlFor="apenas-com-estoque" className="cursor-pointer text-sm font-normal">
+                Apenas com estoque
+              </Label>
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={exportando || totalRegistros === 0}>

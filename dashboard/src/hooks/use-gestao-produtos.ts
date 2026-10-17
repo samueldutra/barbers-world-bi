@@ -63,6 +63,8 @@ export interface FiltrosCatalogo {
   busca: string
   marca: string | null
   categoria: string | null
+  /** Só produtos com saldo virtual > 0 no Bling. */
+  apenasComEstoque: boolean
   ordenarPor: OrdenarCatalogoPor
   ordenarDirecao: OrdenarDirecao
   pagina: number
@@ -80,6 +82,7 @@ function parametros(f: FiltrosCatalogo) {
     p_ordenar_direcao: f.ordenarDirecao,
     p_pagina: f.pagina,
     p_tamanho_pagina: f.tamanhoPagina,
+    p_apenas_com_estoque: f.apenasComEstoque,
   }
 }
 
@@ -134,18 +137,18 @@ export function useCatalogoProdutos(f: FiltrosCatalogo, refreshToken: number) {
       clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- f é reconstruído a cada render; as dependências abaixo cobrem os campos
-  }, [f.filtro, f.busca, f.marca, f.categoria, f.ordenarPor, f.ordenarDirecao, f.pagina, f.tamanhoPagina, refreshToken])
+  }, [f.filtro, f.busca, f.marca, f.categoria, f.apenasComEstoque, f.ordenarPor, f.ordenarDirecao, f.pagina, f.tamanhoPagina, refreshToken])
 
   return { linhas, totalRegistros, loading, error }
 }
 
-export function useResumoCatalogo(refreshToken: number) {
+export function useResumoCatalogo(apenasComEstoque: boolean, refreshToken: number) {
   const [resumo, setResumo] = useState<ResumoCatalogo | null>(null)
 
   useEffect(() => {
     let ativo = true
     const supabase = createClient()
-    Promise.resolve(supabase.rpc('obter_resumo_catalogo_produtos', { p_schema_name: TENANT_SCHEMA }))
+    Promise.resolve(supabase.rpc('obter_resumo_catalogo_produtos', { p_schema_name: TENANT_SCHEMA, p_apenas_com_estoque: apenasComEstoque }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error
@@ -168,7 +171,7 @@ export function useResumoCatalogo(refreshToken: number) {
     return () => {
       ativo = false
     }
-  }, [refreshToken])
+  }, [apenasComEstoque, refreshToken])
 
   return resumo
 }
