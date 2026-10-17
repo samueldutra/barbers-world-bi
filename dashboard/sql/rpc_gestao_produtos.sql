@@ -8,11 +8,13 @@
 --             | 'sem_custo' (sem preço de custo no Bling, 0 ou vazio)
 --   Margem bruta = (preço de venda no Bling − custo no Bling) / preço de venda; só existe com custo > 0 e preço > 0.
 --   O custo é fornecedor.precoCusto do cadastro (produtos.preco_custo, gravado por sync-produtos-bling.py).
+--   p_apenas_com_estoque: TRUE = só saldo virtual do Bling > 0
 --   p_busca: nome ou código (SKU)
 --   p_marca / p_categoria: texto exato (categoria_descricao)
 --   p_ordenar_por: 'nome' | 'preco' | 'estoque' | 'marca' | 'custo' | 'margem'
 
 DROP FUNCTION IF EXISTS obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER, BOOLEAN);
 CREATE OR REPLACE FUNCTION obter_catalogo_produtos(
     p_schema_name TEXT,
     p_filtro TEXT DEFAULT 'todos',
@@ -22,7 +24,8 @@ CREATE OR REPLACE FUNCTION obter_catalogo_produtos(
     p_ordenar_por TEXT DEFAULT 'nome',
     p_ordenar_direcao TEXT DEFAULT 'asc',
     p_pagina INTEGER DEFAULT 1,
-    p_tamanho_pagina INTEGER DEFAULT 50
+    p_tamanho_pagina INTEGER DEFAULT 50,
+    p_apenas_com_estoque BOOLEAN DEFAULT FALSE   -- só produtos com saldo virtual > 0 no Bling
 )
 RETURNS TABLE(
     id_produto BIGINT,
@@ -119,6 +122,7 @@ BEGIN
               AND (%5$L::TEXT IS NULL OR b.nome ILIKE %5$L OR b.codigo ILIKE %5$L)
               AND (%6$L::TEXT IS NULL OR b.marca = %6$L)
               AND (%7$L::TEXT IS NULL OR b.categoria_descricao = %7$L)
+              AND (NOT %10$L OR COALESCE(b.saldo_virtual, 0) > 0)
         )
         SELECT f.id_produto, f.codigo, f.nome, f.marca, f.categoria_descricao, f.imagem_url,
                f.preco, f.preco_custo, f.margem_valor, f.margem_pct, f.preco_anterior, f.data_alteracao_preco, f.saldo_virtual, f.saldo_fisico,
@@ -127,13 +131,14 @@ BEGIN
         WHERE f.rn > %8$L AND f.rn <= %9$L
         ORDER BY f.rn
     $q$, p_schema_name, v_ordem, v_direcao, p_filtro, v_busca,
-         NULLIF(btrim(p_marca), ''), NULLIF(btrim(p_categoria), ''), v_offset, v_offset + v_limite);
+         NULLIF(btrim(p_marca), ''), NULLIF(btrim(p_categoria), ''), v_offset, v_offset + v_limite, COALESCE(p_apenas_com_estoque, FALSE));
 END;
 $$;
 
 -- Cartões do topo: quantos produtos ativos em cada situação.
 DROP FUNCTION IF EXISTS obter_resumo_catalogo_produtos(TEXT);
-CREATE OR REPLACE FUNCTION obter_resumo_catalogo_produtos(p_schema_name TEXT)
+DROP FUNCTION IF EXISTS obter_resumo_catalogo_produtos(TEXT, BOOLEAN);
+CREATE OR REPLACE FUNCTION obter_resumo_catalogo_produtos(p_schema_name TEXT, p_apenas_com_estoque BOOLEAN DEFAULT FALSE)
 RETURNS TABLE(
     total BIGINT, sem_codigo BIGINT, sem_marca BIGINT, sem_categoria BIGINT, sem_estoque BIGINT,
     sem_nuvemshop BIGINT, nuvemshop_despublicado BIGINT, preco_alterado BIGINT, sem_custo BIGINT
@@ -163,11 +168,12 @@ BEGIN
         LEFT JOIN %1$I.estoque_saldos_bling e ON e.id_produto = p.id_produto
         LEFT JOIN ns ON ns.sku_norm = public.normalizar_sku(p.codigo)
         WHERE p.situacao = 'A'
-    $q$, p_schema_name);
+          AND (NOT %2$L OR COALESCE(e.saldo_virtual, 0) > 0)
+    $q$, p_schema_name, COALESCE(p_apenas_com_estoque, FALSE));
 END;
 $$;
 
-REVOKE ALL ON FUNCTION obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER) FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION obter_resumo_catalogo_produtos(TEXT) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER) TO authenticated;
-GRANT EXECUTE ON FUNCTION obter_resumo_catalogo_produtos(TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER, BOOLEAN) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION obter_resumo_catalogo_produtos(TEXT, BOOLEAN) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER, BOOLEAN) TO authenticated;
+GRANT EXECUTE ON FUNCTION obter_resumo_catalogo_produtos(TEXT, BOOLEAN) TO authenticated;
