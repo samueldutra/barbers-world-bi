@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
+export type Plataforma = 'nuvemshop' | 'mercado-livre'
+
 export interface CanalIntegracao {
   id: string
-  plataforma: 'nuvemshop'
+  plataforma: Plataforma
   nome: string
   status: 'pendente' | 'conectado' | 'erro'
   store_id: string | null
@@ -16,7 +18,7 @@ export interface CanalIntegracao {
   conectado_em: string | null
 }
 
-export interface ConfigNuvemshop {
+export interface ConfigPlataforma {
   /** Variáveis de ambiente que faltam no servidor. */
   faltando: string[]
   redirectUri: string | null
@@ -31,15 +33,15 @@ async function chamar<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function useCanaisIntegracoes() {
   const [canais, setCanais] = useState<CanalIntegracao[]>([])
-  const [config, setConfig] = useState<ConfigNuvemshop | null>(null)
+  const [configs, setConfigs] = useState<Record<Plataforma, ConfigPlataforma> | null>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
   const carregar = useCallback(async () => {
     try {
-      const d = await chamar<{ canais: CanalIntegracao[]; nuvemshop: ConfigNuvemshop }>('/api/canais-venda')
+      const d = await chamar<{ canais: CanalIntegracao[]; nuvemshop: ConfigPlataforma; mercadoLivre: ConfigPlataforma }>('/api/canais-venda')
       setCanais(d.canais)
-      setConfig(d.nuvemshop)
+      setConfigs({ nuvemshop: d.nuvemshop, 'mercado-livre': d.mercadoLivre })
       setErro(null)
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar os canais.')
@@ -52,12 +54,12 @@ export function useCanaisIntegracoes() {
     void carregar()
   }, [carregar])
 
-  /** Cadastra o canal e devolve a URL de autorização da Nuvemshop. */
-  const cadastrar = async (nome: string): Promise<string> => {
+  /** Cadastra o canal e devolve a URL de autorização da plataforma. */
+  const cadastrar = async (plataforma: Plataforma, nome: string): Promise<string> => {
     const d = await chamar<{ urlAutorizacao: string }>('/api/canais-venda', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plataforma: 'nuvemshop', nome }),
+      body: JSON.stringify({ plataforma, nome }),
     })
     return d.urlAutorizacao
   }
@@ -70,5 +72,5 @@ export function useCanaisIntegracoes() {
     setCanais((atual) => atual.filter((c) => c.id !== id))
   }
 
-  return { canais, config, loading, erro, cadastrar, reconectar, excluir, recarregar: carregar }
+  return { canais, configs, loading, erro, cadastrar, reconectar, excluir, recarregar: carregar }
 }
