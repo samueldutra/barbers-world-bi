@@ -19,7 +19,7 @@ const STATUS: Record<CanalIntegracao['status'], { rotulo: string; classe: string
 }
 
 function Conteudo() {
-  const { canais, config, loading, erro, cadastrar, reconectar, excluir, recarregar } = useCanaisIntegracoes()
+  const { canais, configs, loading, erro, cadastrar, reconectar, excluir, recarregar } = useCanaisIntegracoes()
   const [dialogAberto, setDialogAberto] = useState(false)
   const params = useSearchParams()
   const router = useRouter()
@@ -29,7 +29,7 @@ function Conteudo() {
     const conectado = params.get('conectado')
     const falha = params.get('erro')
     if (!conectado && !falha) return
-    if (conectado) toast.success('Canal conectado com a Nuvemshop.')
+    if (conectado) toast.success(`Canal conectado com o ${params.get('plataforma') === 'mercado-livre' ? 'Mercado Livre' : 'Nuvemshop'}.`)
     if (falha) toast.error(falha)
     router.replace('/canais-venda')
     void recarregar()
@@ -74,13 +74,15 @@ function Conteudo() {
         <Card>
           <CardHeader>
             <CardTitle>Nenhum canal cadastrado</CardTitle>
-            <CardDescription>Clique em “Cadastrar canal”, escolha a Nuvemshop e siga os passos.</CardDescription>
+            <CardDescription>Clique em “Cadastrar canal”, escolha a plataforma e siga os passos.</CardDescription>
           </CardHeader>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {canais.map((c) => {
-            const logo = logoDoCanal('Nuvemshop')
+            const ehML = c.plataforma === 'mercado-livre'
+            const nomePlataforma = ehML ? 'Mercado Livre' : 'Nuvemshop'
+            const logo = logoDoCanal(nomePlataforma)
             const st = STATUS[c.status]
             return (
               <Card key={c.id}>
@@ -90,7 +92,7 @@ function Conteudo() {
                   <div className="min-w-0 flex-1">
                     <CardTitle className="truncate">{c.nome}</CardTitle>
                     <CardDescription className="truncate">
-                      Nuvemshop{c.store_nome ? ` · ${c.store_nome}` : ''}
+                      {nomePlataforma}{c.store_nome ? ` · ${c.store_nome}` : ''}
                     </CardDescription>
                   </div>
                   <Badge className={st.classe} variant="secondary">{st.rotulo}</Badge>
@@ -98,7 +100,7 @@ function Conteudo() {
                 <CardContent className="flex flex-col gap-3 text-sm">
                   {c.store_id && (
                     <p className="text-muted-foreground">
-                      Loja nº {c.store_id}
+                      {ehML ? 'Vendedor nº' : 'Loja nº'} {c.store_id}
                       {c.store_url ? ` · ${c.store_url}` : ''}
                     </p>
                   )}
@@ -125,7 +127,7 @@ function Conteudo() {
         </div>
       )}
 
-      <CadastrarCanalDialog open={dialogAberto} onOpenChange={setDialogAberto} config={config} onCadastrar={cadastrar} />
+      <CadastrarCanalDialog open={dialogAberto} onOpenChange={setDialogAberto} configs={configs} onCadastrar={cadastrar} />
     </div>
   )
 }

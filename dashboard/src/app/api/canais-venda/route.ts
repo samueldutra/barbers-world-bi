@@ -4,6 +4,11 @@ import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { autorizarCanais } from '@/lib/canais-integracao/autorizar'
 import { configFaltando, configNuvemshop, urlAutorizacao } from '@/lib/canais-integracao/nuvemshop'
+import {
+  configFaltandoMercadoLivre,
+  configMercadoLivre,
+  urlAutorizacaoMercadoLivre,
+} from '@/lib/canais-integracao/mercado-livre'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,14 +28,16 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const config = configNuvemshop()
+  const ml = configMercadoLivre()
   return NextResponse.json({
     canais: data ?? [],
     nuvemshop: { faltando: configFaltando(config), redirectUri: config.redirectUri ?? null },
+    mercadoLivre: { faltando: configFaltandoMercadoLivre(ml), redirectUri: ml.redirectUri ?? null },
   })
 }
 
 const schema = z.object({
-  plataforma: z.enum(['nuvemshop']),
+  plataforma: z.enum(['nuvemshop', 'mercado-livre']),
   nome: z.string().trim().min(2, 'Dê um nome ao canal.').max(80),
 })
 
@@ -44,9 +51,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 })
   }
 
+  const ehML = parsed.data.plataforma === 'mercado-livre'
   const config = configNuvemshop()
-  const faltando = configFaltando(config)
-  if (faltando.length > 0 || !config.appId) {
+  const configML = configMercadoLivre()
+  const faltando = ehML ? configFaltandoMercadoLivre(configML) : configFaltando(config)
+  const appId = ehML ? configML.appId : config.appId
+  if (faltando.length > 0 || !appId) {
     return NextResponse.json(
       { error: `Falta configurar no servidor: ${faltando.join(', ')}.`, faltando },
       { status: 409 }
@@ -61,5 +71,8 @@ export async function POST(request: NextRequest) {
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ canal: data, urlAutorizacao: urlAutorizacao(config.appId, state) }, { status: 201 })
+  const url = ehML
+    ? urlAutorizacaoMercadoLivre(appId, configML.redirectUri!, state)
+    : urlAutorizacao(appId, state)
+  return NextResponse.json({ canal: data, urlAutorizacao: url }, { status: 201 })
 }

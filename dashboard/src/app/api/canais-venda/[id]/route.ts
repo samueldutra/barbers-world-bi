@@ -3,6 +3,11 @@ import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { autorizarCanais } from '@/lib/canais-integracao/autorizar'
 import { configFaltando, configNuvemshop, urlAutorizacao } from '@/lib/canais-integracao/nuvemshop'
+import {
+  configFaltandoMercadoLivre,
+  configMercadoLivre,
+  urlAutorizacaoMercadoLivre,
+} from '@/lib/canais-integracao/mercado-livre'
 import { randomBytes } from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -28,13 +33,21 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   const id = idSchema.safeParse((await ctx.params).id)
   if (!id.success) return NextResponse.json({ error: 'Canal inválido.' }, { status: 400 })
 
+  const admin = getAdminClient()
+  const { data: canal } = await admin.from('canais_integracoes').select('plataforma').eq('id', id.data).maybeSingle()
+  if (!canal) return NextResponse.json({ error: 'Canal não encontrado.' }, { status: 404 })
+
+  const ehML = canal.plataforma === 'mercado-livre'
   const config = configNuvemshop()
-  if (configFaltando(config).length > 0 || !config.appId) {
+  const configML = configMercadoLivre()
+  const appId = ehML ? configML.appId : config.appId
+  const faltando = ehML ? configFaltandoMercadoLivre(configML) : configFaltando(config)
+  if (faltando.length > 0 || !appId) {
     return NextResponse.json({ error: 'Integração não configurada no servidor.' }, { status: 409 })
   }
 
   const state = randomBytes(24).toString('hex')
-  const { data, error } = await getAdminClient()
+  const { data, error } = await admin
     .from('canais_integracoes')
     .update({ oauth_state: state, status: 'pendente', ultimo_erro: null, updated_at: new Date().toISOString() })
     .eq('id', id.data)
@@ -42,5 +55,7 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Canal não encontrado.' }, { status: 404 })
-  return NextResponse.json({ urlAutorizacao: urlAutorizacao(config.appId, state) })
+  return NextResponse.json({
+    urlAutorizacao: ehML ? urlAutorizacaoMercadoLivre(appId, configML.redirectUri!, state) : urlAutorizacao(appId, state),
+  })
 }
