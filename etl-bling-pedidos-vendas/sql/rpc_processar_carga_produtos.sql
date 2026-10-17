@@ -21,7 +21,7 @@ BEGIN
     v_sql := format('
         INSERT INTO %I.produtos AS alvo (
             id_produto, codigo, nome, marca, categoria_id, categoria_descricao,
-            situacao, imagem_url, preco, data_sincronizacao
+            situacao, imagem_url, preco, preco_custo, custo_sincronizado_em, data_sincronizacao
         )
         SELECT
             (item->>''id_produto'')::BIGINT,
@@ -33,6 +33,9 @@ BEGIN
             item->>''situacao'',
             item->>''imagem_url'',
             (item->>''preco'')::DECIMAL,
+            (item->>''preco_custo'')::DECIMAL,
+            -- Só marca o custo como lido quando o payload traz a chave (carga antiga, sem custo, não zera nada).
+            CASE WHEN item ? ''preco_custo'' THEN (item->>''data_sincronizacao'')::TIMESTAMPTZ END,
             (item->>''data_sincronizacao'')::TIMESTAMPTZ
         FROM jsonb_array_elements($1) AS item
         ON CONFLICT (id_produto)
@@ -52,6 +55,8 @@ BEGIN
                                          AND alvo.preco IS DISTINCT FROM EXCLUDED.preco
                                         THEN EXCLUDED.data_sincronizacao ELSE alvo.data_alteracao_preco END,
             preco = EXCLUDED.preco,
+            preco_custo = CASE WHEN EXCLUDED.custo_sincronizado_em IS NOT NULL THEN EXCLUDED.preco_custo ELSE alvo.preco_custo END,
+            custo_sincronizado_em = COALESCE(EXCLUDED.custo_sincronizado_em, alvo.custo_sincronizado_em),
             data_sincronizacao = EXCLUDED.data_sincronizacao
     ', p_schema_name);
 
@@ -64,7 +69,7 @@ GRANT EXECUTE ON FUNCTION processar_carga_produtos(JSONB, TEXT) TO service_role;
 
 -- Mesmo padrão de obter_contatos_pendentes_sync: os id_produto que aparecem em
 -- pedidos_vendas e ainda não têm detalhe em produtos (ou estão desatualizados), mais os
--- ativos do catálogo que ainda não tiveram o detalhe buscado.
+-- ativos do catálogo que ainda não tiveram o detalhe buscado (ou o custo lido).
 CREATE OR REPLACE FUNCTION obter_produtos_pendentes_sync(
     p_schema_name TEXT,
     p_dias_revalidar INTEGER DEFAULT 30,
@@ -91,7 +96,7 @@ BEGIN
         -- (marca/categoria). Busca uma vez; depois só revalida quem vende.
         SELECT p.id_produto
         FROM %I.produtos p
-        WHERE p.data_sincronizacao IS NULL
+        WHERE (p.data_sincronizacao IS NULL OR p.custo_sincronizado_em IS NULL)
           AND p.situacao = ''A''
         LIMIT %L
     ', p_schema_name, p_schema_name, p_dias_revalidar, p_schema_name, p_limite);

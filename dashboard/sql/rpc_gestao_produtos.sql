@@ -5,9 +5,12 @@
 --   p_filtro: 'todos' | 'sem_codigo' | 'sem_marca' | 'sem_categoria' | 'sem_estoque' (saldo virtual <= 0)
 --             | 'sem_nuvemshop' (nenhuma variante com o SKU) | 'nuvemshop_despublicado' (existe, mas nenhuma variante publicada)
 --             | 'preco_alterado' (preço mudou nos últimos 7 dias, ver data_alteracao_preco)
+--             | 'sem_custo' (sem preço de custo no Bling, 0 ou vazio)
+--   Margem bruta = (preço de venda no Bling − custo no Bling) / preço de venda; só existe com custo > 0 e preço > 0.
+--   O custo é fornecedor.precoCusto do cadastro (produtos.preco_custo, gravado por sync-produtos-bling.py).
 --   p_busca: nome ou código (SKU)
 --   p_marca / p_categoria: texto exato (categoria_descricao)
---   p_ordenar_por: 'nome' | 'preco' | 'estoque' | 'marca'
+--   p_ordenar_por: 'nome' | 'preco' | 'estoque' | 'marca' | 'custo' | 'margem'
 
 DROP FUNCTION IF EXISTS obter_catalogo_produtos(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, INTEGER, INTEGER);
 CREATE OR REPLACE FUNCTION obter_catalogo_produtos(
@@ -29,6 +32,9 @@ RETURNS TABLE(
     categoria_descricao TEXT,
     imagem_url TEXT,
     preco NUMERIC,
+    preco_custo NUMERIC,
+    margem_valor NUMERIC,
+    margem_pct NUMERIC,
     preco_anterior NUMERIC,
     data_alteracao_preco TIMESTAMPTZ,
     saldo_virtual NUMERIC,
@@ -55,6 +61,8 @@ BEGIN
         WHEN 'preco' THEN 'b.preco'
         WHEN 'estoque' THEN 'b.saldo_virtual'
         WHEN 'marca' THEN 'b.marca'
+        WHEN 'custo' THEN 'b.preco_custo'
+        WHEN 'margem' THEN 'b.margem_pct'
         ELSE 'b.nome'
     END;
     v_direcao := CASE lower(p_ordenar_direcao) WHEN 'desc' THEN 'DESC' ELSE 'ASC' END;
@@ -79,7 +87,11 @@ BEGIN
                    NULLIF(btrim(p.marca), '')::TEXT AS marca,
                    NULLIF(btrim(p.categoria_descricao), '')::TEXT AS categoria_descricao,
                    p.imagem_url::TEXT AS imagem_url,
-                   p.preco::NUMERIC AS preco, p.preco_anterior::NUMERIC AS preco_anterior, p.data_alteracao_preco,
+                   p.preco::NUMERIC AS preco,
+                   CASE WHEN p.preco_custo > 0 THEN p.preco_custo::NUMERIC END AS preco_custo,
+                   CASE WHEN p.preco_custo > 0 AND p.preco > 0 THEN (p.preco - p.preco_custo)::NUMERIC END AS margem_valor,
+                   CASE WHEN p.preco_custo > 0 AND p.preco > 0 THEN round((p.preco - p.preco_custo) / p.preco * 100, 2)::NUMERIC END AS margem_pct,
+                   p.preco_anterior::NUMERIC AS preco_anterior, p.data_alteracao_preco,
                    e.saldo_virtual::NUMERIC AS saldo_virtual, e.saldo_fisico::NUMERIC AS saldo_fisico,
                    COALESCE(ns.variantes, 0) AS ns_variantes, ns.publicado AS ns_publicado,
                    ns.estoque::NUMERIC AS ns_estoque, ns.preco::NUMERIC AS ns_preco, ns.url AS ns_url
@@ -100,6 +112,7 @@ BEGIN
                     WHEN 'sem_estoque' THEN COALESCE(b.saldo_virtual, 0) <= 0
                     WHEN 'sem_nuvemshop' THEN b.ns_variantes = 0
                     WHEN 'nuvemshop_despublicado' THEN b.ns_variantes > 0 AND b.ns_publicado IS NOT TRUE
+                    WHEN 'sem_custo' THEN COALESCE(b.preco_custo, 0) <= 0
                     WHEN 'preco_alterado' THEN b.data_alteracao_preco >= now() - interval '7 days'
                     ELSE TRUE
                   END
@@ -108,7 +121,7 @@ BEGIN
               AND (%7$L::TEXT IS NULL OR b.categoria_descricao = %7$L)
         )
         SELECT f.id_produto, f.codigo, f.nome, f.marca, f.categoria_descricao, f.imagem_url,
-               f.preco, f.preco_anterior, f.data_alteracao_preco, f.saldo_virtual, f.saldo_fisico,
+               f.preco, f.preco_custo, f.margem_valor, f.margem_pct, f.preco_anterior, f.data_alteracao_preco, f.saldo_virtual, f.saldo_fisico,
                f.ns_variantes, f.ns_publicado, f.ns_estoque, f.ns_preco, f.ns_url, f.tot
         FROM filtrada f
         WHERE f.rn > %8$L AND f.rn <= %9$L
@@ -123,7 +136,7 @@ DROP FUNCTION IF EXISTS obter_resumo_catalogo_produtos(TEXT);
 CREATE OR REPLACE FUNCTION obter_resumo_catalogo_produtos(p_schema_name TEXT)
 RETURNS TABLE(
     total BIGINT, sem_codigo BIGINT, sem_marca BIGINT, sem_categoria BIGINT, sem_estoque BIGINT,
-    sem_nuvemshop BIGINT, nuvemshop_despublicado BIGINT, preco_alterado BIGINT
+    sem_nuvemshop BIGINT, nuvemshop_despublicado BIGINT, preco_alterado BIGINT, sem_custo BIGINT
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -144,7 +157,8 @@ BEGIN
                count(*) FILTER (WHERE COALESCE(e.saldo_virtual, 0) <= 0)::BIGINT,
                count(*) FILTER (WHERE ns.sku_norm IS NULL)::BIGINT,
                count(*) FILTER (WHERE ns.sku_norm IS NOT NULL AND ns.publicado IS NOT TRUE)::BIGINT,
-               count(*) FILTER (WHERE p.data_alteracao_preco >= now() - interval '7 days')::BIGINT
+               count(*) FILTER (WHERE p.data_alteracao_preco >= now() - interval '7 days')::BIGINT,
+               count(*) FILTER (WHERE COALESCE(p.preco_custo, 0) <= 0)::BIGINT
         FROM %1$I.produtos p
         LEFT JOIN %1$I.estoque_saldos_bling e ON e.id_produto = p.id_produto
         LEFT JOIN ns ON ns.sku_norm = public.normalizar_sku(p.codigo)

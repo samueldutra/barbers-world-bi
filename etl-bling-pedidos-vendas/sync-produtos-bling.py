@@ -443,6 +443,8 @@ def buscar_produto(cliente_id: str, conta: str, id_produto: int) -> Optional[dic
 def transformar_produto(produto: dict, categorias: Dict[int, str], data_sincronizacao: str) -> dict:
     categoria = produto.get("categoria") or {}
     categoria_id = categoria.get("id") or None
+    # Custo = "Preço de custo" do cadastro (fornecedor.precoCusto); só vem no detalhe, não na listagem.
+    preco_custo = (produto.get("fornecedor") or {}).get("precoCusto")
     return {
         "id_produto": produto["id"],
         "codigo": produto.get("codigo"),
@@ -453,6 +455,7 @@ def transformar_produto(produto: dict, categorias: Dict[int, str], data_sincroni
         "situacao": produto.get("situacao"),
         "imagem_url": produto.get("imagemURL"),
         "preco": produto.get("preco"),
+        "preco_custo": preco_custo,
         "data_sincronizacao": data_sincronizacao,
     }
 

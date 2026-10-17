@@ -37,3 +37,9 @@ ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS preco_anterior DECIMAL(15,
 ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS data_alteracao_preco TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_produtos_situacao ON barbers.produtos (situacao);
+
+-- Custo do produto (Bling: fornecedor.precoCusto no detalhe GET /produtos/{id}; a listagem não traz). 0/NULL = sem custo
+-- cadastrado. `custo_sincronizado_em` NULL = detalhe ainda não lido com o custo: o produto entra na fila de
+-- obter_produtos_pendentes_sync (backfill único dos ativos; depois só revalida quem vende, a cada 30 dias).
+ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS preco_custo DECIMAL(15,2);
+ALTER TABLE barbers.produtos ADD COLUMN IF NOT EXISTS custo_sincronizado_em TIMESTAMPTZ;

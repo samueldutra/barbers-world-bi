@@ -46,8 +46,8 @@ cabeçalho com breadcrumb) dentro de `TooltipProvider` e `TvModeProvider`. Menu 
 | Rota | Módulo (`user_authorized_modules`) | O que é |
 |---|---|---|
 | `/dashboard` | `dashboard` | KPIs, evolução, vendas por canal, rankings; abas por canal; modo TV |
-| `/relatorio-produtos` | `relatorio-produtos` | Vendas por produto + curva ABC por categoria; ao abrir um produto, painel com **comparação de preços** da concorrência |
-| `/gestao-produtos` | `relatorio-produtos` | **Gestão de Produtos** (submenu de Produtos, mesmo módulo de acesso): catálogo dos produtos **ativos do Bling** com preço (e a última alteração), saldo de estoque (`estoque_saldos_bling`) e situação na Nuvemshop cruzada por SKU normalizado (publicado / despublicado / fora da loja); cartões-filtro (sem estoque, fora da Nuvemshop, despublicados, sem SKU/marca/categoria, preço alterado em 7 dias), busca, marca, categoria e exportação. Só leitura por enquanto; RPCs em `sql/rpc_gestao_produtos.sql` |
+| `/relatorio-produtos` | `relatorio-produtos` | Vendas por produto + curva ABC por categoria |
+| `/gestao-produtos` | `relatorio-produtos` | **Gestão de Produtos** (submenu de Produtos, mesmo módulo de acesso): catálogo dos produtos **ativos do Bling** com preço de venda (e a última alteração), **custo** (`produtos.preco_custo` = `fornecedor.precoCusto` do cadastro, lido no detalhe pelo `sync-produtos-bling.py`) e **margem bruta** ((preço − custo) / preço; só com custo > 0), saldo de estoque (`estoque_saldos_bling`) e situação na Nuvemshop cruzada por SKU normalizado (publicado / despublicado / fora da loja); cartões-filtro (sem estoque, sem custo, fora da Nuvemshop, despublicados, sem SKU/marca/categoria, preço alterado em 7 dias), busca, marca, categoria e exportação. Só leitura por enquanto; RPCs em `sql/rpc_gestao_produtos.sql` |
 | `/relatorio-clientes` | `relatorio-clientes` | Vendas por cliente + curva ABC |
 | `/conferencia-precos` | `conferencia-precos` | Preço de cadastro no Bling × preço cheio da última venda nos canais de referência; altera o preço no Bling |
 | `/prospeccao/mapeamento`, `/prospeccao/rotas/**` | `prospeccao` | Mapeia barbearias (Google Places) e monta rotas de visita |
@@ -128,18 +128,11 @@ texto e ícones brancos; o conteúdo fica no cartão branco (`SidebarInset`). To
 `ThemeProvider` nem classe `.dark` (o `@custom-variant dark` fica só pra manter as variantes `dark:` dos
 componentes shadcn inertes).
 
-### Comparação de preços com a concorrência (piloto)
+### Comparação de preços com a concorrência (removida)
 
-Em `/relatorio-produtos`, clicar numa linha abre o painel do produto (`produto-detalhe-sheet.tsx`); a aba
-**Comparar preços** chama `POST /api/produtos/comparar-precos`, que busca o produto no **Google Shopping Brasil via
-SerpApi** (`src/lib/comparar-precos/`) e lista ofertas de outras lojas (preço, diferença para o nosso, link). A nossa
-loja é filtrada. O texto da busca (nome do produto) pode ser refinado, e há botão para buscar pelo **EAN** quando o
-campo `codigo` do Bling é um EAN.
-- **Custo controlado:** cada busca é paga. Cache de 24 h por produto (reabrir não gasta), teto diário de 100 buscas
-  (`COMPARAR_PRECOS_LIMITE_DIA`), acesso só com o módulo Produtos. Consultas e resultados ficam em
-  `barbers.consultas_precos(_itens)` (histórico de preços da concorrência).
-- Precisa de `SERPAPI_API_KEY` no servidor; sem ela a aba avisa que não está configurada.
-- O Google traz resultados parecidos que não são o mesmo produto: a tela pede conferir modelo/tamanho/kit.
+A comparação com o Google Shopping (SerpApi) foi retirada do módulo Produtos (rota `/api/produtos/comparar-precos`,
+painel do produto, hook e `SERPAPI_API_KEY`/`COMPARAR_PRECOS_LIMITE_DIA`). As tabelas `barbers.consultas_precos(_itens)` e
+as RPCs de `sql/rpc_comparacao_precos.sql` continuam no banco (histórico), sem uso no app.
 
 ### Prospecção: cidades do Brasil e mapeamento automático
 
@@ -173,7 +166,6 @@ campo `codigo` do Bling é um EAN.
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente Supabase (browser e server). A anon é pública. |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Precisa ser a chave com papel `service_role`** (confira o papel dentro do JWT; já houve a `anon` aqui). Usada em `/api/usuarios/**`, mapeamento de cidades, etc. |
 | `GOOGLE_PLACES_API_KEY` | Busca de barbearias (server). Restrinja à Places API (New). |
-| `SERPAPI_API_KEY`, `COMPARAR_PRECOS_LIMITE_DIA` | Comparação de preços (Google Shopping via SerpApi). A segunda é o teto diário de buscas (padrão 100). |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Mapa no navegador (Maps JavaScript API, restrita por HTTP referrer). |
 | `NEXT_PUBLIC_APP_URL`, `NUVEMSHOP_APP_ID`, `NUVEMSHOP_CLIENT_SECRET` | Módulo Canais de Venda (OAuth da Nuvemshop). A URL de retorno é `{NEXT_PUBLIC_APP_URL}/api/canais-venda/nuvemshop/callback`. |
 | `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET`, `BLING_CONTA` | Conferência de Preços altera preço no Bling; tokens OAuth em `public.bling_oauth`. |
