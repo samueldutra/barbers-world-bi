@@ -90,9 +90,8 @@ export function CatalogoTabela({
           <TableRow>
             <TableHead>{cabecalhoOrdenavel('Produto', 'nome')}</TableHead>
             <TableHead>{cabecalhoOrdenavel('Marca', 'marca')}</TableHead>
-            <TableHead>Categoria</TableHead>
-            <TableHead className="text-right">{cabecalhoOrdenavel('Preço', 'preco')}</TableHead>
             <TableHead className="text-right">{cabecalhoOrdenavel('Custo', 'custo')}</TableHead>
+            <TableHead className="text-right">{cabecalhoOrdenavel('Preço de venda', 'preco')}</TableHead>
             <TableHead className="text-right">{cabecalhoOrdenavel('Margem bruta', 'margem')}</TableHead>
             <TableHead className="text-right">{cabecalhoOrdenavel('Estoque', 'estoque')}</TableHead>
             <TableHead>Nuvemshop</TableHead>
@@ -111,18 +110,10 @@ export function CatalogoTabela({
                 </div>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">{p.marca || 'Sem marca'}</TableCell>
-              <TableCell className="text-sm text-muted-foreground">{p.categoria_descricao || 'Sem categoria'}</TableCell>
-              <TableCell className="text-right tabular-nums">
-                <p className="font-medium">{formatarMoeda(Number(p.preco ?? 0))}</p>
-                {p.preco_anterior != null && p.data_alteracao_preco && (
-                  <p className="text-xs text-muted-foreground">
-                    antes {formatarMoeda(Number(p.preco_anterior))} · {new Date(p.data_alteracao_preco).toLocaleDateString('pt-BR')}
-                  </p>
-                )}
-              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {p.preco_custo == null ? <span className="text-muted-foreground">—</span> : formatarMoeda(Number(p.preco_custo))}
               </TableCell>
+              <TableCell className="text-right tabular-nums font-medium">{formatarMoeda(Number(p.preco ?? 0))}</TableCell>
               <TableCell className="text-right tabular-nums">
                 {p.margem_pct == null ? (
                   <span className="text-muted-foreground">—</span>
