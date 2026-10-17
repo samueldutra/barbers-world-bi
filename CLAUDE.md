@@ -16,6 +16,8 @@ Objetivo: BI da **Barbers World**. Em produção:
   (`etl-bling-pedidos-vendas/`), mais clientes, produtos, canais e situações (scripts `sync-*`).
 - ✅ ETL de pedidos da **Nuvemshop** (`etl-nuvemshop-pedidos/`) → `barbers.nuvemshop_pedidos(_itens)`, último passo do mesmo
   workflow; lê as lojas conectadas em Canais de Venda. Aguarda a primeira loja conectada para rodar de verdade.
+- 🟡 ETL de pedidos do **Mercado Livre** (`etl-mercadolivre-pedidos/`) → `barbers.mercadolivre_pedidos(_itens)`, passo do mesmo workflow antes do catálogo da Nuvemshop;
+  renova o token (6 h, refresh de uso único) e lê as contas conectadas em Canais de Venda. **Código pronto, mas SQL não aplicado e nunca rodou numa conta real**; precisa dos segredos `MERCADOLIVRE_APP_ID`/`MERCADOLIVRE_CLIENT_SECRET` no repositório.
 - ✅ ETL do catálogo da **Nuvemshop** (`etl-nuvemshop-produtos/`) → `barbers.nuvemshop_produtos` (uma linha por variante, com SKU),
   penúltimo passo do workflow; alimenta o módulo **Vínculo de SKU** do dashboard. Precisa do escopo `read_products`.
 - ✅ Dimensões `barbers.canais_venda`, `contatos`, `produtos` e `situacoes_pedido`, sincronizadas pelo mesmo workflow.

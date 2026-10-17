@@ -35,7 +35,7 @@ do vendedor (colaborador/operador recebe `invalid_operator_user_id`) e clique em
 
 ## Próximos passos
 
-1. ETL de pedidos (`GET /orders/search?seller={id}&order.date_last_updated.from=...`, `offset`/`limit` ≤ 51), com
+1. ✅ ETL de pedidos feito (`etl-mercadolivre-pedidos/`); falta aplicar o SQL e rodar com uma conta conectada.
    renovação do token antes de cada rodada (como `public.bling_oauth`), em `etl-mercadolivre-pedidos/`.
 2. Webhooks (tópico `orders_v2`) para atualização em tempo quase real.
 3. Conciliar com `barbers.canais_venda` (grupo "Mercado Livre") para a aba do Dashboard.
