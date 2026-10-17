@@ -189,6 +189,19 @@ jobs:
           pip install -r requirements.txt
           python etl-nuvemshop-pedidos.py
 
+      # Pedidos do Mercado Livre (contas conectadas em Canais de Venda). Sem conta conectada, só avisa e termina.
+      # Renova o access_token (6 h) com MERCADOLIVRE_APP_ID/MERCADOLIVRE_CLIENT_SECRET (segredos do repositório).
+      - name: Mercado Livre (pedidos alterados recentemente)
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' && inputs.aplicar_titulos_maquinas == '' }}
+        working-directory: etl-mercadolivre-pedidos
+        env:
+          ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
+          MERCADOLIVRE_APP_ID: ${{ secrets.MERCADOLIVRE_APP_ID }}
+          MERCADOLIVRE_CLIENT_SECRET: ${{ secrets.MERCADOLIVRE_CLIENT_SECRET }}
+        run: |
+          pip install -r requirements.txt
+          python etl-mercadolivre-pedidos.py
+
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)
