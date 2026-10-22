@@ -23,6 +23,7 @@ import { montarUrlRota, proximoTrecho } from '@/lib/google-maps-route'
 import { MAX_PARADAS_ROTA } from '@/lib/prospeccao'
 import { exportarRotaPDF } from '@/lib/pdf-rota'
 import { LABEL_STATUS_ROTA, VARIANTE_STATUS_ROTA, origemRota, percentualVisitado } from '@/lib/rotas'
+import type { StatusLead } from '@/hooks/use-leads-mapeados'
 import type { ParadaRota, StatusRota } from '@/hooks/use-rotas-visita'
 
 const MapaRota = dynamic(() => import('@/components/prospeccao/rotas/mapa-rota').then((m) => m.MapaRota), {
@@ -59,7 +60,7 @@ export default function RotaDetalhePage() {
   const [destacada, setDestacada] = useState<number | null>(null)
   const refsParadas = useRef(new Map<number, HTMLLIElement>())
 
-  const { rota, paradas, loading, error, naoEncontrada, alternarVisita, favoritarLead, atualizarStatus, excluir } = useRotaVisita(id)
+  const { rota, paradas, loading, error, naoEncontrada, alternarVisita, favoritarLead, classificarLead, atualizarStatus, excluir } = useRotaVisita(id)
 
   if (loading) {
     return (
@@ -110,6 +111,15 @@ export default function RotaDetalhePage() {
     } catch (err) {
       console.error('Erro ao favoritar lead:', err)
       toast.error('Não foi possível atualizar o favorito.')
+    }
+  }
+
+  const handleClassificar = async (parada: ParadaRota, status: StatusLead) => {
+    try {
+      await classificarLead(parada, status)
+    } catch (err) {
+      console.error('Erro ao classificar lead:', err)
+      toast.error('Não foi possível salvar a classificação.')
     }
   }
 
@@ -197,6 +207,7 @@ export default function RotaDetalhePage() {
             destacada={parada.parada_id === destacada}
             onAlternarVisita={() => handleAlternarVisita(parada)}
             onFavoritar={() => handleFavoritar(parada)}
+            onClassificar={(status) => handleClassificar(parada, status)}
           />
         ))}
       </ol>
