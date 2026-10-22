@@ -5,10 +5,11 @@ import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, List, Map as MapIcon, Navigation, Star } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Copy, ExternalLink, FileDown, List, Map as MapIcon, Navigation, Search, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -29,6 +30,13 @@ const MapaRota = dynamic(() => import('@/components/prospeccao/rotas/mapa-rota')
   loading: () => <Skeleton className="h-full w-full" />,
 })
 
+const MIN_LETRAS_BUSCA = 3
+
+/** Minúsculas e sem acento, para a busca por nome ignorar maiúsculas e acentuação. */
+function normalizarBusca(texto: string) {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
 function VoltarParaRotas() {
   return (
     <Button variant="ghost" size="sm" className="-ml-2 w-fit" asChild>
@@ -47,6 +55,7 @@ export default function RotaDetalhePage() {
   const isMobile = useIsMobile()
   const [aba, setAba] = useState<'paradas' | 'favoritos' | 'mapa'>('paradas')
   const [filtros, setFiltros] = useState<FiltrosRota>(FILTROS_ROTA_PADRAO)
+  const [busca, setBusca] = useState('')
   const [destacada, setDestacada] = useState<number | null>(null)
   const refsParadas = useRef(new Map<number, HTMLLIElement>())
 
@@ -164,7 +173,12 @@ export default function RotaDetalhePage() {
   }
 
   // Ordem original da rota é mantida nas duas listas (a parada 7 continua sendo a 7 em Favoritos).
-  const passaFiltro = (p: ParadaRota) => filtros.classificacoes.length === 0 || filtros.classificacoes.includes(p.status_lead)
+  // A busca por nome só vale a partir de MIN_LETRAS_BUSCA letras e casa em qualquer parte do nome.
+  const termoBusca = normalizarBusca(busca.trim())
+  const buscando = termoBusca.length >= MIN_LETRAS_BUSCA
+  const passaFiltro = (p: ParadaRota) =>
+    (filtros.classificacoes.length === 0 || filtros.classificacoes.includes(p.status_lead)) &&
+    (!buscando || normalizarBusca(p.nome).includes(termoBusca))
   const montarLista = (itens: { parada: ParadaRota; ordem: number }[], vazio: string) =>
     itens.length === 0 ? (
       <p className="py-8 text-center text-sm text-muted-foreground">{vazio}</p>
@@ -188,20 +202,40 @@ export default function RotaDetalhePage() {
       </ol>
     )
   const comOrdem = paradas.map((parada, i) => ({ parada, ordem: i + 1 })).filter((x) => passaFiltro(x.parada))
-  const filtrando = filtros.classificacoes.length > 0
+  const filtrando = filtros.classificacoes.length > 0 || buscando
   const listaParadas = montarLista(
     comOrdem,
-    paradas.length === 0 ? 'Essa rota não tem paradas.' : 'Nenhuma parada com essa classificação.'
+    paradas.length === 0 ? 'Essa rota não tem paradas.' : 'Nenhuma parada encontrada com esses filtros.'
   )
   const favoritas = comOrdem.filter((x) => x.parada.favorito)
   const listaFavoritos = montarLista(
     favoritas,
-    filtrando ? 'Nenhuma parada favorita com essa classificação.' : 'Nenhuma parada favorita. Toque na estrela de uma parada para marcá-la.'
+    filtrando ? 'Nenhuma parada favorita encontrada com esses filtros.' : 'Nenhuma parada favorita. Toque na estrela de uma parada para marcá-la.'
   )
   const totalFavoritas = paradas.filter((p) => p.favorito).length
 
   const filtroBarra = (
-    <div className="flex items-center justify-end">
+    <div className="flex items-center gap-2">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar barbearia (mín. 3 letras)"
+          aria-label="Buscar parada pelo nome da barbearia"
+          className="px-8"
+        />
+        {busca && (
+          <button
+            type="button"
+            onClick={() => setBusca('')}
+            aria-label="Limpar busca"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
       <FiltrosRotaDrawer valor={filtros} onAplicar={setFiltros} />
     </div>
   )
