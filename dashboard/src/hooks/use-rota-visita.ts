@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { TENANT_SCHEMA } from '@/lib/tenant'
+import type { StatusLead } from '@/hooks/use-leads-mapeados'
 import type { ParadaRota, RotaVisita, StatusRota } from '@/hooks/use-rotas-visita'
 
 /** Uma rota + paradas, pra tela de detalhe (/prospeccao/rotas/[id]). Marcar visita é
@@ -79,6 +80,21 @@ export function useRotaVisita(id: number) {
     }
   }
 
+  // Classificação é do lead (vale em todas as rotas): atualiza todas as paradas do mesmo lead.
+  const classificarLead = async (parada: ParadaRota, status: StatusLead) => {
+    const aplicar = (v: StatusLead) =>
+      setParadas((atual) => atual.map((p) => (p.lead_id === parada.lead_id ? { ...p, status_lead: v } : p)))
+    aplicar(status)
+    const supabase = createClient()
+    const { error } = await Promise.resolve(
+      supabase.rpc('atualizar_status_lead_mapeado', { p_schema_name: TENANT_SCHEMA, p_id: parada.lead_id, p_status: status })
+    )
+    if (error) {
+      aplicar(parada.status_lead)
+      throw error
+    }
+  }
+
   const atualizarStatus = async (status: StatusRota) => {
     const supabase = createClient()
     const { error } = await Promise.resolve(
@@ -94,5 +110,5 @@ export function useRotaVisita(id: number) {
     if (error) throw error
   }
 
-  return { rota, paradas, loading, error, naoEncontrada, recarregar: carregar, alternarVisita, favoritarLead, atualizarStatus, excluir }
+  return { rota, paradas, loading, error, naoEncontrada, recarregar: carregar, alternarVisita, favoritarLead, classificarLead, atualizarStatus, excluir }
 }

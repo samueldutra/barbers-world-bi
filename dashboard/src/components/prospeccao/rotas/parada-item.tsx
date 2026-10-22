@@ -4,9 +4,12 @@ import { forwardRef } from 'react'
 import { Check, Navigation, Phone, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from 'cn'
 import { formatarDataHora } from '@/lib/formatters'
 import { montarUrlNavegacao } from '@/lib/google-maps-route'
+import { ORDEM_STATUS, STATUS_LEAD } from '@/lib/leads-status'
+import type { StatusLead } from '@/hooks/use-leads-mapeados'
 import type { ParadaRota } from '@/hooks/use-rotas-visita'
 
 interface Props {
@@ -16,12 +19,13 @@ interface Props {
   destacada: boolean
   onAlternarVisita: () => void
   onFavoritar: () => void
+  onClassificar: (status: StatusLead) => void
 }
 
 /** Parada da rota, pensada pro uso em campo no celular: alvo de toque grande pra marcar a
  * visita, e atalhos de ligar/navegar que abrem os apps do telefone. */
 export const ParadaItem = forwardRef<HTMLLIElement, Props>(function ParadaItem(
-  { parada, ordem, proxima, destacada, onAlternarVisita, onFavoritar },
+  { parada, ordem, proxima, destacada, onAlternarVisita, onFavoritar, onClassificar },
   ref
 ) {
   const visitada = parada.visita_realizada
@@ -77,6 +81,19 @@ export const ParadaItem = forwardRef<HTMLLIElement, Props>(function ParadaItem(
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Select value={parada.status_lead} onValueChange={(v) => onClassificar(v as StatusLead)}>
+            <SelectTrigger className="h-9 min-w-36" aria-label="Classificação da barbearia">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ORDEM_STATUS.map((st) => (
+                <SelectItem key={st} value={st}>
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: STATUS_LEAD[st].cor }} aria-hidden />
+                  {STATUS_LEAD[st].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             size="sm"
             variant={visitada ? 'secondary' : 'default'}
