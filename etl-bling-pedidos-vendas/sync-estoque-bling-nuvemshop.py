@@ -77,7 +77,7 @@ class Abortar(Exception):
 
 
 def token_nuvemshop(store_id: int) -> str:
-    url = (f"{base.SUPABASE_URL}/rest/v1/canais_integracoes?plataforma=eq.nuvemshop&status=eq.conectado"
+    url = (f"{base.SUPABASE_URL}/rest/v1/canais_integracoes?{base.filtro_tenant_canais()}plataforma=eq.nuvemshop&status=eq.conectado"
            f"&store_id=eq.{store_id}&select=access_token")
     resp = base.get_http_session().get(url, headers=base._supabase_headers(), timeout=30)
     resp.raise_for_status()

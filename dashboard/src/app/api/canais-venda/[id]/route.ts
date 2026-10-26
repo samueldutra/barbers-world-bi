@@ -16,25 +16,25 @@ const idSchema = z.string().uuid()
 
 /** Remove o cadastro (e o token guardado). Não desinstala o app dentro da Nuvemshop. */
 export async function DELETE(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { erro } = await autorizarCanais()
+  const { erro, tenant } = await autorizarCanais()
   if (erro) return erro
   const id = idSchema.safeParse((await ctx.params).id)
   if (!id.success) return NextResponse.json({ error: 'Canal inválido.' }, { status: 400 })
 
-  const { error } = await getAdminClient().from('canais_integracoes').delete().eq('id', id.data)
+  const { error } = await getAdminClient().from('canais_integracoes').delete().eq('id', id.data).eq('tenant_id', tenant.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
 
 /** Gera uma nova URL de autorização (canal pendente, com erro ou pra reconectar). */
 export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { erro } = await autorizarCanais()
+  const { erro, tenant } = await autorizarCanais()
   if (erro) return erro
   const id = idSchema.safeParse((await ctx.params).id)
   if (!id.success) return NextResponse.json({ error: 'Canal inválido.' }, { status: 400 })
 
   const admin = getAdminClient()
-  const { data: canal } = await admin.from('canais_integracoes').select('plataforma').eq('id', id.data).maybeSingle()
+  const { data: canal } = await admin.from('canais_integracoes').select('plataforma').eq('id', id.data).eq('tenant_id', tenant.id).maybeSingle()
   if (!canal) return NextResponse.json({ error: 'Canal não encontrado.' }, { status: 404 })
 
   const ehML = canal.plataforma === 'mercado-livre'
@@ -51,6 +51,7 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
     .from('canais_integracoes')
     .update({ oauth_state: state, status: 'pendente', ultimo_erro: null, updated_at: new Date().toISOString() })
     .eq('id', id.data)
+    .eq('tenant_id', tenant.id)
     .select('id')
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

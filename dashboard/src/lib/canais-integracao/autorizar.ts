@@ -1,16 +1,9 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { usuarioTemModulo } from '@/lib/usuarios/tem-modulo'
+import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 
 export const MODULO_CANAIS = 'canais-venda'
 
-/** Usuário logado, ativo e com o módulo "Canais de venda" (ou super admin). */
-export async function autorizarCanais() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { erro: NextResponse.json({ error: 'Não autenticado.' }, { status: 401 }), user: null }
-  if (!(await usuarioTemModulo(supabase, user.id, MODULO_CANAIS))) {
-    return { erro: NextResponse.json({ error: 'Sem acesso ao módulo Canais de venda.' }, { status: 403 }), user: null }
-  }
-  return { erro: null, user }
+/** Usuário logado, ativo e com o módulo "Canais de venda" no tenant ativo (ou super admin). Devolve o tenant:
+ * todo acesso a public.canais_integracoes (service_role) PRECISA filtrar por `tenant.id`. */
+export function autorizarCanais() {
+  return autorizarModulo(MODULO_CANAIS, 'Sem acesso ao módulo Canais de venda.')
 }

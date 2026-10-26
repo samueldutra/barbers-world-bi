@@ -17,7 +17,7 @@ function voltar(request: NextRequest, params: Record<string, string>) {
  * `state` liga o retorno ao cadastro criado em POST /api/canais-venda.
  */
 export async function GET(request: NextRequest) {
-  const { erro } = await autorizarCanais()
+  const { erro, tenant } = await autorizarCanais()
   if (erro) return voltar(request, { erro: 'Sessão expirada ou sem acesso. Entre de novo e reconecte o canal.' })
 
   const code = request.nextUrl.searchParams.get('code')
@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     .from('canais_integracoes')
     .select('id')
     .eq('oauth_state', state)
+    .eq('tenant_id', tenant.id)
     .eq('plataforma', 'mercado-livre')
     .maybeSingle()
   if (!canal) return voltar(request, { erro: 'Autorização desconhecida ou já usada. Gere o link de novo.' })

@@ -198,10 +198,10 @@ def obter_configuracoes_clientes() -> dict:
     return json.loads(LOCAL_CLIENT_CONFIGS)
 
 
-def listar_lojas_conectadas() -> List[dict]:
+def listar_lojas_conectadas(tenant_id: str) -> List[dict]:
     """Lojas Nuvemshop conectadas no dashboard (public.canais_integracoes)."""
     url = (f"{SUPABASE_URL}/rest/v1/canais_integracoes"
-           "?plataforma=eq.nuvemshop&status=eq.conectado&access_token=not.is.null"
+           f"?tenant_id=eq.{tenant_id}&plataforma=eq.nuvemshop&status=eq.conectado&access_token=not.is.null"
            "&select=id,nome,store_id,access_token&order=created_at")
     resp = get_http_session().get(url, headers=_supabase_headers(), timeout=30)
     resp.raise_for_status()
@@ -452,8 +452,11 @@ def executar_etl(cliente_id: str) -> tuple:
     if not config_cliente:
         raise ValueError(f"Cliente '{cliente_id}' não encontrado nas configurações")
     schema = config_cliente["schema"]
+    tenant_id = config_cliente.get("tenant_id")
+    if not tenant_id:
+        raise ValueError(f"Cliente '{cliente_id}' sem tenant_id em LOCAL_CLIENT_CONFIGS (public.tenants.id): sem ele as lojas de outros clientes seriam lidas.")
 
-    lojas = listar_lojas_conectadas()
+    lojas = listar_lojas_conectadas(tenant_id)
     if not lojas:
         log("Nenhuma loja Nuvemshop conectada (módulo Canais de Venda). Nada a fazer.")
         return 0, 0, 0

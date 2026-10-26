@@ -156,6 +156,16 @@ def rpc_supabase_com_retry(rpc_name: str, payload: dict, max_retries: int = 3,
                     raise
 
 
+def filtro_tenant_canais() -> str:
+    """Parte da query REST de public.canais_integracoes que restringe às lojas do cliente (ETL_CLIENTE).
+    Sem tenant_id na configuração o script se recusa a rodar: leria as lojas de todos os clientes."""
+    cliente = os.getenv('ETL_CLIENTE')
+    tenant_id = (obter_configuracoes_clientes().get(cliente) or {}).get('tenant_id')
+    if not tenant_id:
+        raise SystemExit(f"[ERRO] Cliente '{cliente}' sem tenant_id em LOCAL_CLIENT_CONFIGS (public.tenants.id)")
+    return f"tenant_id=eq.{tenant_id}&"
+
+
 def obter_configuracoes_clientes() -> dict:
     if LOCAL_MODE:
         if not LOCAL_CLIENT_CONFIGS:

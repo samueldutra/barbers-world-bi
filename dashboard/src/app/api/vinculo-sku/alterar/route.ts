@@ -54,12 +54,14 @@ export async function POST(request: NextRequest) {
   const admin = getAdminClient()
   const resultados: ResultadoAlteracaoSku[] = []
   const tokens = new Map<number, string | null>() // store_id -> access_token
+  const tenantId = tenant.id
 
   async function tokenDaLoja(storeId: number): Promise<string | null> {
     if (tokens.has(storeId)) return tokens.get(storeId) ?? null
     const { data } = await admin
       .from('canais_integracoes')
       .select('access_token')
+      .eq('tenant_id', tenantId)
       .eq('plataforma', 'nuvemshop')
       .eq('status', 'conectado')
       .eq('store_id', String(storeId))

@@ -22,12 +22,16 @@ Fase 1 (isolamento no banco + tenant ativo no app). **Ainda não dá para cadast
 
 Conferir depois: com um usuário comum do tenant A, `rpc('obter_kpis_vendas', { p_schema_name: '<schema do B>' })` deve falhar com "Acesso negado ao tenant".
 
-## Falta (fase 2) — bloqueia o segundo cliente
+## Fase 2 (canais, Bling e ETL por tenant)
 
-- `public.canais_integracoes` (tokens Nuvemshop/Mercado Livre) não tem `tenant_id`: `lojaNuvemshop()`, `/api/canais-venda/**` e os ETLs `etl-nuvemshop-*`/`etl-mercadolivre-*` leem todas as lojas, de qualquer cliente. Adicionar `tenant_id` e filtrar nesses pontos.
-- `lib/bling.ts` usa `BLING_CONTA` (env). Trocar por `tenants.conta_bling` do tenant ativo.
-- ETL: ler a lista de tenants de `public.tenants` (em vez de `LOCAL_CLIENT_CONFIGS`) e rodar um tenant por vez (ou matriz no GitHub Actions); `bling_oauth_bootstrap.py` por tenant.
-- Instalação de um schema novo: hoje os SQL de tabelas têm `barbers` escrito. Parametrizar (ou `criar_tenant(slug)`).
+- `sql/multi_tenant_fase2.sql`: `canais_integracoes.tenant_id` (backfill = barbers, DEFAULT temporário) e `meus_tenants()` devolvendo `conta_bling`. Depois do deploy: `ALTER TABLE public.canais_integracoes ALTER COLUMN tenant_id DROP DEFAULT;`.
+- Dashboard: `autorizarCanais()` devolve o tenant; listar/criar/excluir/reconectar canal e os callbacks OAuth filtram por `tenant_id`; `lojaNuvemshop(tenantId, ...)`; `lib/bling.ts` recebe a conta (`contaBlingDoTenant(tenant)` = `tenants.conta_bling` ou o slug). `BLING_CONTA` (env) deixou de existir; `BLING_CLIENT_ID/SECRET` continuam um app só.
+- ETL: o workflow `etl-hourly.yml` tem um job `tenants` (lê `public.tenants`) e roda o ETL inteiro em matriz, um por cliente (`fail-fast: false`). Disparo manual aceita `tenant` (slug); **vazio = todos os clientes**, então nos disparos de escrita informe o cliente. `LOCAL_CLIENT_CONFIGS` ganhou `tenant_id` (obrigatório nos ETLs Nuvemshop/Mercado Livre e nos scripts manuais que leem `canais_integracoes`).
+- Novo cliente: `python3 scripts/gerar-sql-tenant.py <slug> <schema> "<Nome>" [conta_bling] > instalar.sql` e aplicar. Cria o schema, tabelas, views e triggers (sem os dados da Barbers) e cadastra o tenant. Depois: criar o usuário, associá-lo ao tenant, conectar o Bling (`bling_oauth_bootstrap.py` com `BLING_CONTA=<conta_bling>`) e os canais pela tela de Canais de Venda.
+
+## Falta (fase 3)
+
+- Redirect URIs do Bling/Nuvemshop/Mercado Livre são únicos (um domínio para todos): cada cliente autoriza o mesmo app.
 - Marca por tenant além de nome/logo; `abas-canais.ts` e `leads-status.ts` (status por vendedor da Barbers) por tenant.
 - Tela de Usuários só para super admin da plataforma; falta `tenant_users.is_admin` gerindo os próprios usuários.
-- Fuso, `NEXT_PUBLIC_APP_URL` e callbacks OAuth continuam únicos (um domínio para todos os clientes).
+- O gerador de SQL não foi testado contra um banco real (só geração e leitura do resultado).

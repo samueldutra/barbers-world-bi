@@ -45,12 +45,13 @@ export async function autorizarModulo(
   return { erro: null, user, tenant }
 }
 
-/** Token e id da loja Nuvemshop conectada. Com `storeId`, a loja pedida; sem, a única conectada (erro se houver 0 ou 2+). */
-export async function lojaNuvemshop(storeId?: number): Promise<{ storeId: number; token: string } | { erro: string }> {
+/** Token e id da loja Nuvemshop conectada DO TENANT. Com `storeId`, a loja pedida; sem, a única conectada (erro se houver 0 ou 2+). */
+export async function lojaNuvemshop(tenantId: string, storeId?: number): Promise<{ storeId: number; token: string } | { erro: string }> {
   const admin = getAdminClient()
   let consulta = admin
     .from('canais_integracoes')
     .select('store_id, access_token')
+    .eq('tenant_id', tenantId)
     .eq('plataforma', 'nuvemshop')
     .eq('status', 'conectado')
   if (storeId !== undefined) consulta = consulta.eq('store_id', String(storeId))
