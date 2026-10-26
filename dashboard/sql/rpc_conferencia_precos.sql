@@ -82,6 +82,7 @@ DECLARE
     v_sku TEXT;
     v_offset INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_ordenar_coluna := CASE p_ordenar_por
         WHEN 'preco_atual' THEN 'preco_atual'
         WHEN 'preco_ultima_venda' THEN 'preco_ultima_venda'
@@ -193,6 +194,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         INSERT INTO %I.produtos_alteracoes_preco
             (id_produto, preco_anterior, preco_novo, origem, sucesso, erro, usuario_id, usuario_email)

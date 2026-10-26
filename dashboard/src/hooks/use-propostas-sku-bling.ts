@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 export type StatusProposta = 'pendente' | 'aplicado' | 'erro' | 'excluido'
 
@@ -25,7 +25,7 @@ export function useResumoPropostas(gatilho: number) {
   useEffect(() => {
     let ativo = true
     const supabase = createClient()
-    Promise.resolve(supabase.rpc('obter_resumo_propostas_sku_bling', { p_schema_name: TENANT_SCHEMA }))
+    Promise.resolve(supabase.rpc('obter_resumo_propostas_sku_bling', { p_schema_name: tenantSchema() }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error
@@ -57,7 +57,7 @@ export function usePropostasSkuBling(filtros: { status: string; busca: string; p
     const timer = setTimeout(() => {
       Promise.resolve(
         supabase.rpc('obter_propostas_sku_bling', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenantSchema(),
           p_status: status,
           p_busca: busca.trim() || null,
           p_pagina: pagina,
@@ -95,7 +95,7 @@ export async function buscarTodasPropostas(status: string): Promise<LinhaPropost
   const todas: LinhaProposta[] = []
   for (let pagina = 1; ; pagina++) {
     const { data, error } = await supabase.rpc('obter_propostas_sku_bling', {
-      p_schema_name: TENANT_SCHEMA,
+      p_schema_name: tenantSchema(),
       p_status: status,
       p_busca: null,
       p_pagina: pagina,

@@ -39,6 +39,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT
             (SELECT count(*) FROM %1$I.produtos p WHERE p.situacao = ''A'' AND public.normalizar_sku(p.codigo) = public.normalizar_sku($1))::INTEGER,
@@ -72,6 +73,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         INSERT INTO %I.nuvemshop_alteracoes_sku
             (store_id, id_produto_ns, id_variante, sku_anterior, sku_novo, id_produto_bling, origem, sucesso, erro, usuario_id, usuario_email)
@@ -114,6 +116,7 @@ DECLARE
     v_palavras TEXT[];
     v_chave TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_palavras := COALESCE(regexp_split_to_array(public.normalizar_nome(p_busca), '\s+'), ARRAY[]::TEXT[]);
     v_chave := COALESCE(public.normalizar_nome(NULLIF(btrim(COALESCE(p_busca, '')), '')), public.normalizar_nome(p_referencia));
 

@@ -39,6 +39,7 @@ AS $$
 DECLARE
     v_ids BIGINT[];
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     -- "Loose index scan": os ids de situação vistos nos pedidos são achados com ~1 sonda no índice
     -- por valor distinto (cerca de 25), em vez de ler as ~95 mil entradas do índice (DISTINCT) —
     -- de ~31 ms para <1 ms por chamada (o dashboard chama isso ~9x por carga).
@@ -111,6 +112,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH pedidos_periodo AS (
             SELECT DISTINCT ON (id_pedido)
@@ -182,6 +184,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH pedidos_periodo AS (
             SELECT DISTINCT ON (id_pedido)
@@ -241,6 +244,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH pedidos_periodo AS (
             SELECT DISTINCT ON (id_pedido)
@@ -287,6 +291,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT id_loja, descricao::TEXT, grupo::TEXT
         FROM %I.canais_venda
@@ -327,6 +332,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH RECURSIVE vistas AS (
             -- ids de situação vistos nos pedidos, por "loose index scan" (~1 sonda por valor distinto)

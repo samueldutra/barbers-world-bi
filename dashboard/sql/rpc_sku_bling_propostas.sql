@@ -56,6 +56,7 @@ DECLARE
     v_busca TEXT;
     v_offset INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_busca := CASE WHEN p_busca IS NULL OR btrim(p_busca) = '' THEN NULL ELSE '%' || btrim(p_busca) || '%' END;
     v_offset := (GREATEST(p_pagina, 1) - 1) * GREATEST(p_tamanho_pagina, 1);
 
@@ -81,6 +82,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('SELECT status::TEXT, count(*)::BIGINT FROM %I.sku_bling_propostas GROUP BY status', p_schema_name);
 END;
 $$;
@@ -95,6 +97,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT pp.id_produto IS NOT NULL, pp.status::TEXT, pp.codigo_proposto::TEXT, p.nome::TEXT, p.codigo::TEXT, p.situacao::TEXT,
                (SELECT count(*) FROM %1$I.produtos o WHERE o.id_produto <> $1
@@ -124,6 +127,7 @@ AS $$
 DECLARE
     v_codigo TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         UPDATE %I.sku_bling_propostas
         SET status = CASE WHEN $2 THEN ''aplicado'' ELSE ''erro'' END,

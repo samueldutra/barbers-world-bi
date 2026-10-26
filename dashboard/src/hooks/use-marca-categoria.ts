@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 /** 'sem_marca_ou_categoria' = falta uma das duas; 'completos' = tem marca e categoria. */
 export type FiltroMarcaCategoria = 'todos' | 'sem_marca' | 'sem_categoria' | 'sem_marca_ou_categoria' | 'completos'
@@ -74,7 +74,7 @@ export interface FiltrosMarcaCategoria {
 
 function parametros(f: FiltrosMarcaCategoria) {
   return {
-    p_schema_name: TENANT_SCHEMA,
+    p_schema_name: tenantSchema(),
     p_filtro: f.filtro,
     p_busca: f.busca.trim() || null,
     p_marca: f.marca.trim() || null,
@@ -147,7 +147,7 @@ export function useResumoMarcaCategoria(apenasPublicados: boolean, gatilho: numb
   const [resumo, setResumo] = useState<ResumoMarcaCategoria | null>(null)
   useEffect(() => {
     let ativo = true
-    Promise.resolve(createClient().rpc('obter_resumo_marca_categoria', { p_schema_name: TENANT_SCHEMA, p_apenas_publicados: apenasPublicados }))
+    Promise.resolve(createClient().rpc('obter_resumo_marca_categoria', { p_schema_name: tenantSchema(), p_apenas_publicados: apenasPublicados }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error
@@ -166,7 +166,7 @@ export function useCategoriasNuvemshop(gatilho: number) {
   const [categorias, setCategorias] = useState<CategoriaNuvemshop[]>([])
   useEffect(() => {
     let ativo = true
-    Promise.resolve(createClient().rpc('obter_categorias_nuvemshop', { p_schema_name: TENANT_SCHEMA }))
+    Promise.resolve(createClient().rpc('obter_categorias_nuvemshop', { p_schema_name: tenantSchema() }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error
@@ -184,7 +184,7 @@ export function useMarcasNuvemshop(gatilho: number) {
   const [marcas, setMarcas] = useState<MarcaNuvemshop[]>([])
   useEffect(() => {
     let ativo = true
-    Promise.resolve(createClient().rpc('obter_marcas_nuvemshop', { p_schema_name: TENANT_SCHEMA }))
+    Promise.resolve(createClient().rpc('obter_marcas_nuvemshop', { p_schema_name: tenantSchema() }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error

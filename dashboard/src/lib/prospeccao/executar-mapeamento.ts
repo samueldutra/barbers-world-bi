@@ -1,4 +1,4 @@
-import { processarMapeamento } from '@/lib/prospeccao/mapeamento-cidade'
+import { depsDoTenant, processarMapeamento } from '@/lib/prospeccao/mapeamento-cidade'
 
 /** Tempo de trabalho por invocação — abaixo do maxDuration (60 s) das rotas, com folga pra
  * terminar a busca em andamento e disparar a próxima invocação. */
@@ -6,15 +6,15 @@ export const ORCAMENTO_POR_INVOCACAO_MS = 40_000
 
 /** Processa o mapeamento e, se ainda sobrou fila, dispara a próxima invocação (cadeia): cada
  * invocação trabalha ~40 s e chama /continuar, que responde na hora (202) e segue em segundo plano. */
-export async function executarEEncadear(jobId: number, token: string, origin: string) {
-  const resultado = await processarMapeamento(jobId, ORCAMENTO_POR_INVOCACAO_MS)
+export async function executarEEncadear(schema: string, jobId: number, token: string, origin: string) {
+  const resultado = await processarMapeamento(jobId, ORCAMENTO_POR_INVOCACAO_MS, depsDoTenant(schema))
   if (resultado !== 'continua') return
 
   try {
     await fetch(`${origin}/api/prospeccao/cidades/continuar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId, token }),
+      body: JSON.stringify({ schema, jobId, token }),
       signal: AbortSignal.timeout(10_000),
     })
   } catch (err) {

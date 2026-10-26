@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 /** Marcas/categorias disponíveis pra filtro — vêm da dimensão produtos inteira (mesmo
  * padrão de use-canais-venda.ts), não do período filtrado. */
@@ -16,8 +16,8 @@ export function useFiltrosProdutos() {
     const supabase = createClient()
 
     Promise.all([
-      supabase.rpc('obter_marcas_produtos', { p_schema_name: TENANT_SCHEMA }),
-      supabase.rpc('obter_categorias_produtos', { p_schema_name: TENANT_SCHEMA }),
+      supabase.rpc('obter_marcas_produtos', { p_schema_name: tenantSchema() }),
+      supabase.rpc('obter_categorias_produtos', { p_schema_name: tenantSchema() }),
     ])
       .then(([marcasRes, categoriasRes]) => {
         if (!ativo) return

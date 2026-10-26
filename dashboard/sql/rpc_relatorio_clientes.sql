@@ -75,6 +75,7 @@ DECLARE
     v_busca_pattern TEXT;
     v_offset INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_ordenar_coluna := CASE p_ordenar_por
         WHEN 'qtde_pedidos' THEN 'total_pedidos'
         WHEN 'ticket_medio' THEN 'ticket_medio'
@@ -231,6 +232,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT DISTINCT municipio::TEXT
         FROM %I.contatos
@@ -280,6 +282,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH pedidos_periodo AS (
             SELECT DISTINCT ON (pv.id_pedido)

@@ -70,6 +70,7 @@ AS $$
 DECLARE
     v_linhas BIGINT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     IF p_schema_name IS NULL OR p_schema_name = '' THEN
         RAISE EXCEPTION 'Schema name é obrigatório';
     END IF;
@@ -105,6 +106,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         WITH nsv AS (
             SELECT n.id_variante, n.id_produto, count(*) OVER (PARTITION BY n.id_produto) AS variantes_do_produto
@@ -187,6 +189,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT t.store_id, t.id_produto_ns, t.id_variante, t.nome_ns, t.variacao_ns, t.sku_ns, t.publicado, t.estoque_ns,
                t.id_produto_bling, t.codigo_bling, t.nome_bling,

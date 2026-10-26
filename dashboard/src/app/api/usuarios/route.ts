@@ -8,7 +8,7 @@ import { mensagemErroEmail, urlDefinirSenha } from '@/lib/supabase/links-acesso'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const { erro } = await exigirSuperAdmin()
+  const { erro, tenant } = await exigirSuperAdmin()
   if (erro) return erro
 
   const admin = createAdminClient()
@@ -16,9 +16,11 @@ export async function GET() {
   const [{ data: perfis, error: perfisError }, { data: modulos, error: modulosError }, { data: authData, error: authError }] =
     await Promise.all([
       admin.from('user_profiles').select('id, full_name, is_superadmin, is_active, created_at').order('created_at', { ascending: false }),
-      admin.from('user_authorized_modules').select('user_id, module'),
+      admin.from('user_authorized_modules').select('user_id, module').eq('tenant_id', tenant.id),
       admin.auth.admin.listUsers({ perPage: 1000 }),
     ])
+  const { data: membros } = await admin.from('tenant_users').select('user_id').eq('tenant_id', tenant.id)
+  const idsDoTenant = new Set((membros ?? []).map((m) => m.user_id as string))
 
   if (perfisError || modulosError || authError) {
     console.error('Erro ao listar usuários:', perfisError ?? modulosError ?? authError)
@@ -43,7 +45,8 @@ export async function GET() {
     modulosPorId.set(m.user_id, lista)
   }
 
-  const usuarios = (perfis ?? []).map((p) => ({
+  // Só quem é do tenant ativo (super admins da plataforma aparecem em todos).
+  const usuarios = (perfis ?? []).filter((p) => p.is_superadmin || idsDoTenant.has(p.id)).map((p) => ({
     id: p.id,
     email: emailPorId.get(p.id) ?? '',
     full_name: p.full_name,
@@ -79,7 +82,7 @@ function emailJaCadastrado(err: { message?: string; code?: string } | null): boo
  * admin enviar por outro canal.
  */
 export async function POST(request: NextRequest) {
-  const { erro } = await exigirSuperAdmin()
+  const { erro, tenant } = await exigirSuperAdmin()
   if (erro) return erro
 
   let body: unknown
@@ -151,10 +154,15 @@ export async function POST(request: NextRequest) {
     .upsert({ id: novoId, full_name, is_superadmin, is_active: true }, { onConflict: 'id' })
   if (perfilError) return desfazer('Erro ao gravar perfil do novo usuário', perfilError)
 
+  const { error: membroError } = await admin
+    .from('tenant_users')
+    .upsert({ user_id: novoId, tenant_id: tenant.id }, { onConflict: 'user_id,tenant_id' })
+  if (membroError) return desfazer('Erro ao associar o novo usuário ao cliente', membroError)
+
   if (!is_superadmin && modules.length > 0) {
     const { error: modulosError } = await admin
       .from('user_authorized_modules')
-      .insert(modules.map((module) => ({ user_id: novoId, module })))
+      .insert(modules.map((module) => ({ user_id: novoId, tenant_id: tenant.id, module })))
     if (modulosError) return desfazer('Erro ao gravar módulos do novo usuário', modulosError)
   }
 

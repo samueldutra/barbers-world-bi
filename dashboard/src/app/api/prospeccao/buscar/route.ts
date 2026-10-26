@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { usuarioPodeProspectar } from '@/lib/prospeccao/acesso'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 import {
   CAMPOS_PLACES as CAMPOS,
   mapearResultado,
@@ -105,14 +104,8 @@ async function buscarUmPonto(
 export async function POST(request: NextRequest) {
   // Cada busca é paga (Google Places): só quem tem o módulo de Prospecção. O proxy só garante
   // que há sessão; módulos não são conferidos nas rotas /api/*.
-  const supabaseSessao = await createClient()
-  const {
-    data: { user },
-  } = await supabaseSessao.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Sessão expirada. Entre de novo.' }, { status: 401 })
-  if (!(await usuarioPodeProspectar(supabaseSessao, user.id))) {
-    return NextResponse.json({ error: 'Sem acesso ao módulo de Prospecção.' }, { status: 403 })
-  }
+  const { erro, tenant } = await autorizarModulo('prospeccao', 'Sem acesso ao módulo de Prospecção.')
+  if (erro) return erro
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY
   if (!apiKey) {
@@ -173,7 +166,7 @@ export async function POST(request: NextRequest) {
       try {
         const supabase = await createClient()
         const { data, error } = await supabase.rpc('salvar_leads_novos', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenant.schema_name,
           p_leads: resultados.map((r) => ({ ...r, nicho })),
         })
         if (error) {

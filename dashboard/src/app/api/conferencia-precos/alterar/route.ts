@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { alterarPrecoProduto } from '@/lib/bling'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 
 export const dynamic = 'force-dynamic'
 // Cada lote tem no máximo MAX_ITENS_POR_LOTE produtos a ~2 req/s (limite do Bling é 3 req/s,
@@ -28,34 +27,6 @@ const schema = z.object({
     .max(MAX_ITENS_POR_LOTE),
 })
 
-/** Quem tem o módulo liberado (ou é super admin) pode alterar preço — mesma regra do
- * middleware pra página, repetida aqui porque /api/* não passa pela checagem de módulo. */
-async function autorizar() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { erro: NextResponse.json({ error: 'Não autenticado.' }, { status: 401 }) }
-
-  const { data: perfil } = await supabase
-    .from('user_profiles')
-    .select('is_superadmin, is_active')
-    .eq('id', user.id)
-    .single()
-  if (!perfil?.is_active) return { erro: NextResponse.json({ error: 'Conta desativada.' }, { status: 403 }) }
-
-  if (!perfil.is_superadmin) {
-    const { data: liberado } = await supabase
-      .from('user_authorized_modules')
-      .select('module')
-      .eq('user_id', user.id)
-      .eq('module', MODULO)
-      .maybeSingle()
-    if (!liberado) {
-      return { erro: NextResponse.json({ error: 'Sem acesso ao módulo de conferência de preços.' }, { status: 403 }) }
-    }
-  }
-  return { erro: null, user }
-}
-
 export interface ResultadoAlteracao {
   id_produto: number
   sucesso: boolean
@@ -63,7 +34,7 @@ export interface ResultadoAlteracao {
 }
 
 export async function POST(request: NextRequest) {
-  const { erro, user } = await autorizar()
+  const { erro, user, tenant } = await autorizarModulo(MODULO, 'Sem acesso ao módulo de conferência de preços.')
   if (erro) return erro
 
   let body: unknown
@@ -94,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { error: erroRegistro } = await admin.rpc('registrar_alteracao_preco', {
-      p_schema_name: TENANT_SCHEMA,
+      p_schema_name: tenant.schema_name,
       p_id_produto: item.id_produto,
       p_preco_anterior: item.preco_anterior,
       p_preco_novo: precoNovo,

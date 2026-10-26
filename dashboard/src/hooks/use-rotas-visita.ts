@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import type { StatusLead } from '@/hooks/use-leads-mapeados'
 
 /** 'mapeando' e 'erro_mapeamento' são definidos pelo sistema (rota por cidade ainda sendo
@@ -48,7 +48,7 @@ export function useRotasVisita() {
     if (!silencioso) setLoading(true)
     setError(null)
     const supabase = createClient()
-    const { data, error } = await Promise.resolve(supabase.rpc('obter_rotas_visita', { p_schema_name: TENANT_SCHEMA }))
+    const { data, error } = await Promise.resolve(supabase.rpc('obter_rotas_visita', { p_schema_name: tenantSchema() }))
     if (error) {
       console.error('Erro ao carregar rotas de visita:', error)
       setError('Não foi possível carregar as rotas salvas.')
@@ -66,7 +66,7 @@ export function useRotasVisita() {
     const supabase = createClient()
     const { data, error } = await Promise.resolve(
       supabase.rpc('salvar_rota_visita', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_nome: nome,
         p_lead_ids: leadIds,
         p_descricao: descricao ?? null,
@@ -81,7 +81,7 @@ export function useRotasVisita() {
   const carregarParadas = async (rotaId: number) => {
     const supabase = createClient()
     const { data, error } = await Promise.resolve(
-      supabase.rpc('obter_rota_visita_paradas', { p_schema_name: TENANT_SCHEMA, p_rota_id: rotaId })
+      supabase.rpc('obter_rota_visita_paradas', { p_schema_name: tenantSchema(), p_rota_id: rotaId })
     )
     if (error) throw error
     return (data as ParadaRota[]) ?? []
@@ -90,7 +90,7 @@ export function useRotasVisita() {
   const atualizarStatus = async (id: number, status: StatusRota) => {
     const supabase = createClient()
     const { error } = await Promise.resolve(
-      supabase.rpc('atualizar_status_rota_visita', { p_schema_name: TENANT_SCHEMA, p_id: id, p_status: status })
+      supabase.rpc('atualizar_status_rota_visita', { p_schema_name: tenantSchema(), p_id: id, p_status: status })
     )
     if (error) throw error
     await carregar()
@@ -100,7 +100,7 @@ export function useRotasVisita() {
     const supabase = createClient()
     const { error } = await Promise.resolve(
       supabase.rpc('atualizar_parada_rota_visita', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_parada_id: paradaId,
         p_visita_realizada: visitaRealizada,
         p_observacoes: observacoes ?? null,
@@ -112,7 +112,7 @@ export function useRotasVisita() {
 
   const excluir = async (id: number) => {
     const supabase = createClient()
-    const { error } = await Promise.resolve(supabase.rpc('excluir_rota_visita', { p_schema_name: TENANT_SCHEMA, p_id: id }))
+    const { error } = await Promise.resolve(supabase.rpc('excluir_rota_visita', { p_schema_name: tenantSchema(), p_id: id }))
     if (error) throw error
     await carregar()
   }

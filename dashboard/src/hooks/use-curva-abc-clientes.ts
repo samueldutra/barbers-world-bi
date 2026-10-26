@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 import type { ClasseAbc } from '@/hooks/use-curva-abc'
 
@@ -44,7 +44,7 @@ export function useCurvaAbcClientes({ atual, canais, cidade, limite = 50, refres
 
     Promise.resolve(
       supabase.rpc('obter_curva_abc_clientes', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,

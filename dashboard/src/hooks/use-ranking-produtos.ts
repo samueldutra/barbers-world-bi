@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 
 export type OrdenarRankingPor = 'faturamento' | 'unidades' | 'pedidos'
@@ -62,7 +62,7 @@ export function useRankingProdutos({ atual, canais, situacoes, ordenarPor, refre
 
     Promise.all([
       supabase.rpc('obter_ranking_produtos', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,
@@ -71,14 +71,14 @@ export function useRankingProdutos({ atual, canais, situacoes, ordenarPor, refre
         p_situacoes: situacoes,
       }),
       supabase.rpc('obter_vendas_por_categoria', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,
         p_situacoes: situacoes,
       }),
       supabase.rpc('obter_vendas_por_marca', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,

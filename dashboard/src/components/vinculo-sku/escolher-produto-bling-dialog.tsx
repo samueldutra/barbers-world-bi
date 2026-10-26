@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from 'cn'
 import { formatarMoeda } from '@/lib/formatters'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import type { LinhaVinculo } from '@/hooks/use-vinculo-sku'
 
 export interface ProdutoBlingBusca {
@@ -55,7 +55,7 @@ export function EscolherProdutoBlingDialog({ linha, onOpenChange, onEscolher }: 
     const timer = setTimeout(() => {
       Promise.resolve(
         supabase.rpc('buscar_produtos_bling', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenantSchema(),
           p_busca: busca.trim() || null,
           p_referencia: referencia || null,
           p_limite: 30,

@@ -1,6 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { SYSTEM_MODULES, moduleForPath } from '@/types/modules'
+import { TENANT_COOKIE } from '@/lib/tenant'
+import { resolverTenantAtivo } from '@/lib/tenant-resolver'
 
 export async function updateSession(request: NextRequest) {
   // Supabase às vezes manda o code de recovery pra Site URL em vez do redirectTo.
@@ -96,10 +98,15 @@ export async function updateSession(request: NextRequest) {
   if (user && profile && !isSuper && !isAdminRoute) {
     const modulo = moduleForPath(request.nextUrl.pathname)
     if (modulo) {
-      const { data: autorizados } = await supabase
-        .from('user_authorized_modules')
-        .select('module')
-        .eq('user_id', user.id)
+      // Módulos são por tenant: usa o tenant ativo (cookie validado contra as associações do usuário).
+      const { ativo: tenant } = await resolverTenantAtivo(supabase, request.cookies.get(TENANT_COOKIE)?.value)
+      const { data: autorizados } = tenant
+        ? await supabase
+            .from('user_authorized_modules')
+            .select('module')
+            .eq('user_id', user.id)
+            .eq('tenant_id', tenant.id)
+        : { data: [] as { module: string }[] }
 
       const idsAutorizados = new Set((autorizados ?? []).map((r) => r.module as string))
 

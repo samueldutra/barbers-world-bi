@@ -66,6 +66,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT
             r.id, r.nome, r.descricao, r.ponto_partida_endereco, r.status,
@@ -115,6 +116,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT
             p.id, p.lead_id, p.ordem, p.visita_realizada, p.visitado_em, p.observacoes,
@@ -158,6 +160,7 @@ DECLARE
     v_sql TEXT;
     v_rota_id BIGINT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     IF p_lead_ids IS NULL OR array_length(p_lead_ids, 1) IS NULL THEN
         RAISE EXCEPTION 'informe pelo menos 1 lead pra montar a rota';
     END IF;
@@ -199,6 +202,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     IF p_status NOT IN ('planejada', 'em_andamento', 'concluida', 'cancelada') THEN
         RAISE EXCEPTION 'status de rota inválido: %', p_status;
     END IF;
@@ -232,6 +236,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         UPDATE %I.rotas_visita_paradas
         SET visita_realizada = %L,
@@ -265,6 +270,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('DELETE FROM %I.rotas_visita WHERE id = %L', p_schema_name, p_id);
     EXECUTE v_sql;
 END;

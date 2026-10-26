@@ -22,7 +22,7 @@ const atualizarUsuarioSchema = z.object({
 })
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { erro, user } = await exigirSuperAdmin()
+  const { erro, user, tenant } = await exigirSuperAdmin()
   if (erro) return erro
 
   const { id } = await params
@@ -72,7 +72,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   // super admin — super admin ignora a tabela, não precisa de linha por módulo.
   const viraSuperAdmin = is_superadmin === true
   if (modules && !viraSuperAdmin) {
-    const { error: deleteError } = await admin.from('user_authorized_modules').delete().eq('user_id', id)
+    const { error: deleteError } = await admin.from('user_authorized_modules').delete().eq('user_id', id).eq('tenant_id', tenant.id)
     if (deleteError) {
       console.error('Erro ao limpar módulos antigos:', deleteError)
       return NextResponse.json({ error: 'Não foi possível atualizar os módulos.' }, { status: 500 })
@@ -80,7 +80,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (modules.length > 0) {
       const { error: insertError } = await admin
         .from('user_authorized_modules')
-        .insert(modules.map((module) => ({ user_id: id, module })))
+        .insert(modules.map((module) => ({ user_id: id, tenant_id: tenant.id, module })))
       if (insertError) {
         console.error('Erro ao gravar novos módulos:', insertError)
         return NextResponse.json({ error: 'Não foi possível atualizar os módulos.' }, { status: 500 })
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { erro, user } = await exigirSuperAdmin()
+  const { erro, user, tenant } = await exigirSuperAdmin()
   if (erro) return erro
 
   const { id } = await params
@@ -107,6 +107,22 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   if (await ehUltimoSuperAdmin(admin, id)) {
     return NextResponse.json({ error: 'Não é possível excluir o último super admin do sistema.' }, { status: 400 })
+  }
+
+  // Quem também pertence a outro cliente só sai deste: a conta continua existindo no outro.
+  const { data: outros } = await admin
+    .from('tenant_users')
+    .select('tenant_id')
+    .eq('user_id', id)
+    .neq('tenant_id', tenant.id)
+  if ((outros?.length ?? 0) > 0) {
+    const { error: removeError } = await admin.from('tenant_users').delete().eq('user_id', id).eq('tenant_id', tenant.id)
+    const { error: modulosError } = await admin.from('user_authorized_modules').delete().eq('user_id', id).eq('tenant_id', tenant.id)
+    if (removeError || modulosError) {
+      console.error('Erro ao remover usuário do cliente:', removeError ?? modulosError)
+      return NextResponse.json({ error: 'Não foi possível remover o usuário.' }, { status: 500 })
+    }
+    return NextResponse.json({ id })
   }
 
   const { error } = await admin.auth.admin.deleteUser(id)

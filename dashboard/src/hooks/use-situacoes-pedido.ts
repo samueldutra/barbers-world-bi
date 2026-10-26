@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 
 export interface SituacaoPedido {
@@ -40,7 +40,7 @@ export function useSituacoesPedido({ atual, canais, refreshToken }: Args) {
     const { data_inicial, data_final } = formatarRangeParaAPI(atual)
     supabase
       .rpc('obter_situacoes_pedido', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canais,

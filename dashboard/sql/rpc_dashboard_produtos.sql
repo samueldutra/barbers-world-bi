@@ -38,6 +38,7 @@ DECLARE
     v_sql TEXT;
     v_ordenar_coluna TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_ordenar_coluna := CASE p_ordenar_por
         WHEN 'unidades' THEN 'unidades_vendidas'
         WHEN 'pedidos' THEN 'pedidos'
@@ -95,6 +96,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT
             COALESCE(NULLIF(TRIM(p.categoria_descricao), ''''), ''Sem categoria'')::TEXT AS categoria_descricao,
@@ -140,6 +142,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT
             COALESCE(NULLIF(TRIM(p.marca), ''''), ''Sem marca'')::TEXT AS marca,

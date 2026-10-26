@@ -14,7 +14,7 @@ import { useRelatorioClientes, type LinhaRelatorioCliente, type OrdenarClientesP
 import { useCurvaAbcClientes } from '@/hooks/use-curva-abc-clientes'
 import { obterRangePreset, formatarRangeParaAPI, type PeriodoPreset, type RangeData } from '@/lib/date-ranges'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { exportarCSV, exportarXLSX, type ColunaExportavel } from '@/lib/export'
 import { formatarData, formatarAniversario, formatarDias } from '@/lib/formatters'
 import { linkWhatsapp } from '@/lib/whatsapp'
@@ -184,7 +184,7 @@ export default function RelatorioClientesPage() {
       const supabase = createClient()
       const { data_inicial, data_final } = formatarRangeParaAPI(atual)
       const { data, error } = await supabase.rpc('obter_relatorio_vendas_clientes', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canaisSelecionados,

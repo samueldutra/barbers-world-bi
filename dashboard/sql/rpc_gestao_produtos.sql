@@ -60,6 +60,7 @@ DECLARE
     v_limite INTEGER;
     v_offset INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_ordem := CASE p_ordenar_por
         WHEN 'preco' THEN 'b.preco'
         WHEN 'estoque' THEN 'b.saldo_virtual'
@@ -148,6 +149,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format($q$
         WITH ns AS (
             SELECT public.normalizar_sku(n.sku) AS sku_norm, bool_or(COALESCE(n.publicado, FALSE)) AS publicado

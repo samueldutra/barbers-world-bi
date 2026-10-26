@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
-  let body: { jobId?: unknown; token?: unknown }
+  let body: { schema?: unknown; jobId?: unknown; token?: unknown }
   try {
     body = await request.json()
   } catch {
@@ -17,11 +17,12 @@ export async function POST(request: NextRequest) {
   }
   const jobId = Number(body.jobId)
   const token = typeof body.token === 'string' ? body.token : ''
-  if (!Number.isInteger(jobId) || !token) return NextResponse.json({ error: 'Requisição inválida.' }, { status: 400 })
+  const schema = typeof body.schema === 'string' ? body.schema : ''
+  if (!Number.isInteger(jobId) || !token || !schema) return NextResponse.json({ error: 'Requisição inválida.' }, { status: 400 })
 
-  if (!(await validarToken(jobId, token))) return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 })
+  if (!(await validarToken(schema, jobId, token))) return NextResponse.json({ error: 'Não autorizado.' }, { status: 403 })
 
   const origin = request.nextUrl.origin
-  after(() => executarEEncadear(jobId, token, origin))
+  after(() => executarEEncadear(schema, jobId, token, origin))
   return NextResponse.json({ ok: true }, { status: 202 })
 }
