@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 export interface CanalVenda {
   id_loja: number
@@ -18,7 +18,7 @@ export function useCanaisVenda() {
     let ativo = true
     const supabase = createClient()
     supabase
-      .rpc('obter_canais_venda', { p_schema_name: TENANT_SCHEMA })
+      .rpc('obter_canais_venda', { p_schema_name: tenantSchema() })
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 /** Municípios disponíveis pro filtro de cidade — vêm da dimensão contatos inteira (mesmo
  * padrão de use-filtros-produtos.ts), não do período filtrado. */
@@ -14,7 +14,7 @@ export function useFiltrosClientes() {
     let ativo = true
     const supabase = createClient()
 
-    Promise.resolve(supabase.rpc('obter_municipios_clientes', { p_schema_name: TENANT_SCHEMA }))
+    Promise.resolve(supabase.rpc('obter_municipios_clientes', { p_schema_name: tenantSchema() }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error

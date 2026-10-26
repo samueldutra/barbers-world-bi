@@ -66,6 +66,7 @@ DECLARE
     -- minúsculas e sem acento, igual ao nome_busca gravado em cidades
     v_busca TEXT := translate(lower(trim(COALESCE(p_busca, ''))), 'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn');
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT
             c.id_ibge,
@@ -98,6 +99,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT l.id, l.nome, l.latitude, l.longitude
         FROM %1$I.leads_mapeados l
@@ -181,6 +183,7 @@ DECLARE
     v_uf TEXT;
     v_estado TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     IF p_rota_nome IS NULL OR trim(p_rota_nome) = '' THEN
         RAISE EXCEPTION 'informe um nome pra rota';
     END IF;
@@ -225,6 +228,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT m.id, m.id_ibge, c.nome, c.uf::TEXT, c.estado, m.status, m.nicho, m.token,
                m.fila, m.circulos_total, m.circulos_processados, m.leads_novos, m.parcial,
@@ -252,6 +256,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         UPDATE %I.cidades_mapeamento
         SET fila = %L::JSONB, circulos_total = %L, circulos_processados = %L,
@@ -275,6 +280,7 @@ DECLARE
     v_rota BIGINT;
     v_cidade INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('SELECT rota_id, id_ibge FROM %I.cidades_mapeamento WHERE id = %L', p_schema_name, p_job_id)
         INTO v_rota, v_cidade;
 
@@ -312,6 +318,7 @@ AS $$
 DECLARE
     v_rota BIGINT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('SELECT rota_id FROM %I.cidades_mapeamento WHERE id = %L', p_schema_name, p_job_id) INTO v_rota;
     EXECUTE format('UPDATE %I.cidades_mapeamento SET status = ''erro'', erro = %L, atualizado_em = now() WHERE id = %L',
                    p_schema_name, left(p_erro, 500), p_job_id);
@@ -330,6 +337,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT id, token FROM %I.cidades_mapeamento
         WHERE status IN (''pendente'', ''mapeando'') AND atualizado_em < now() - make_interval(secs => %L)
@@ -348,6 +356,7 @@ AS $$
 DECLARE
     v_id BIGINT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         UPDATE %I.cidades_mapeamento SET atualizado_em = now()
         WHERE id = %L AND status IN (''pendente'', ''mapeando'') AND atualizado_em < now() - make_interval(secs => %L)

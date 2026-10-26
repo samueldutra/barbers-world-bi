@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 export type StatusLead =
   | 'cliente'
@@ -57,7 +57,7 @@ export function useLeadsMapeados() {
     setError(null)
     const supabase = createClient()
     const { data, error } = await Promise.resolve(
-      supabase.rpc('obter_leads_mapeados', { p_schema_name: TENANT_SCHEMA, p_status: null })
+      supabase.rpc('obter_leads_mapeados', { p_schema_name: tenantSchema(), p_status: null })
     )
     if (error) {
       console.error('Erro ao carregar leads mapeados:', error)
@@ -76,7 +76,7 @@ export function useLeadsMapeados() {
     const supabase = createClient()
     const { error } = await Promise.resolve(
       supabase.rpc('salvar_lead_mapeado', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_nome: input.nome,
         p_latitude: input.latitude,
         p_longitude: input.longitude,
@@ -101,7 +101,7 @@ export function useLeadsMapeados() {
     const supabase = createClient()
     const { error } = await Promise.resolve(
       supabase.rpc('atualizar_status_lead_mapeado', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_id: id,
         p_status: status,
       })
@@ -116,7 +116,7 @@ export function useLeadsMapeados() {
     setLeads((atual) => atual.map((l) => (l.id === id ? { ...l, favorito } : l)))
     const supabase = createClient()
     const { error } = await Promise.resolve(
-      supabase.rpc('favoritar_lead_mapeado', { p_schema_name: TENANT_SCHEMA, p_id: id, p_favorito: favorito })
+      supabase.rpc('favoritar_lead_mapeado', { p_schema_name: tenantSchema(), p_id: id, p_favorito: favorito })
     )
     if (error) {
       await carregar()
@@ -128,7 +128,7 @@ export function useLeadsMapeados() {
     setLeads((atual) => atual.filter((l) => l.id !== id))
     const supabase = createClient()
     const { error } = await Promise.resolve(
-      supabase.rpc('excluir_lead_mapeado', { p_schema_name: TENANT_SCHEMA, p_id: id })
+      supabase.rpc('excluir_lead_mapeado', { p_schema_name: tenantSchema(), p_id: id })
     )
     if (error) {
       await carregar()

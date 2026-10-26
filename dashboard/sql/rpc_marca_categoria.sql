@@ -72,6 +72,7 @@ DECLARE
     v_limite INTEGER;
     v_offset INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_ordem := CASE p_ordenar_por WHEN 'marca' THEN 'p.marca' ELSE 'p.nome' END;
     v_direcao := CASE lower(p_ordenar_direcao) WHEN 'desc' THEN 'DESC' ELSE 'ASC' END;
     v_busca := CASE WHEN p_busca IS NULL OR btrim(p_busca) = '' THEN NULL ELSE '%' || btrim(p_busca) || '%' END;
@@ -146,6 +147,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format($q$
         WITH produto AS (
             SELECT n.store_id, n.id_produto, bool_or(n.publicado) AS publicado,
@@ -172,6 +174,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format($q$
         WITH %1$s,
         uso AS (
@@ -198,6 +201,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format($q$
         WITH usadas AS (
             SELECT n.marca::TEXT AS nome, count(DISTINCT n.id_produto) AS qtd
@@ -233,6 +237,7 @@ DECLARE
     v_nome TEXT := btrim(regexp_replace(COALESCE(p_nome, ''), '\s+', ' ', 'g'));
     v_existe BOOLEAN;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     IF v_nome = '' THEN RAISE EXCEPTION 'O nome da marca é obrigatório'; END IF;
     EXECUTE format('
         SELECT EXISTS (SELECT 1 FROM %1$I.nuvemshop_produtos WHERE public.normalizar_sku(marca) = public.normalizar_sku($1))
@@ -254,6 +259,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         INSERT INTO %I.nuvemshop_categorias (store_id, id_categoria, nome, id_pai, data_sincronizacao)
         VALUES ($1, $2, $3, $4, now())
@@ -272,6 +278,7 @@ AS $$
 DECLARE
     v_faltam BIGINT[];
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         SELECT COALESCE(array_agg(i), ARRAY[]::BIGINT[])
         FROM unnest($2) AS i
@@ -293,6 +300,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         UPDATE %I.nuvemshop_produtos SET
             marca = CASE WHEN $3 THEN NULLIF(btrim($4), '''') ELSE marca END,
@@ -315,6 +323,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         INSERT INTO %I.nuvemshop_alteracoes_marca_categoria
             (store_id, id_produto_ns, marca_anterior, marca_nova, categorias_anteriores, categorias_novas, sucesso, erro, usuario_id, usuario_email)

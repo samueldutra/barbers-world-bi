@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 export type FiltroCatalogo =
   | 'todos'
@@ -73,7 +73,7 @@ export interface FiltrosCatalogo {
 
 function parametros(f: FiltrosCatalogo) {
   return {
-    p_schema_name: TENANT_SCHEMA,
+    p_schema_name: tenantSchema(),
     p_filtro: f.filtro,
     p_busca: f.busca.trim() || null,
     p_marca: f.marca,
@@ -148,7 +148,7 @@ export function useResumoCatalogo(apenasComEstoque: boolean, refreshToken: numbe
   useEffect(() => {
     let ativo = true
     const supabase = createClient()
-    Promise.resolve(supabase.rpc('obter_resumo_catalogo_produtos', { p_schema_name: TENANT_SCHEMA, p_apenas_com_estoque: apenasComEstoque }))
+    Promise.resolve(supabase.rpc('obter_resumo_catalogo_produtos', { p_schema_name: tenantSchema(), p_apenas_com_estoque: apenasComEstoque }))
       .then(({ data, error }) => {
         if (!ativo) return
         if (error) throw error

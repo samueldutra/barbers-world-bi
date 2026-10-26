@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 export type StatusConferencia = 'todos' | 'divergentes' | 'ultima_venda_menor' | 'alterados'
 export type OrdenarConferenciaPor =
@@ -50,7 +50,7 @@ export interface FiltrosConferencia {
 
 export function parametrosConferencia(f: FiltrosConferencia) {
   return {
-    p_schema_name: TENANT_SCHEMA,
+    p_schema_name: tenantSchema(),
     p_canais: f.canais,
     p_descricao: f.descricao.trim() || null,
     p_sku: f.sku.trim() || null,

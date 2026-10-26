@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 
 export interface KpisVendas {
@@ -83,7 +83,7 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes, refre
 
       const [kpiAtualRes, kpiCompRes, evolAtualRes, evolCompRes, canalRes] = await Promise.all([
         supabase.rpc('obter_kpis_vendas', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenantSchema(),
           p_data_inicial: data_inicial,
           p_data_final: data_final,
           p_canais: canais,
@@ -91,7 +91,7 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes, refre
         }),
         comp
           ? supabase.rpc('obter_kpis_vendas', {
-              p_schema_name: TENANT_SCHEMA,
+              p_schema_name: tenantSchema(),
               p_data_inicial: comp.data_inicial,
               p_data_final: comp.data_final,
               p_canais: canais,
@@ -99,7 +99,7 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes, refre
             })
           : Promise.resolve({ data: [KPIS_VAZIO], error: null }),
         supabase.rpc('obter_evolucao_vendas', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenantSchema(),
           p_data_inicial: data_inicial,
           p_data_final: data_final,
           p_canais: canais,
@@ -107,7 +107,7 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes, refre
         }),
         comp
           ? supabase.rpc('obter_evolucao_vendas', {
-              p_schema_name: TENANT_SCHEMA,
+              p_schema_name: tenantSchema(),
               p_data_inicial: comp.data_inicial,
               p_data_final: comp.data_final,
               p_canais: canais,
@@ -115,7 +115,7 @@ export function useVendasDashboard({ atual, comparacao, canais, situacoes, refre
             })
           : Promise.resolve({ data: [], error: null }),
         supabase.rpc('obter_vendas_por_canal', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenantSchema(),
           p_data_inicial: data_inicial,
           p_data_final: data_final,
           p_situacoes: situacoes,

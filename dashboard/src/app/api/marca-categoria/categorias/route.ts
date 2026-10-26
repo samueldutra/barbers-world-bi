@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { criarCategoriaNuvemshop } from '@/lib/canais-integracao/nuvemshop'
 import { autorizarModulo, lojaNuvemshop } from '@/lib/api/autorizar-modulo'
-import { TENANT_SCHEMA } from '@/lib/tenant'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +16,7 @@ const normalizar = (t: string) => t.trim().replace(/\s+/g, ' ').toUpperCase()
 
 /** Cria uma categoria na Nuvemshop e a reflete no banco (aparece na lista na hora). */
 export async function POST(request: NextRequest) {
-  const { erro } = await autorizarModulo('marca-categoria', 'Sem acesso ao módulo de marca e categoria.')
+  const { erro, tenant } = await autorizarModulo('marca-categoria', 'Sem acesso ao módulo de marca e categoria.')
   if (erro) return erro
 
   let body: unknown
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
 
   const admin = getAdminClient()
   // Não cria duplicada (mesmo nome sob o mesmo pai) nem sob um pai que não existe.
-  const { data: existentes, error: erroLista } = await admin.rpc('obter_categorias_nuvemshop', { p_schema_name: TENANT_SCHEMA })
+  const { data: existentes, error: erroLista } = await admin.rpc('obter_categorias_nuvemshop', { p_schema_name: tenant.schema_name })
   if (erroLista) return NextResponse.json({ error: 'Não foi possível conferir as categorias existentes.' }, { status: 500 })
   const lista = (existentes ?? []) as { id_categoria: number; nome: string; id_pai: number | null }[]
   if (idPai !== null && !lista.some((c) => Number(c.id_categoria) === idPai)) {
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
   try {
     const criada = await criarCategoriaNuvemshop(loja.token, String(loja.storeId), nome, idPai)
     const { error: erroEspelho } = await admin.rpc('registrar_categoria_nuvemshop', {
-      p_schema_name: TENANT_SCHEMA, p_store_id: loja.storeId, p_id_categoria: criada.id, p_nome: criada.nome, p_id_pai: criada.idPai,
+      p_schema_name: tenant.schema_name, p_store_id: loja.storeId, p_id_categoria: criada.id, p_nome: criada.nome, p_id_pai: criada.idPai,
     })
     // A categoria já existe na Nuvemshop; se o espelho falhar, o próximo ETL do catálogo a traz.
     if (erroEspelho) console.error('[marca-categoria] Falha ao espelhar a categoria criada:', criada.id, erroEspelho)

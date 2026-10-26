@@ -50,6 +50,7 @@ DECLARE
     v_busca_pattern TEXT;
     v_offset INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_ordenar_coluna := CASE p_ordenar_por
         WHEN 'qtde_vendida' THEN 'unidades_vendidas'
         ELSE 'faturamento'
@@ -115,6 +116,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT DISTINCT COALESCE(NULLIF(TRIM(marca), ''''), ''Sem marca'')::TEXT AS marca
         FROM %I.produtos
@@ -137,6 +139,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT DISTINCT COALESCE(NULLIF(TRIM(categoria_descricao), ''''), ''Sem categoria'')::TEXT AS categoria_descricao
         FROM %I.produtos
@@ -181,6 +184,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH por_categoria AS (
             SELECT

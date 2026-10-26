@@ -3,7 +3,6 @@ import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { alterarMarcaCategoriasProduto, buscarMarcaCategoriasProduto } from '@/lib/canais-integracao/nuvemshop'
 import { autorizarModulo, lojaNuvemshop } from '@/lib/api/autorizar-modulo'
-import { TENANT_SCHEMA } from '@/lib/tenant'
 
 export const dynamic = 'force-dynamic'
 // Lote pequeno (cada produto = 1 leitura + 1 gravação, ~1,4 req/s no balde da Nuvemshop): a tela manda vários lotes
@@ -68,7 +67,7 @@ function categoriasConferem(pedido: number[], gravado: number[], paiDe: Map<numb
 }
 
 export async function POST(request: NextRequest) {
-  const { erro, user } = await autorizarModulo(MODULO, 'Sem acesso ao módulo de marca e categoria.')
+  const { erro, user, tenant } = await autorizarModulo(MODULO, 'Sem acesso ao módulo de marca e categoria.')
   if (erro) return erro
 
   let body: unknown
@@ -97,7 +96,7 @@ export async function POST(request: NextRequest) {
   if (idsEscolhidos.length > 0) {
     for (const storeId of new Set(itens.map((i) => i.store_id))) {
       const { data } = await admin.rpc('categorias_inexistentes_nuvemshop', {
-        p_schema_name: TENANT_SCHEMA, p_store_id: storeId, p_ids: idsEscolhidos,
+        p_schema_name: tenant.schema_name, p_store_id: storeId, p_ids: idsEscolhidos,
       })
       categoriasInvalidas = categoriasInvalidas.concat((data as number[] | null) ?? [])
     }
@@ -105,7 +104,7 @@ export async function POST(request: NextRequest) {
 
   const paiDe = new Map<number, number | null>()
   if (categorias) {
-    const { data: lista } = await admin.rpc('obter_categorias_nuvemshop', { p_schema_name: TENANT_SCHEMA })
+    const { data: lista } = await admin.rpc('obter_categorias_nuvemshop', { p_schema_name: tenant.schema_name })
     for (const c of (lista ?? []) as { id_categoria: number; id_pai: number | null }[]) {
       paiDe.set(Number(c.id_categoria), c.id_pai === null ? null : Number(c.id_pai))
     }
@@ -190,7 +189,7 @@ export async function POST(request: NextRequest) {
     const sucesso = mensagemErro === null
     if (gravou) {
       const { error: erroEspelho } = await admin.rpc('espelhar_marca_categoria_nuvemshop', {
-        p_schema_name: TENANT_SCHEMA, p_store_id: item.store_id, p_id_produto: item.id_produto_ns,
+        p_schema_name: tenant.schema_name, p_store_id: item.store_id, p_id_produto: item.id_produto_ns,
         p_atualizar_marca: marca !== undefined, p_marca: novaMarca,
         p_atualizar_categorias: categorias !== undefined, p_categorias_ids: novasCategorias,
       })
@@ -200,7 +199,7 @@ export async function POST(request: NextRequest) {
     // Auditoria: toda tentativa fica registrada (sucesso, recusa da Nuvemshop ou recusa de validação). Produto que já estava assim não gera linha.
     if (!sucesso || gravou) {
       const { error: erroRegistro } = await admin.rpc('registrar_alteracao_marca_categoria', {
-        p_schema_name: TENANT_SCHEMA, p_store_id: item.store_id, p_id_produto_ns: item.id_produto_ns,
+        p_schema_name: tenant.schema_name, p_store_id: item.store_id, p_id_produto_ns: item.id_produto_ns,
         p_marca_anterior: anterior?.marca ?? null, p_marca_nova: novaMarca,
         p_categorias_anteriores: anterior?.categoriasIds ?? null, p_categorias_novas: gravou ? novasCategorias : null,
         p_sucesso: sucesso, p_erro: mensagemErro, p_usuario_id: user.id, p_usuario_email: user.email ?? null,

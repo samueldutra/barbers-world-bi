@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { formatarRangeParaAPI, type RangeData } from '@/lib/date-ranges'
 
 export type OrdenarClientesPor = 'valor_vendido' | 'qtde_pedidos' | 'ticket_medio' | 'ultima_compra' | 'frequencia_media'
@@ -82,7 +82,7 @@ export function useRelatorioClientes({
     const timer = setTimeout(() => {
       Promise.resolve(
         supabase.rpc('obter_relatorio_vendas_clientes', {
-          p_schema_name: TENANT_SCHEMA,
+          p_schema_name: tenantSchema(),
           p_data_inicial: data_inicial,
           p_data_final: data_final,
           p_canais: canais,

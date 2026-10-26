@@ -14,7 +14,7 @@ import { cn } from 'cn'
 import { geocodificarEndereco } from '@/lib/geocode'
 import { ordenarPorProximidade } from '@/lib/distancia'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { useBuscaCidades, type CidadeBusca } from '@/hooks/use-cidades'
 
 interface Props {
@@ -95,7 +95,7 @@ export function CriarRotaCidadeDialog({ open, onOpenChange, onCriar, onMapeament
       // Cidade já mapeada: cria a rota na hora, na melhor ordem a partir do ponto de partida.
       const supabase = createClient()
       const { data, error } = await Promise.resolve(
-        supabase.rpc('obter_leads_da_cidade', { p_schema_name: TENANT_SCHEMA, p_id_ibge: cidade.id_ibge })
+        supabase.rpc('obter_leads_da_cidade', { p_schema_name: tenantSchema(), p_id_ibge: cidade.id_ibge })
       )
       if (error) throw error
       const leads = (data as { id: number; latitude: number; longitude: number }[]) ?? []

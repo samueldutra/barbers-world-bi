@@ -179,6 +179,7 @@ DECLARE
     v_offset INTEGER;
     v_limite INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     -- Ordem padrão = do mais grave ao menos grave (sem SKU, duplicado, sem correspondência, ajustar...).
     v_ordem := CASE p_ordenar_por
         WHEN 'nome' THEN 'COALESCE(nome_ns, nome_bling)'
@@ -260,6 +261,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format($q$
         SELECT t.status, count(*)::BIGINT
         FROM (%s) t

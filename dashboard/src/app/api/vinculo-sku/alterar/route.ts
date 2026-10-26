@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { alterarSkuVariante } from '@/lib/canais-integracao/nuvemshop'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 
 export const dynamic = 'force-dynamic'
 // Lote pequeno a ~1,4 req/s (balde da Nuvemshop: 2/s) — a tela manda vários lotes e mostra o progresso.
@@ -29,34 +28,6 @@ const schema = z.object({
     .max(MAX_ITENS_POR_LOTE),
 })
 
-/** Quem tem o módulo liberado (ou é super admin) pode corrigir o vínculo — mesma regra do middleware
- * pra página, repetida aqui porque /api/* não passa pela checagem de módulo. */
-async function autorizar() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { erro: NextResponse.json({ error: 'Não autenticado.' }, { status: 401 }) }
-
-  const { data: perfil } = await supabase
-    .from('user_profiles')
-    .select('is_superadmin, is_active')
-    .eq('id', user.id)
-    .single()
-  if (!perfil?.is_active) return { erro: NextResponse.json({ error: 'Conta desativada.' }, { status: 403 }) }
-
-  if (!perfil.is_superadmin) {
-    const { data: liberado } = await supabase
-      .from('user_authorized_modules')
-      .select('module')
-      .eq('user_id', user.id)
-      .eq('module', MODULO)
-      .maybeSingle()
-    if (!liberado) {
-      return { erro: NextResponse.json({ error: 'Sem acesso ao módulo de vínculo de SKU.' }, { status: 403 }) }
-    }
-  }
-  return { erro: null, user }
-}
-
 export interface ResultadoAlteracaoSku {
   id_variante: number
   sucesso: boolean
@@ -66,7 +37,7 @@ export interface ResultadoAlteracaoSku {
 }
 
 export async function POST(request: NextRequest) {
-  const { erro, user } = await autorizar()
+  const { erro, user, tenant } = await autorizarModulo(MODULO, 'Sem acesso ao módulo de vínculo de SKU.')
   if (erro) return erro
 
   let body: unknown
@@ -111,7 +82,7 @@ export async function POST(request: NextRequest) {
       // 1) O SKU precisa existir em exatamente 1 produto ativo do Bling (a fonte da verdade) e não pode
       //    já estar em outra variante da Nuvemshop (criaria duplicidade). Grava-se o código EXATO do Bling.
       const { data: validacao, error: erroValidacao } = await admin.rpc('validar_sku_vinculo_nuvemshop', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenant.schema_name,
         p_sku: item.sku_novo,
         p_id_variante: item.id_variante,
       })
@@ -135,7 +106,7 @@ export async function POST(request: NextRequest) {
     // saber quem tentou o quê.
     const sucesso = mensagemErro === null
     const { error: erroRegistro } = await admin.rpc('registrar_alteracao_sku_nuvemshop', {
-      p_schema_name: TENANT_SCHEMA,
+      p_schema_name: tenant.schema_name,
       p_store_id: item.store_id,
       p_id_produto_ns: item.id_produto_ns,
       p_id_variante: item.id_variante,

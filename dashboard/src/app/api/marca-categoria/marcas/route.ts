@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { autorizarModulo, lojaNuvemshop } from '@/lib/api/autorizar-modulo'
-import { TENANT_SCHEMA } from '@/lib/tenant'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +12,7 @@ const schema = z.object({
 /** Cadastra uma marca na lista do BI. Na Nuvemshop a marca é só um texto do produto: ela passa a existir lá quando for
  * atribuída a algum produto (pela ação em massa). */
 export async function POST(request: NextRequest) {
-  const { erro } = await autorizarModulo('marca-categoria', 'Sem acesso ao módulo de marca e categoria.')
+  const { erro, tenant } = await autorizarModulo('marca-categoria', 'Sem acesso ao módulo de marca e categoria.')
   if (erro) return erro
 
   let body: unknown
@@ -29,7 +28,7 @@ export async function POST(request: NextRequest) {
   if ('erro' in loja) return NextResponse.json({ error: loja.erro }, { status: 400 })
 
   const { data, error } = await getAdminClient().rpc('registrar_marca_nuvemshop', {
-    p_schema_name: TENANT_SCHEMA, p_store_id: loja.storeId, p_nome: parsed.data.nome,
+    p_schema_name: tenant.schema_name, p_store_id: loja.storeId, p_nome: parsed.data.nome,
   })
   if (error) return NextResponse.json({ error: 'Não foi possível cadastrar a marca.' }, { status: 500 })
   if (data === 'ja_existe') return NextResponse.json({ error: `A marca "${parsed.data.nome}" já existe (maiúsculas e espaços não diferenciam).` }, { status: 409 })

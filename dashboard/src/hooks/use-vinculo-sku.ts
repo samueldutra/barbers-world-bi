@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 /** 'todos' = todas as variantes da Nuvemshop; 'problemas' = todas menos as vinculadas; ou um StatusVinculo. */
 export type FiltroStatusVinculo = 'todos' | 'problemas' | string
@@ -54,7 +54,7 @@ export interface FiltrosVinculo {
 
 export function parametrosVinculo(f: FiltrosVinculo) {
   return {
-    p_schema_name: TENANT_SCHEMA,
+    p_schema_name: tenantSchema(),
     p_status: f.status,
     p_busca: f.busca.trim() || null,
     p_apenas_publicados: f.apenasPublicados,
@@ -125,7 +125,7 @@ export function useResumoVinculoSku(apenasPublicados: boolean, apenasComEstoque:
     const supabase = createClient()
     Promise.resolve(
       supabase.rpc('obter_resumo_vinculo_sku_nuvemshop', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_apenas_publicados: apenasPublicados,
         p_apenas_com_estoque: apenasComEstoque,
       })
@@ -197,7 +197,7 @@ export function parUtilizavel(par: ParConfirmado | undefined): par is ParConfirm
 export async function buscarParesConfirmados(variantes?: number[]): Promise<ParConfirmado[]> {
   const supabase = createClient()
   const { data, error } = await supabase.rpc('obter_pares_confirmados_nuvemshop', {
-    p_schema_name: TENANT_SCHEMA,
+    p_schema_name: tenantSchema(),
     p_variantes: variantes ?? null,
   })
   if (error) throw error
@@ -255,7 +255,7 @@ export interface DivergenciaSkuPedidos {
 /** Variantes já vinculadas por SKU cujo produto do Bling pelo SKU difere do produto que as vendas mostram. */
 export async function buscarDivergenciasSkuPedidos(): Promise<DivergenciaSkuPedidos[]> {
   const supabase = createClient()
-  const { data, error } = await supabase.rpc('obter_divergencias_sku_pedidos', { p_schema_name: TENANT_SCHEMA })
+  const { data, error } = await supabase.rpc('obter_divergencias_sku_pedidos', { p_schema_name: tenantSchema() })
   if (error) throw error
   return (data as DivergenciaSkuPedidos[]) ?? []
 }

@@ -12,7 +12,7 @@ import { useRelatorioProdutos, type LinhaRelatorioProduto, type OrdenarRelatorio
 import { useCurvaAbc } from '@/hooks/use-curva-abc'
 import { obterRangePreset, formatarRangeParaAPI, type PeriodoPreset, type RangeData } from '@/lib/date-ranges'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 import { exportarCSV, exportarXLSX, type ColunaExportavel } from '@/lib/export'
 
 const COLUNAS_EXPORTACAO: ColunaExportavel<LinhaRelatorioProduto>[] = [
@@ -120,7 +120,7 @@ export default function RelatorioProdutosPage() {
       const supabase = createClient()
       const { data_inicial, data_final } = formatarRangeParaAPI(atual)
       const { data, error } = await supabase.rpc('obter_relatorio_vendas_produtos', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenantSchema(),
         p_data_inicial: data_inicial,
         p_data_final: data_final,
         p_canais: canaisSelecionados,

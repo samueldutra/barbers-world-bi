@@ -1,5 +1,4 @@
 import { getAdminClient } from '@/lib/supabase/admin'
-import { TENANT_SCHEMA } from '@/lib/tenant'
 import { buscarPorTipoNoCirculo, MAX_RESULTADOS_PLACES, type ResultadoBusca } from '@/lib/places'
 import { ordenarPorProximidade } from '@/lib/distancia'
 
@@ -142,21 +141,27 @@ export interface Dependencias {
   caixa: (nome: string, estado: string) => Promise<CaixaGeografica>
 }
 
-async function rpcReal<T>(nome: string, args: Record<string, unknown>): Promise<T> {
-  const { data, error } = await getAdminClient().rpc(nome, { p_schema_name: TENANT_SCHEMA, ...args })
-  if (error) throw new Error(`${nome}: ${error.message}`)
-  return data as T
+/** Dependências reais para o schema de um tenant. O schema vem sempre de um tenant já validado
+ * (sessão do usuário) ou de um job cujo token foi conferido. */
+export function depsDoTenant(schema: string): Dependencias {
+  return {
+    rpc: async <T>(nome: string, args: Record<string, unknown>): Promise<T> => {
+      const { data, error } = await getAdminClient().rpc(nome, { p_schema_name: schema, ...args })
+      if (error) throw new Error(`${nome}: ${error.message}`)
+      return data as T
+    },
+    buscar: buscarPorTipoNoCirculo,
+    caixa: caixaDoMunicipio,
+  }
 }
 
-const depsReais: Dependencias = { rpc: rpcReal, buscar: buscarPorTipoNoCirculo, caixa: caixaDoMunicipio }
-
-export async function obterMapeamento(jobId: number, deps: Dependencias = depsReais): Promise<Mapeamento | null> {
+export async function obterMapeamento(jobId: number, deps: Dependencias): Promise<Mapeamento | null> {
   const linhas = await deps.rpc<Mapeamento[]>('obter_mapeamento_cidade', { p_job_id: jobId })
   return linhas?.[0] ?? null
 }
 
-export async function validarToken(jobId: number, token: string): Promise<boolean> {
-  const job = await obterMapeamento(jobId)
+export async function validarToken(schema: string, jobId: number, token: string): Promise<boolean> {
+  const job = await obterMapeamento(jobId, depsDoTenant(schema))
   return !!job && job.token === token
 }
 
@@ -191,7 +196,7 @@ async function finalizar(deps: Dependencias, job: Mapeamento, parcial: boolean) 
 export async function processarMapeamento(
   jobId: number,
   orcamentoMs: number,
-  deps: Dependencias = depsReais
+  deps: Dependencias
 ): Promise<'concluido' | 'continua' | 'erro'> {
   const inicio = Date.now()
   const apiKey = process.env.GOOGLE_PLACES_API_KEY

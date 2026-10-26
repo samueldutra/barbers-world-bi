@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { alterarCodigoProduto, buscarProduto } from '@/lib/bling'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 
 export const dynamic = 'force-dynamic'
 // Cada produto faz 3 chamadas ao Bling (ler, alterar, reler) a ~2 req/s; o limite do Bling (3 req/s) é
@@ -18,34 +17,6 @@ const schema = z.object({
   itens: z.array(z.object({ id_produto: z.number().int().positive() })).min(1).max(MAX_ITENS_POR_LOTE),
 })
 
-/** Quem tem o módulo liberado (ou é super admin) — mesma regra do middleware pra página, repetida aqui
- * porque /api/* não passa pela checagem de módulo. */
-async function autorizar() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { erro: NextResponse.json({ error: 'Não autenticado.' }, { status: 401 }) }
-
-  const { data: perfil } = await supabase
-    .from('user_profiles')
-    .select('is_superadmin, is_active')
-    .eq('id', user.id)
-    .single()
-  if (!perfil?.is_active) return { erro: NextResponse.json({ error: 'Conta desativada.' }, { status: 403 }) }
-
-  if (!perfil.is_superadmin) {
-    const { data: liberado } = await supabase
-      .from('user_authorized_modules')
-      .select('module')
-      .eq('user_id', user.id)
-      .eq('module', MODULO)
-      .maybeSingle()
-    if (!liberado) {
-      return { erro: NextResponse.json({ error: 'Sem acesso ao módulo de vínculo de SKU.' }, { status: 403 }) }
-    }
-  }
-  return { erro: null, user }
-}
-
 export interface ResultadoAplicacaoSku {
   id_produto: number
   sucesso: boolean
@@ -57,7 +28,7 @@ export interface ResultadoAplicacaoSku {
 const norm = (s: string | null | undefined) => (s ?? '').trim().replace(/\s+/g, ' ').toUpperCase()
 
 export async function POST(request: NextRequest) {
-  const { erro, user } = await autorizar()
+  const { erro, user, tenant } = await autorizarModulo(MODULO, 'Sem acesso ao módulo de vínculo de SKU.')
   if (erro) return erro
 
   let body: unknown
@@ -76,7 +47,7 @@ export async function POST(request: NextRequest) {
   // Trava do teste: enquanto nenhuma aplicação tiver dado certo, só 1 produto por vez. Vale no servidor (a
   // tela só reflete) — a primeira gravação em massa no Bling precisa antes provar que a API aceita o campo.
   const { data: primeira } = await admin.rpc('validar_proposta_sku_bling', {
-    p_schema_name: TENANT_SCHEMA,
+    p_schema_name: tenant.schema_name,
     p_id_produto: itens[0].id_produto,
   })
   const aplicadosAteAgora = Number((Array.isArray(primeira) ? primeira[0] : primeira)?.aplicados ?? 0)
@@ -99,7 +70,7 @@ export async function POST(request: NextRequest) {
     try {
       // 1) A proposta existe, está liberada e o código não está em uso por outro produto.
       const { data: validacao, error: erroValidacao } = await admin.rpc('validar_proposta_sku_bling', {
-        p_schema_name: TENANT_SCHEMA,
+        p_schema_name: tenant.schema_name,
         p_id_produto: item.id_produto,
       })
       if (erroValidacao) throw new Error('Não foi possível validar a proposta. Tente de novo.')
@@ -137,7 +108,7 @@ export async function POST(request: NextRequest) {
 
     const sucesso = mensagemErro === null
     const { error: erroRegistro } = await admin.rpc('registrar_aplicacao_sku_bling', {
-      p_schema_name: TENANT_SCHEMA,
+      p_schema_name: tenant.schema_name,
       p_id_produto: item.id_produto,
       p_sucesso: sucesso,
       p_erro: mensagemErro,

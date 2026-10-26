@@ -46,6 +46,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT p.id_produto, p.codigo::TEXT, p.nome::TEXT, p.marca::TEXT, p.preco::NUMERIC, p.imagem_url::TEXT
         FROM %I.produtos p
@@ -63,6 +64,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT c.id, c.consulta, c.consultado_em, c.total_resultados
         FROM %I.consultas_precos c
@@ -81,6 +83,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     RETURN QUERY EXECUTE format('
         SELECT i.posicao, i.loja, i.titulo, i.preco, i.preco_texto, i.link, i.thumbnail
         FROM %I.consultas_precos_itens i
@@ -110,6 +113,7 @@ DECLARE
     v_quando TIMESTAMPTZ;
     v_total INTEGER := COALESCE(jsonb_array_length(p_itens), 0);
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         INSERT INTO %I.consultas_precos (id_produto, consulta, total_resultados, criado_por)
         VALUES (%L, %L, %L, %L)
@@ -140,6 +144,7 @@ AS $$
 DECLARE
     v_total INTEGER;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('
         SELECT count(*)::INT FROM %I.consultas_precos
         WHERE consultado_em >= date_trunc(''day'', now() AT TIME ZONE ''America/Sao_Paulo'') AT TIME ZONE ''America/Sao_Paulo''

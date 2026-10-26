@@ -120,6 +120,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         SELECT id, origem_tipo, origem_id, nome, nicho, endereco, cidade, telefone, latitude, longitude,
                status, observacoes, criado_em, atualizado_em, uf, favorito
@@ -144,6 +145,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     EXECUTE format('UPDATE %I.leads_mapeados SET favorito = %L::BOOLEAN WHERE id = %L',
                    p_schema_name, COALESCE(p_favorito, false), p_id);
 END;
@@ -180,6 +182,7 @@ DECLARE
     v_id BIGINT;
     v_status TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_status := CASE WHEN p_status IN ('cliente', 'concorrente', 'lead', 'cliente_bw', 'cliente_anderson', 'cliente_leo') THEN p_status ELSE 'lead' END;
 
     IF p_origem_tipo IS NOT NULL AND p_origem_id IS NOT NULL THEN
@@ -232,6 +235,7 @@ DECLARE
     v_sql TEXT;
     v_count INT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         WITH dados AS (
             SELECT
@@ -300,6 +304,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     IF p_status NOT IN ('cliente', 'concorrente', 'lead', 'pendente', 'cliente_bw', 'cliente_anderson', 'cliente_leo') THEN
         RAISE EXCEPTION 'status inválido: %', p_status;
     END IF;
@@ -336,6 +341,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('
         UPDATE %I.leads_mapeados
         SET cidade = %L, atualizado_em = now()
@@ -358,6 +364,7 @@ AS $$
 DECLARE
     v_sql TEXT;
 BEGIN
+    PERFORM public.assert_tenant_access(p_schema_name);
     v_sql := format('DELETE FROM %I.leads_mapeados WHERE id = %L', p_schema_name, p_id);
     EXECUTE v_sql;
 END;

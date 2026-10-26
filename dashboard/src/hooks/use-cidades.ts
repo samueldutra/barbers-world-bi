@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { TENANT_SCHEMA } from '@/lib/tenant'
+import { tenantSchema } from '@/lib/tenant'
 
 export interface CidadeBusca {
   id_ibge: number
@@ -31,7 +31,7 @@ export function useBuscaCidades(busca: string, ativo: boolean) {
     const timer = setTimeout(async () => {
       const supabase = createClient()
       const { data, error } = await Promise.resolve(
-        supabase.rpc('buscar_cidades', { p_schema_name: TENANT_SCHEMA, p_busca: busca, p_limite: 40 })
+        supabase.rpc('buscar_cidades', { p_schema_name: tenantSchema(), p_busca: busca, p_limite: 40 })
       )
       if (!atual) return
       if (error) {
