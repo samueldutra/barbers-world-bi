@@ -81,10 +81,11 @@ export async function POST(request: NextRequest) {
   const { itens, marca, categorias } = parsed.data
 
   const admin = getAdminClient()
+  const tenantId = tenant.id
   const lojas = new Map<number, { token: string } | { erro: string }>()
   async function lojaDe(storeId: number) {
     if (!lojas.has(storeId)) {
-      const l = await lojaNuvemshop(storeId)
+      const l = await lojaNuvemshop(tenantId, storeId)
       lojas.set(storeId, 'erro' in l ? { erro: l.erro } : { token: l.token })
     }
     return lojas.get(storeId)!

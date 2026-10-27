@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { alterarPrecoProduto } from '@/lib/bling'
+import { alterarPrecoProduto, contaBlingDoTenant } from '@/lib/bling'
 import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 
 export const dynamic = 'force-dynamic'
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     let mensagemErro: string | null = null
     try {
-      await alterarPrecoProduto(item.id_produto, precoNovo)
+      await alterarPrecoProduto(contaBlingDoTenant(tenant), item.id_produto, precoNovo)
     } catch (e) {
       mensagemErro = e instanceof Error ? e.message : 'Erro desconhecido ao alterar no Bling.'
     }

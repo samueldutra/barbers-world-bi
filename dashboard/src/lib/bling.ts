@@ -3,7 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin'
 /**
  * Acesso à API do Bling (v3) pelo servidor do Next — só usar em rotas de API.
  *
- * O token OAuth é o MESMO do ETL (tabela public.bling_oauth, 1 linha por conta). O Bling
+ * O token OAuth é o MESMO do ETL (tabela public.bling_oauth, 1 linha por conta = 1 por tenant). O Bling
  * rotaciona o refresh_token a cada renovação, então dois processos renovando ao mesmo tempo
  * invalidam um ao outro. Proteção aqui: a regravação só acontece se o refresh_token no banco
  * ainda for o que usamos (update condicional); se outro processo (o ETL de hora em hora)
@@ -21,18 +21,19 @@ interface LinhaOAuth {
   expires_at: string
 }
 
-function contaBling(): string {
-  return process.env.BLING_CONTA || 'barbers'
+/** Linha de public.bling_oauth do tenant (cada cliente tem a sua conta Bling). */
+export function contaBlingDoTenant(tenant: { slug: string; conta_bling: string | null }): string {
+  return tenant.conta_bling || tenant.slug
 }
 
-async function lerTokens(): Promise<LinhaOAuth> {
+async function lerTokens(conta: string): Promise<LinhaOAuth> {
   const { data, error } = await getAdminClient()
     .from('bling_oauth')
     .select('access_token, refresh_token, expires_at')
-    .eq('conta', contaBling())
+    .eq('conta', conta)
     .single()
   if (error || !data) {
-    throw new Error(`Token do Bling não encontrado para a conta '${contaBling()}' (public.bling_oauth).`)
+    throw new Error(`Token do Bling não encontrado para a conta '${conta}' (public.bling_oauth).`)
   }
   return data as LinhaOAuth
 }
@@ -41,7 +42,7 @@ function tokenValido(linha: LinhaOAuth): boolean {
   return new Date(linha.expires_at).getTime() - Date.now() > MARGEM_EXPIRACAO_MS
 }
 
-async function renovarToken(atual: LinhaOAuth): Promise<string> {
+async function renovarToken(conta: string, atual: LinhaOAuth): Promise<string> {
   const clientId = process.env.BLING_CLIENT_ID
   const clientSecret = process.env.BLING_CLIENT_SECRET
   if (!clientId || !clientSecret) {
@@ -61,7 +62,7 @@ async function renovarToken(atual: LinhaOAuth): Promise<string> {
 
   if (!resp.ok) {
     // Provável corrida com o ETL: ele renovou antes e o nosso refresh_token já não vale.
-    const relida = await lerTokens()
+    const relida = await lerTokens(conta)
     if (relida.refresh_token !== atual.refresh_token && tokenValido(relida)) return relida.access_token
     throw new Error(`Falha ao renovar o token do Bling (${resp.status}).`)
   }
@@ -75,7 +76,7 @@ async function renovarToken(atual: LinhaOAuth): Promise<string> {
       expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('conta', contaBling())
+    .eq('conta', conta)
     .eq('refresh_token', atual.refresh_token)
     .select('conta')
 
@@ -87,15 +88,15 @@ async function renovarToken(atual: LinhaOAuth): Promise<string> {
   }
   if (!gravadas || gravadas.length === 0) {
     // Outro processo gravou entre a leitura e agora; o token dele é tão válido quanto o nosso.
-    return (await lerTokens()).access_token
+    return (await lerTokens(conta)).access_token
   }
   return tokens.access_token
 }
 
-async function obterAccessToken(forcarRenovacao = false): Promise<string> {
-  const linha = await lerTokens()
+async function obterAccessToken(conta: string, forcarRenovacao = false): Promise<string> {
+  const linha = await lerTokens(conta)
   if (!forcarRenovacao && tokenValido(linha)) return linha.access_token
-  return renovarToken(linha)
+  return renovarToken(conta, linha)
 }
 
 export class ErroBling extends Error {
@@ -111,8 +112,8 @@ function mensagemErroBling(corpo: unknown, status: number): string {
 }
 
 /** Chamada autenticada; renova o token uma vez em caso de 401 e espera/retenta em 429. */
-async function blingFetch(path: string, init: RequestInit): Promise<Response> {
-  let token = await obterAccessToken()
+async function blingFetch(conta: string, path: string, init: RequestInit): Promise<Response> {
+  let token = await obterAccessToken(conta)
   for (let tentativa = 0; tentativa < 4; tentativa++) {
     const resp = await fetch(`${BLING_API_URL}${path}`, {
       ...init,
@@ -120,7 +121,7 @@ async function blingFetch(path: string, init: RequestInit): Promise<Response> {
       cache: 'no-store',
     })
     if (resp.status === 401 && tentativa === 0) {
-      token = await obterAccessToken(true)
+      token = await obterAccessToken(conta, true)
       continue
     }
     if (resp.status === 429) {
@@ -134,8 +135,8 @@ async function blingFetch(path: string, init: RequestInit): Promise<Response> {
 }
 
 /** Altera só o preço de venda do produto (PATCH parcial — os demais campos ficam intactos). */
-export async function alterarPrecoProduto(idProduto: number, preco: number): Promise<void> {
-  const resp = await blingFetch(`/produtos/${idProduto}`, {
+export async function alterarPrecoProduto(conta: string, idProduto: number, preco: number): Promise<void> {
+  const resp = await blingFetch(conta, `/produtos/${idProduto}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ preco }),
@@ -153,8 +154,8 @@ export interface ProdutoBling {
 }
 
 /** Lê o produto no Bling (só os campos que usamos). */
-export async function buscarProduto(idProduto: number): Promise<ProdutoBling> {
-  const resp = await blingFetch(`/produtos/${idProduto}`, { method: 'GET' })
+export async function buscarProduto(conta: string, idProduto: number): Promise<ProdutoBling> {
+  const resp = await blingFetch(conta, `/produtos/${idProduto}`, { method: 'GET' })
   const corpo = await resp.json().catch(() => null)
   if (!resp.ok) throw new ErroBling(mensagemErroBling(corpo, resp.status), resp.status)
   const d = (corpo as { data?: { id?: number; nome?: string; codigo?: string } })?.data
@@ -164,8 +165,8 @@ export async function buscarProduto(idProduto: number): Promise<ProdutoBling> {
 
 /** Altera só o código (SKU) do produto (PATCH parcial). O chamador deve conferir com buscarProduto depois:
  * o Bling pode aceitar a chamada e ignorar o campo. */
-export async function alterarCodigoProduto(idProduto: number, codigo: string): Promise<void> {
-  const resp = await blingFetch(`/produtos/${idProduto}`, {
+export async function alterarCodigoProduto(conta: string, idProduto: number, codigo: string): Promise<void> {
+  const resp = await blingFetch(conta, `/produtos/${idProduto}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ codigo }),

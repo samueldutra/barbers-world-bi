@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Dados inválidos.' }, { status: 400 })
 
-  const loja = await lojaNuvemshop()
+  const loja = await lojaNuvemshop(tenant.id)
   if ('erro' in loja) return NextResponse.json({ error: loja.erro }, { status: 400 })
 
   const { data, error } = await getAdminClient().rpc('registrar_marca_nuvemshop', {

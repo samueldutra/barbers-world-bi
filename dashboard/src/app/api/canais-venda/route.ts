@@ -18,12 +18,13 @@ const COLUNAS_PUBLICAS =
 
 /** Lista os canais cadastrados + o que falta configurar no servidor pra integrar. */
 export async function GET() {
-  const { erro } = await autorizarCanais()
+  const { erro, tenant } = await autorizarCanais()
   if (erro) return erro
 
   const { data, error } = await getAdminClient()
     .from('canais_integracoes')
     .select(COLUNAS_PUBLICAS)
+    .eq('tenant_id', tenant.id)
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -43,7 +44,7 @@ const schema = z.object({
 
 /** Cadastra o canal (status "pendente") e devolve a URL pra o lojista autorizar o app. */
 export async function POST(request: NextRequest) {
-  const { erro, user } = await autorizarCanais()
+  const { erro, user, tenant } = await autorizarCanais()
   if (erro) return erro
 
   const parsed = schema.safeParse(await request.json().catch(() => null))
@@ -66,7 +67,13 @@ export async function POST(request: NextRequest) {
   const state = randomBytes(24).toString('hex')
   const { data, error } = await getAdminClient()
     .from('canais_integracoes')
-    .insert({ plataforma: parsed.data.plataforma, nome: parsed.data.nome, oauth_state: state, criado_por: user!.id })
+    .insert({
+      tenant_id: tenant.id,
+      plataforma: parsed.data.plataforma,
+      nome: parsed.data.nome,
+      oauth_state: state,
+      criado_por: user.id,
+    })
     .select(COLUNAS_PUBLICAS)
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { alterarCodigoProduto, buscarProduto } from '@/lib/bling'
+import { alterarCodigoProduto, buscarProduto, contaBlingDoTenant } from '@/lib/bling'
 import { autorizarModulo } from '@/lib/api/autorizar-modulo'
 
 export const dynamic = 'force-dynamic'
@@ -85,17 +85,17 @@ export async function POST(request: NextRequest) {
       const proposto = String(v.codigo_proposto)
 
       // 2) Confere NO BLING (os dados do BI podem estar atrasados): o produto continua sem código.
-      const atual = await buscarProduto(item.id_produto)
+      const atual = await buscarProduto(contaBlingDoTenant(tenant), item.id_produto)
       if (atual.codigo) throw new Error(`No Bling o produto já tem código (${atual.codigo}) — o BI estava desatualizado.`)
       await pausa()
 
       // 3) Grava só o código.
       tocouNoBling = true
-      await alterarCodigoProduto(item.id_produto, proposto)
+      await alterarCodigoProduto(contaBlingDoTenant(tenant), item.id_produto, proposto)
       await pausa()
 
       // 4) Relê e confirma. O Bling pode responder OK e ignorar o campo — sem esta conferência o teste não prova nada.
-      const depois = await buscarProduto(item.id_produto)
+      const depois = await buscarProduto(contaBlingDoTenant(tenant), item.id_produto)
       if (norm(depois.codigo) !== norm(proposto)) {
         throw new Error(
           `O Bling respondeu OK, mas o código não ficou gravado (lido de volta: ${depois.codigo ?? 'vazio'}). O campo pode não ser alterável por esta API.`

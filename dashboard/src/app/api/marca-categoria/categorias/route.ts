@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Dados inválidos.' }, { status: 400 })
   const { nome, id_pai: idPai = null } = parsed.data
 
-  const loja = await lojaNuvemshop()
+  const loja = await lojaNuvemshop(tenant.id)
   if ('erro' in loja) return NextResponse.json({ error: loja.erro }, { status: 400 })
 
   const admin = getAdminClient()

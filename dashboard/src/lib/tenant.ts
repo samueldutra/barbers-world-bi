@@ -14,6 +14,8 @@ export interface Tenant {
   slug: string
   nome: string
   schema_name: string
+  /** Linha de public.bling_oauth deste cliente (null = usa o slug). */
+  conta_bling: string | null
   logo_url: string | null
   is_admin: boolean
 }

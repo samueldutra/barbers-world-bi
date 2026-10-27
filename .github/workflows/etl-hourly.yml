@@ -75,6 +75,10 @@ on:
         required: false
         type: boolean
         default: false
+      tenant:
+        description: 'Cliente (slug em public.tenants) a processar. Vazio = todos os clientes ativos. Obrigatório pensar nisso nos disparos de ESCRITA: os campos acima valem para o cliente escolhido'
+        required: false
+        default: ''
       apenas_nuvemshop:
         description: 'Pular os passos do Bling e rodar só os da Nuvemshop (ex.: backfill de pedidos com alterados_horas=8760)'
         required: false
@@ -82,7 +86,39 @@ on:
         default: false
 
 jobs:
+  # Lista os clientes ativos (public.tenants) e monta a matriz: cada cliente roda o ETL inteiro, em
+  # paralelo, com o próprio schema, conta do Bling e lojas (canais_integracoes.tenant_id).
+  tenants:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.lista.outputs.matrix }}
+    steps:
+      - id: lista
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TENANT: ${{ inputs.tenant }}
+        run: |
+          resp=$(curl -fsS "$SUPABASE_URL/rest/v1/tenants?ativo=eq.true&select=id,slug,schema_name,conta_bling&order=slug" \
+            -H "apikey: $SUPABASE_SERVICE_KEY" -H "Authorization: Bearer $SUPABASE_SERVICE_KEY") || {
+            echo "::error::Não foi possível ler public.tenants (sql/multi_tenant.sql aplicado? SUPABASE_SERVICE_KEY é a service_role?)"; exit 1; }
+          matrix=$(jq -c --arg t "$TENANT" '{tenant: [ .[] | select($t == "" or .slug == $t) | (.conta_bling // .slug) as $conta
+            | {slug, conta_bling: $conta, config: ({(.slug): {schema: .schema_name, conta_bling: $conta, tenant_id: .id}} | tojson)} ]}' <<<"$resp")
+          if [ "$(jq '.tenant | length' <<<"$matrix")" -eq 0 ]; then
+            echo "::error::Nenhum cliente ativo encontrado${TENANT:+ com o slug '$TENANT'}."; exit 1
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   etl:
+    name: ETL (${{ matrix.tenant.slug }})
+    needs: tenants
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.tenants.outputs.matrix) }}
+    # Um ETL por cliente de cada vez (o refresh_token do Bling/Mercado Livre é de uso único).
+    concurrency:
+      group: etl-${{ matrix.tenant.slug }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # Os segredos são do REPOSITÓRIO (Settings > Secrets and variables > Actions), sem depender de
     # nenhum "environment" — antes ficavam num ambiente criado pela integração da Vercel, que some
@@ -99,14 +135,14 @@ jobs:
     env:
       # Mesmo caminho de execução local (sem SSM/AWS) — só troca de onde roda.
       LOCAL_MODE: 'true'
-      ETL_CLIENTE: barbers
-      LOCAL_CLIENT_CONFIGS: '{"barbers":{"schema":"barbers"}}'
+      ETL_CLIENTE: ${{ matrix.tenant.slug }}
+      LOCAL_CLIENT_CONFIGS: ${{ matrix.tenant.config }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
       BLING_CLIENT_ID: ${{ secrets.BLING_CLIENT_ID }}
       BLING_CLIENT_SECRET: ${{ secrets.BLING_CLIENT_SECRET }}
       BLING_REDIRECT_URI: ${{ secrets.BLING_REDIRECT_URI }}
-      BLING_CONTA: barbers
+      BLING_CONTA: ${{ matrix.tenant.conta_bling }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
       - uses: actions/checkout@v4

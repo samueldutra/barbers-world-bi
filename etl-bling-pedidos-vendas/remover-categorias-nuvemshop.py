@@ -42,7 +42,7 @@ def main():
     if not plano:
         base.log("[ERRO] CATEGORIAS_PLANO vazio")
         sys.exit(1)
-    url = f"{base.SUPABASE_URL}/rest/v1/canais_integracoes?plataforma=eq.nuvemshop&status=eq.conectado&select=store_id,access_token"
+    url = f"{base.SUPABASE_URL}/rest/v1/canais_integracoes?{base.filtro_tenant_canais()}plataforma=eq.nuvemshop&status=eq.conectado&select=store_id,access_token"
     resp = base.get_http_session().get(url, headers=base._supabase_headers(), timeout=30)
     resp.raise_for_status()
     lojas = [l for l in resp.json() if l.get("access_token")]
