@@ -34,4 +34,5 @@ Conferir depois: com um usuário comum do tenant A, `rpc('obter_kpis_vendas', { 
 - Redirect URIs do Bling/Nuvemshop/Mercado Livre são únicos (um domínio para todos): cada cliente autoriza o mesmo app.
 - Marca por tenant além de nome/logo; `abas-canais.ts` e `leads-status.ts` (status por vendedor da Barbers) por tenant.
 - Tela de Usuários só para super admin da plataforma; falta `tenant_users.is_admin` gerindo os próprios usuários.
-- O gerador de SQL não foi testado contra um banco real (só geração e leitura do resultado).
+- Gerador de SQL: o script de instalação foi executado no Supabase de produção dentro de uma transação desfeita (schema de teste `teste_cli`, 25 tabelas, view, trigger, índices): sem erro de DDL e sem resíduo. As tabelas de estoque e de vínculos por loja foram incluídas depois e ainda não rodaram. Não se criam GRANTs: o schema da Barbers também não tem; só as RPCs (SECURITY DEFINER) acessam os dados. Fica de fora de propósito o que é só da Barbers (`consultas_precos*`, `titulos_*`).
+- `leads_mapeados.status` ainda nasce com os status da Barbers (`cliente_bw`, `cliente_anderson`, `cliente_leo`).

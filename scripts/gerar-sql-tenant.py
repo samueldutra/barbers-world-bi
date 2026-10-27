@@ -31,6 +31,8 @@ ARQUIVOS = [
     "etl-bling-pedidos-vendas/sql/create_table_pedidos_vendas.sql",
     "etl-bling-pedidos-vendas/sql/create_table_canais_venda_de_para.sql",
     "etl-bling-pedidos-vendas/sql/create_table_produtos_lojas.sql",
+    "etl-bling-pedidos-vendas/sql/rpc_estoque_bling_nuvemshop.sql",
+    "etl-bling-pedidos-vendas/sql/rpc_vinculos_lote_loja.sql",
     "etl-nuvemshop-pedidos/sql/create_table_nuvemshop_pedidos.sql",
     "etl-nuvemshop-produtos/sql/create_table_nuvemshop_produtos.sql",
     "etl-nuvemshop-produtos/sql/marca_categoria.sql",
