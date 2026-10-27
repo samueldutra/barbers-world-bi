@@ -31,7 +31,13 @@ Conferir depois: com um usuário comum do tenant A, `rpc('obter_kpis_vendas', { 
 
 ## Falta (fase 3)
 
-- Redirect URIs do Bling/Nuvemshop/Mercado Livre são únicos (um domínio para todos): cada cliente autoriza o mesmo app.
+- Nuvemshop/Mercado Livre: o redirect é único (um domínio para todos) e o app é o mesmo para todos os clientes. Só o Bling tem app próprio por cliente.
+
+## Bling: app próprio por cliente
+
+Cada cliente cria o app dele no Bling (Central de Extensões, aplicativo próprio) com redirect `http://localhost:8080/callback`. As credenciais ficam em `public.bling_apps` (uma linha por `conta`, RLS sem política: só `service_role`); a conta sem linha usa `BLING_CLIENT_ID/SECRET` (Barbers). O ETL (`obter_credenciais_bling(cliente, conta)`) e o dashboard (`lib/bling.ts`) consultam a tabela na renovação do token.
+
+Como cadastrar o Bling de um cliente novo: aplicar `etl-bling-pedidos-vendas/sql/create_table_bling_apps.sql` (uma vez) e, na pasta do ETL, com `.env` apontando para o app do cliente e `BLING_CONTA=<conta_bling do tenant>`, `BLING_APP_PROPRIO=1`, rodar `python bling_oauth_bootstrap.py` e autorizar com o login do Bling dele. Isso grava tokens e app.
 - Marca por tenant além de nome/logo; `abas-canais.ts` e `leads-status.ts` (status por vendedor da Barbers) por tenant.
 - Tela de Usuários só para super admin da plataforma; falta `tenant_users.is_admin` gerindo os próprios usuários.
 - O gerador de SQL não foi testado contra um banco real (só geração e leitura do resultado).

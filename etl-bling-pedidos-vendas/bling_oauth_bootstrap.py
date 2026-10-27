@@ -120,6 +120,32 @@ def _save_supabase(tokens: dict):
         sys.exit(1)
     print(f"[OK] Tokens gravados em public.bling_oauth (conta={CONTA}).")
 
+    # Cliente com app próprio no Bling: guarda o client_id/secret da conta para o ETL e o dashboard
+    # usarem na renovação do token (sem isso, valem as credenciais globais).
+    if os.getenv("BLING_APP_PROPRIO") == "1":
+        resp = requests.post(
+            f"{SUPABASE_URL}/rest/v1/bling_apps",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            },
+            json={
+                "conta": CONTA,
+                "client_id": CLIENT_ID,
+                "client_secret": CLIENT_SECRET,
+                "redirect_uri": REDIRECT_URI,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            print(f"[ERRO] Gravacao do app em public.bling_apps falhou ({resp.status_code}): {resp.text}")
+            print("       Crie a tabela primeiro: sql/create_table_bling_apps.sql")
+            sys.exit(1)
+        print(f"[OK] App do Bling gravado em public.bling_apps (conta={CONTA}).")
+
 
 def main():
     faltando = [k for k, v in {

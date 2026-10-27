@@ -168,7 +168,7 @@ as RPCs de `sql/rpc_comparacao_precos.sql` continuam no banco (histórico), sem 
 | `GOOGLE_PLACES_API_KEY` | Busca de barbearias (server). Restrinja à Places API (New). |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Mapa no navegador (Maps JavaScript API, restrita por HTTP referrer). |
 | `NEXT_PUBLIC_APP_URL`, `NUVEMSHOP_APP_ID`, `NUVEMSHOP_CLIENT_SECRET` | Módulo Canais de Venda (OAuth da Nuvemshop). A URL de retorno é `{NEXT_PUBLIC_APP_URL}/api/canais-venda/nuvemshop/callback`. |
-| `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET` | App do Bling (compartilhado entre os tenants). Conferência de Preços e Gerar SKU alteram o Bling; o token OAuth de cada cliente fica em `public.bling_oauth` (conta = `tenants.conta_bling`). |
+| `BLING_CLIENT_ID`, `BLING_CLIENT_SECRET` | App do Bling **global** (Barbers); cliente com app próprio tem o dele em `public.bling_apps` (por conta) e `lib/bling.ts` o usa na renovação. Conferência de Preços e Gerar SKU alteram o Bling; o token OAuth de cada cliente fica em `public.bling_oauth` (conta = `tenants.conta_bling`). |
 
 Nunca commitar valores reais (o `.env.local.example` só tem os nomes).
 
