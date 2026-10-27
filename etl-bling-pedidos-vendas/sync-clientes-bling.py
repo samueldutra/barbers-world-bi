@@ -237,6 +237,10 @@ def obter_app_bling_supabase(conta: str) -> Optional[dict]:
 
 
 def obter_credenciais_bling(cliente_id: str, conta: Optional[str] = None) -> dict:
+    if conta:
+        app = obter_app_bling_supabase(conta)
+        if app:
+            return app
     if LOCAL_MODE:
         if LOCAL_BLING_CREDENTIALS:
             return json.loads(LOCAL_BLING_CREDENTIALS)
@@ -379,10 +383,6 @@ def buscar_contato(cliente_id: str, conta: str, id_contato: int) -> Optional[dic
 def normalizar_data_nascimento(valor: Optional[str]) -> Optional[str]:
     """Bling manda '0000-00-00' (ou vazio) quando o campo não foi preenchido — não é
     uma data válida, então vira NULL em vez de quebrar o cast ::DATE no Postgres."""
-    if conta:
-        app = obter_app_bling_supabase(conta)
-        if app:
-            return app
     if not valor or not valor.strip() or valor.startswith("0000"):
         return None
     return valor
