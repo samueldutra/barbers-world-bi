@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createImplicitClient, mensagemErroEmail, urlDefinirSenha } from '@/lib/supabase/links-acesso'
-import { exigirSuperAdmin } from '@/lib/usuarios/exigir-super-admin'
+import { exigirAdmin, exigirAlvoDoCliente } from '@/lib/usuarios/exigir-admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ const schema = z.object({ enviar_email: z.boolean() })
  * Ambos em fluxo implícito: funcionam em qualquer aparelho (ver lib/supabase/links-acesso.ts).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { erro } = await exigirSuperAdmin()
+  const { erro, tenant, superAdmin } = await exigirAdmin()
   if (erro) return erro
 
   const { id } = await params
@@ -25,6 +25,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!parsed.success) return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
 
   const admin = createAdminClient()
+  const negado = await exigirAlvoDoCliente(admin, tenant.id, superAdmin, id)
+  if (negado) return negado
   const { data, error } = await admin.auth.admin.getUserById(id)
   if (error || !data.user?.email) {
     return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 })

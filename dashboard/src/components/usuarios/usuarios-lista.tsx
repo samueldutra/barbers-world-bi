@@ -109,9 +109,12 @@ export function UsuariosLista({ usuarios, loading, usuarioAtualId, onEditar, onE
                 {u.is_superadmin ? (
                   <Badge>Super admin</Badge>
                 ) : u.modules.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">Nenhum módulo</span>
+                  <span className="text-xs text-muted-foreground">
+                    {u.is_admin && <Badge variant="secondary" className="mr-1 text-xs">Administrador</Badge>}Nenhum módulo
+                  </span>
                 ) : (
                   <div className="flex flex-wrap gap-1">
+                    {u.is_admin && <Badge variant="secondary" className="text-xs">Administrador</Badge>}
                     {u.modules.map((m) => (
                       <Badge key={m} variant="outline" className="text-xs">
                         {moduleLabel(m)}
