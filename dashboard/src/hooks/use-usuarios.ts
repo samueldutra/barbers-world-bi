@@ -7,6 +7,8 @@ export interface Usuario {
   email: string
   full_name: string | null
   is_superadmin: boolean
+  /** Administrador do cliente ativo (gerencia os usuários dele). */
+  is_admin: boolean
   is_active: boolean
   created_at: string
   modules: string[]
@@ -28,6 +30,7 @@ export interface CriarUsuarioInput {
   email: string
   full_name: string
   is_superadmin: boolean
+  is_admin?: boolean
   modules: string[]
 }
 
@@ -35,6 +38,7 @@ export interface AtualizarUsuarioInput {
   full_name?: string
   is_superadmin?: boolean
   is_active?: boolean
+  is_admin?: boolean
   modules?: string[]
 }
 

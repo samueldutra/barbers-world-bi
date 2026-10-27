@@ -87,10 +87,14 @@ export async function updateSession(request: NextRequest) {
   const isSuper = profile?.is_superadmin === true
   const isAdminRoute = request.nextUrl.pathname.startsWith('/usuarios')
 
+  // /usuarios: super admin ou administrador do cliente ativo (tenant_users.is_admin).
   if (user && isAdminRoute && !isSuper) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
+    const { ativo: tenantAtivo } = await resolverTenantAtivo(supabase, request.cookies.get(TENANT_COOKIE)?.value)
+    if (!tenantAtivo?.is_admin) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
   }
 
   // Módulos: quem não é super admin só entra no que foi liberado em Usuários. Rotas fora

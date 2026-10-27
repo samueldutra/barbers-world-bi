@@ -40,7 +40,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const superAdmin = isSuperAdmin(profile)
 
   const liberados = navMain.filter((item) => superAdmin || modules.includes(item.id))
-  const items = superAdmin ? [...liberados, navUsuarios] : liberados
+  const items = superAdmin || tenant?.is_admin ? [...liberados, navUsuarios] : liberados
   const { isMobile } = useSidebar()
   const marca = (
     <>

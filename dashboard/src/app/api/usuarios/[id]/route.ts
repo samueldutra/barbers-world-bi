@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { exigirSuperAdmin } from '@/lib/usuarios/exigir-super-admin'
+import { exigirAdmin, exigirAlvoDoCliente } from '@/lib/usuarios/exigir-admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MODULE_IDS } from '@/types/modules'
 
@@ -18,11 +18,12 @@ const atualizarUsuarioSchema = z.object({
   full_name: z.string().trim().min(1).optional(),
   is_superadmin: z.boolean().optional(),
   is_active: z.boolean().optional(),
+  is_admin: z.boolean().optional(),
   modules: z.array(z.string()).optional(),
 })
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { erro, user, tenant } = await exigirSuperAdmin()
+  const { erro, user, tenant, superAdmin } = await exigirAdmin()
   if (erro) return erro
 
   const { id } = await params
@@ -38,9 +39,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!parsed.success) {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
   }
-  const { full_name, is_superadmin, is_active, modules } = parsed.data
+  const { full_name, is_superadmin, is_active, is_admin, modules } = parsed.data
 
   const admin = createAdminClient()
+
+  const negado = await exigirAlvoDoCliente(admin, tenant.id, superAdmin, id)
+  if (negado) return negado
+  if (!superAdmin) {
+    if (is_superadmin !== undefined) {
+      return NextResponse.json({ error: 'Só o super admin da plataforma altera esse perfil.' }, { status: 403 })
+    }
+    if (is_admin !== undefined && user?.id === id) {
+      return NextResponse.json({ error: 'Você não pode alterar o seu próprio papel de administrador.' }, { status: 400 })
+    }
+    // Nome e situação (ativo/inativo) valem para a conta inteira: só dá para mexer se o usuário é só deste cliente.
+    if (full_name !== undefined || is_active !== undefined) {
+      const { count } = await admin.from('tenant_users').select('user_id', { count: 'exact', head: true }).eq('user_id', id)
+      if ((count ?? 0) > 1) {
+        return NextResponse.json({ error: 'Este usuário também pertence a outro cliente: nome e situação só o super admin altera. Ajuste os módulos ou remova-o deste cliente.' }, { status: 403 })
+      }
+    }
+  }
 
   const removendoUltimoSuperAdmin =
     (is_superadmin === false || is_active === false) && (await ehUltimoSuperAdmin(admin, id))
@@ -64,6 +83,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const { error } = await admin.from('user_profiles').update(dadosPerfil).eq('id', id)
     if (error) {
       console.error('Erro ao atualizar perfil:', error)
+      return NextResponse.json({ error: 'Não foi possível atualizar o usuário.' }, { status: 500 })
+    }
+  }
+
+  if (is_admin !== undefined) {
+    const { error } = await admin.from('tenant_users').update({ is_admin }).eq('user_id', id).eq('tenant_id', tenant.id)
+    if (error) {
+      console.error('Erro ao atualizar papel de administrador:', error)
       return NextResponse.json({ error: 'Não foi possível atualizar o usuário.' }, { status: 500 })
     }
   }
@@ -94,7 +121,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { erro, user, tenant } = await exigirSuperAdmin()
+  const { erro, user, tenant, superAdmin } = await exigirAdmin()
   if (erro) return erro
 
   const { id } = await params
@@ -104,6 +131,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   }
 
   const admin = createAdminClient()
+
+  const negado = await exigirAlvoDoCliente(admin, tenant.id, superAdmin, id)
+  if (negado) return negado
 
   if (await ehUltimoSuperAdmin(admin, id)) {
     return NextResponse.json({ error: 'Não é possível excluir o último super admin do sistema.' }, { status: 400 })

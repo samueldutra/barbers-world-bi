@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SYSTEM_MODULES } from '@/types/modules'
+import { useProfile } from '@/hooks/use-profile'
 import type { Usuario, CriarUsuarioInput, AtualizarUsuarioInput, ResultadoCriacao } from '@/hooks/use-usuarios'
 
 interface Props {
@@ -30,10 +31,14 @@ interface Props {
 
 export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtualizar, onCriado }: Props) {
   const editando = usuario !== null
+  const { profile } = useProfile()
+  const souSuperAdmin = profile?.is_superadmin === true
+  const meuId = profile?.id
 
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [isSuperAdmin, setIsSuperAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [modules, setModules] = useState<Set<string>>(new Set())
   const [salvando, setSalvando] = useState(false)
@@ -43,6 +48,7 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
     setFullName(usuario?.full_name ?? '')
     setEmail(usuario?.email ?? '')
     setIsSuperAdmin(usuario?.is_superadmin ?? false)
+    setIsAdmin(usuario?.is_admin ?? false)
     setIsActive(usuario?.is_active ?? true)
     setModules(new Set(usuario?.modules ?? []))
   }, [open, usuario])
@@ -75,7 +81,8 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
       if (editando) {
         await onAtualizar(usuario!.id, {
           full_name: fullName.trim(),
-          is_superadmin: isSuperAdmin,
+          ...(souSuperAdmin ? { is_superadmin: isSuperAdmin } : {}),
+          is_admin: isAdmin,
           is_active: isActive,
           modules: Array.from(modules),
         })
@@ -85,7 +92,8 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
         const criado = await onCriar({
           email: email.trim().toLowerCase(),
           full_name: fullName.trim(),
-          is_superadmin: isSuperAdmin,
+          is_superadmin: souSuperAdmin && isSuperAdmin,
+          is_admin: isAdmin,
           modules: Array.from(modules),
         })
         toast.success('Usuário criado.')
@@ -137,17 +145,33 @@ export function UsuarioFormDialog({ open, onOpenChange, usuario, onCriar, onAtua
             {editando && <p className="text-xs text-muted-foreground">Email não pode ser alterado por aqui.</p>}
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="is-superadmin"
-              checked={isSuperAdmin}
-              onCheckedChange={(v) => setIsSuperAdmin(v === true)}
-              disabled={salvando}
-            />
-            <Label htmlFor="is-superadmin" className="font-normal">
-              Super admin — acesso total a todos os módulos
-            </Label>
-          </div>
+          {souSuperAdmin && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="is-superadmin"
+                checked={isSuperAdmin}
+                onCheckedChange={(v) => setIsSuperAdmin(v === true)}
+                disabled={salvando}
+              />
+              <Label htmlFor="is-superadmin" className="font-normal">
+                Super admin — acesso total a todos os módulos e clientes
+              </Label>
+            </div>
+          )}
+
+          {!isSuperAdmin && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="is-admin"
+                checked={isAdmin}
+                onCheckedChange={(v) => setIsAdmin(v === true)}
+                disabled={salvando || usuario?.id === meuId}
+              />
+              <Label htmlFor="is-admin" className="font-normal">
+                Administrador deste cliente — gerencia os usuários dele
+              </Label>
+            </div>
+          )}
 
           {editando && (
             <div className="flex items-center gap-2">

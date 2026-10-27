@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { exigirSuperAdmin } from '@/lib/usuarios/exigir-super-admin'
+import { exigirAdmin } from '@/lib/usuarios/exigir-admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MODULE_IDS } from '@/types/modules'
 import { mensagemErroEmail, urlDefinirSenha } from '@/lib/supabase/links-acesso'
@@ -8,7 +8,7 @@ import { mensagemErroEmail, urlDefinirSenha } from '@/lib/supabase/links-acesso'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const { erro, tenant } = await exigirSuperAdmin()
+  const { erro, tenant, superAdmin } = await exigirAdmin()
   if (erro) return erro
 
   const admin = createAdminClient()
@@ -19,8 +19,9 @@ export async function GET() {
       admin.from('user_authorized_modules').select('user_id, module').eq('tenant_id', tenant.id),
       admin.auth.admin.listUsers({ perPage: 1000 }),
     ])
-  const { data: membros } = await admin.from('tenant_users').select('user_id').eq('tenant_id', tenant.id)
+  const { data: membros } = await admin.from('tenant_users').select('user_id, is_admin').eq('tenant_id', tenant.id)
   const idsDoTenant = new Set((membros ?? []).map((m) => m.user_id as string))
+  const adminsDoTenant = new Set((membros ?? []).filter((m) => m.is_admin).map((m) => m.user_id as string))
 
   if (perfisError || modulosError || authError) {
     console.error('Erro ao listar usuários:', perfisError ?? modulosError ?? authError)
@@ -45,12 +46,16 @@ export async function GET() {
     modulosPorId.set(m.user_id, lista)
   }
 
-  // Só quem é do tenant ativo (super admins da plataforma aparecem em todos).
-  const usuarios = (perfis ?? []).filter((p) => p.is_superadmin || idsDoTenant.has(p.id)).map((p) => ({
+  // Só quem é do tenant ativo. Super admins da plataforma aparecem em todos, mas só para super admin:
+  // o administrador do cliente não vê nem mexe neles.
+  const usuarios = (perfis ?? [])
+    .filter((p) => (superAdmin ? p.is_superadmin || idsDoTenant.has(p.id) : !p.is_superadmin && idsDoTenant.has(p.id)))
+    .map((p) => ({
     id: p.id,
     email: emailPorId.get(p.id) ?? '',
     full_name: p.full_name,
     is_superadmin: p.is_superadmin,
+    is_admin: adminsDoTenant.has(p.id),
     is_active: p.is_active,
     created_at: p.created_at,
     ...acessoPorId.get(p.id),
@@ -64,6 +69,7 @@ const criarUsuarioSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   full_name: z.string().trim().min(1),
   is_superadmin: z.boolean(),
+  is_admin: z.boolean().optional(),
   modules: z.array(z.string()),
 })
 
@@ -82,7 +88,7 @@ function emailJaCadastrado(err: { message?: string; code?: string } | null): boo
  * admin enviar por outro canal.
  */
 export async function POST(request: NextRequest) {
-  const { erro, tenant } = await exigirSuperAdmin()
+  const { erro, tenant, superAdmin } = await exigirAdmin()
   if (erro) return erro
 
   let body: unknown
@@ -97,6 +103,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Dados inválidos.' }, { status: 400 })
   }
   const { email, full_name, is_superadmin, modules } = parsed.data
+  const is_admin = parsed.data.is_admin === true
+  if (is_superadmin && !superAdmin) {
+    return NextResponse.json({ error: 'Só o super admin da plataforma pode criar super admins.' }, { status: 403 })
+  }
 
   const modulosInvalidos = modules.filter((m) => !MODULE_IDS.includes(m))
   if (modulosInvalidos.length > 0) {
@@ -156,7 +166,7 @@ export async function POST(request: NextRequest) {
 
   const { error: membroError } = await admin
     .from('tenant_users')
-    .upsert({ user_id: novoId, tenant_id: tenant.id }, { onConflict: 'user_id,tenant_id' })
+    .upsert({ user_id: novoId, tenant_id: tenant.id, is_admin }, { onConflict: 'user_id,tenant_id' })
   if (membroError) return desfazer('Erro ao associar o novo usuário ao cliente', membroError)
 
   if (!is_superadmin && modules.length > 0) {
