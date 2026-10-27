@@ -5,7 +5,8 @@ import { IconDeviceTv, IconX } from '@tabler/icons-react'
 import { LayoutDashboard } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CanalLogo } from '@/components/filtros/canal-logo'
-import { ABAS_DASHBOARD, type AbaDashboard } from '@/lib/abas-canais'
+import { abasDoTenant, type AbaDashboard } from '@/lib/abas-canais'
+import { useTenant } from '@/contexts/tenant-context'
 import { Button } from '@/components/ui/button'
 import { useTvMode } from '@/contexts/tv-mode-context'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -43,6 +44,8 @@ export default function DashboardPage() {
 
   const [periodo, setPeriodo] = useState<PeriodoPreset>('mes_atual')
   const [rangePersonalizado, setRangePersonalizado] = useState<RangeData | null>(null)
+  const { tenant } = useTenant()
+  const abas = useMemo(() => abasDoTenant(tenant), [tenant])
   const [aba, setAba] = useState<AbaDashboard>('geral')
   // Escolha do usuário no filtro de canais — só vale na aba Geral e é preservada ao navegar entre abas.
   const [canaisSelecionados, setCanaisSelecionados] = useState<number[] | null>(null)
@@ -63,7 +66,7 @@ export default function DashboardPage() {
 
   // Aba de canal: usa o período e a situação escolhidos, mas IGNORA o filtro de canais — os
   // canais são todos os do grupo da aba (inclui lojas antigas/recriadas do mesmo marketplace).
-  const abaDeCanal = ABAS_DASHBOARD.find((a) => a.id === aba && a.grupo) ?? null
+  const abaDeCanal = abas.find((a) => a.id === aba && a.grupo) ?? null
   const canaisDaAba = useMemo(
     () => (abaDeCanal ? canais.filter((c) => c.grupo === abaDeCanal.grupo).map((c) => c.id_loja) : null),
     [abaDeCanal, canais]
@@ -143,7 +146,7 @@ export default function DashboardPage() {
       <Tabs value={aba} onValueChange={(v) => setAba(v as AbaDashboard)} className="-mb-2">
         <div className="max-w-full overflow-x-auto">
           <TabsList className="group-data-horizontal/tabs:h-14 gap-1.5 p-1.5">
-            {ABAS_DASHBOARD.map((a) => (
+            {abas.map((a) => (
               <TabsTrigger
                 key={a.id}
                 value={a.id}

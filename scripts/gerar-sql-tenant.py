@@ -5,7 +5,7 @@ Uso (na raiz do repositório):
     python3 scripts/gerar-sql-tenant.py <slug> <schema> "<Nome do cliente>" [conta_bling] > instalar-<slug>.sql
 
 Cole o resultado no SQL Editor do Supabase (ou aplique pelo MCP). Exige que sql/multi_tenant.sql e
-sql/multi_tenant_fase2.sql já estejam aplicados.
+sql/multi_tenant_fase2.sql e sql/multi_tenant_config.sql já estejam aplicados.
 
 O que entra: CREATE SCHEMA, tabelas, índices, views, triggers e as funções DO SCHEMA (as que o próprio
 SQL cria como `barbers.<função>`), tudo com `barbers` trocado pelo schema novo; e o cadastro em
@@ -98,7 +98,7 @@ def main():
 
     saida = [
         f"-- Instalação do cliente '{nome}' (slug {slug}, schema {schema}). Gerado por scripts/gerar-sql-tenant.py.",
-        "-- Pré-requisito: sql/multi_tenant.sql e sql/multi_tenant_fase2.sql aplicados.",
+        "-- Pré-requisito: sql/multi_tenant.sql, sql/multi_tenant_fase2.sql e sql/multi_tenant_config.sql aplicados.",
         "BEGIN;",
         f"CREATE SCHEMA IF NOT EXISTS {schema};",
     ]
@@ -110,7 +110,10 @@ def main():
         saida.append(f"\n-- ==== {rel}")
         for cmd in comandos:
             if MANTER.match(cmd):
-                saida.append(re.sub(rf"\b{SCHEMA_ORIGEM}\b", schema, cmd) + ";")
+                novo = re.sub(rf"\b{SCHEMA_ORIGEM}\b", schema, cmd)
+                # Classificações de lead exclusivas da Barbers não entram no CHECK do cliente novo.
+                novo = novo.replace(", 'cliente_bw', 'cliente_anderson', 'cliente_leo'", "")
+                saida.append(novo + ";")
             else:
                 chave = " ".join(cmd.split()[:3]).upper()
                 descartados[chave] = descartados.get(chave, 0) + 1

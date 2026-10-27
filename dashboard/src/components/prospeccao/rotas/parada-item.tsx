@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from 'cn'
 import { formatarDataHora } from '@/lib/formatters'
 import { montarUrlNavegacao } from '@/lib/google-maps-route'
-import { ORDEM_STATUS, STATUS_LEAD } from '@/lib/leads-status'
+import { STATUS_LEAD } from '@/lib/leads-status'
+import { useStatusLead } from '@/hooks/use-status-lead'
 import type { StatusLead } from '@/hooks/use-leads-mapeados'
 import type { ParadaRota } from '@/hooks/use-rotas-visita'
 
@@ -29,6 +30,7 @@ export const ParadaItem = forwardRef<HTMLLIElement, Props>(function ParadaItem(
   ref
 ) {
   const visitada = parada.visita_realizada
+  const { ordem: ordemStatus } = useStatusLead()
   const telefone = parada.telefone?.replace(/[^\d+]/g, '')
 
   return (
@@ -86,7 +88,7 @@ export const ParadaItem = forwardRef<HTMLLIElement, Props>(function ParadaItem(
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ORDEM_STATUS.map((st) => (
+              {ordemStatus.map((st) => (
                 <SelectItem key={st} value={st}>
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: STATUS_LEAD[st].cor }} aria-hidden />
                   {STATUS_LEAD[st].label}

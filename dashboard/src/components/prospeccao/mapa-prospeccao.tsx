@@ -5,7 +5,8 @@ import { APIProvider, Map, Marker, InfoWindow, useMap, type MapMouseEvent } from
 import { Button } from '@/components/ui/button'
 import type { ResultadoBusca } from '@/hooks/use-busca-nicho'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
-import { STATUS_CLASSIFICAVEIS, STATUS_LEAD } from '@/lib/leads-status'
+import { STATUS_LEAD } from '@/lib/leads-status'
+import { useStatusLead } from '@/hooks/use-status-lead'
 
 /** Ícones coloridos por status via SVG inline (data URI) — não depende de Map ID nem do
  * script do Google já ter carregado (diferente de AdvancedMarker/google.maps.Size). */
@@ -126,6 +127,7 @@ export function MapaProspeccao({
   leadsSelecionadosRota = SEM_SELECAO,
   onToggleLeadRota,
 }: Props) {
+  const { classificaveis } = useStatusLead()
   const [selecionado, setSelecionado] = useState<SelecaoAberta>(null)
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
@@ -252,7 +254,7 @@ export function MapaProspeccao({
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               {selecionado.item.telefone && <p className="text-xs text-muted-foreground">{selecionado.item.telefone}</p>}
               <div className="flex flex-wrap gap-1 pt-1">
-                {STATUS_CLASSIFICAVEIS.map((status) => (
+                {classificaveis.map((status) => (
                   <Button
                     key={status}
                     size="sm"
@@ -280,7 +282,7 @@ export function MapaProspeccao({
               {selecionado.item.endereco && <p className="text-xs text-muted-foreground">{selecionado.item.endereco}</p>}
               <p className="text-xs font-medium uppercase text-muted-foreground">{LABEL_STATUS[selecionado.item.status]}</p>
               <div className="flex flex-wrap gap-1 pt-1">
-                {STATUS_CLASSIFICAVEIS.map((status) => (
+                {classificaveis.map((status) => (
                   <Button
                     key={status}
                     size="sm"
