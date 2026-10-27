@@ -174,6 +174,10 @@ def obter_app_bling_supabase(conta: str) -> Optional[dict]:
 
 
 def obter_credenciais_bling(cliente_id: str, conta: Optional[str] = None) -> dict:
+    if conta:
+        app = obter_app_bling_supabase(conta)
+        if app:
+            return app
     if LOCAL_MODE:
         if LOCAL_BLING_CREDENTIALS:
             return json.loads(LOCAL_BLING_CREDENTIALS)
@@ -307,10 +311,6 @@ def _bling_get(cliente_id: str, conta: str, path: str, params: dict = None) -> d
 def descobrir_modulo_vendas(cliente_id: str, conta: str) -> int:
     """Procura o módulo de pedidos de venda em GET /situacoes/modulos (fallback quando
     BLING_ID_MODULO_VENDAS não está definido)."""
-    if conta:
-        app = obter_app_bling_supabase(conta)
-        if app:
-            return app
     modulos = _bling_get(cliente_id, conta, "/situacoes/modulos").get("data", [])
     for m in modulos:
         texto = f"{m.get('nome', '')} {m.get('descricao', '')}".lower()
