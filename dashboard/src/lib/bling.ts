@@ -42,12 +42,23 @@ function tokenValido(linha: LinhaOAuth): boolean {
   return new Date(linha.expires_at).getTime() - Date.now() > MARGEM_EXPIRACAO_MS
 }
 
-async function renovarToken(conta: string, atual: LinhaOAuth): Promise<string> {
-  const clientId = process.env.BLING_CLIENT_ID
-  const clientSecret = process.env.BLING_CLIENT_SECRET
+/** App do Bling da conta: o próprio do cliente (public.bling_apps) ou, sem linha, o global do ambiente. */
+async function credenciaisApp(conta: string): Promise<{ clientId: string; clientSecret: string }> {
+  const { data } = await getAdminClient()
+    .from('bling_apps')
+    .select('client_id, client_secret')
+    .eq('conta', conta)
+    .maybeSingle()
+  const clientId = data?.client_id || process.env.BLING_CLIENT_ID
+  const clientSecret = data?.client_secret || process.env.BLING_CLIENT_SECRET
   if (!clientId || !clientSecret) {
-    throw new Error('BLING_CLIENT_ID/BLING_CLIENT_SECRET não configurados no servidor.')
+    throw new Error(`App do Bling não configurado para a conta '${conta}' (public.bling_apps ou BLING_CLIENT_ID/SECRET).`)
   }
+  return { clientId, clientSecret }
+}
+
+async function renovarToken(conta: string, atual: LinhaOAuth): Promise<string> {
+  const { clientId, clientSecret } = await credenciaisApp(conta)
 
   const resp = await fetch(BLING_TOKEN_URL, {
     method: 'POST',

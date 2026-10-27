@@ -55,7 +55,10 @@ Fonte de verdade dos tokens: tabela `public.bling_oauth` (1 linha por `conta`), 
 `.env`/SSM — o `refresh_token` roda a cada renovação e precisa ficar em algum lugar
 persistente e compartilhável entre execuções local/Lambda.
 
-- `client_id`/`client_secret`/`redirect_uri` do app Bling: `.env` local
+- App Bling **próprio de um cliente**: linha da conta em `public.bling_apps` (`sql/create_table_bling_apps.sql`,
+  gravada pelo bootstrap com `BLING_APP_PROPRIO=1`). `obter_credenciais_bling(cliente, conta)` olha essa tabela
+  primeiro; sem linha, cai no app global abaixo.
+- `client_id`/`client_secret`/`redirect_uri` do app Bling global (Barbers): `.env` local
   (`BLING_CLIENT_ID`/`BLING_CLIENT_SECRET`/`BLING_REDIRECT_URI`) ou SSM
   `/etl/bling/{cliente_id}/app` na AWS.
 - Autorização inicial (uma vez, navegador): `bling_oauth_bootstrap.py`. URLs de

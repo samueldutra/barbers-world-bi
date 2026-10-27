@@ -267,8 +267,27 @@ def obter_configuracoes_clientes() -> dict:
     return json.loads(parameter['Parameter']['Value'])
 
 
-def obter_credenciais_bling(cliente_id: str) -> dict:
+def obter_app_bling_supabase(conta: str) -> Optional[dict]:
+    """App do Bling (client_id/secret) próprio da conta, em public.bling_apps; None = usa o app global."""
+    try:
+        resp = get_http_session().get(
+            f"{SUPABASE_URL}/rest/v1/bling_apps?conta=eq.{conta}&select=client_id,client_secret,redirect_uri",
+            headers=_supabase_headers(), timeout=30,
+        )
+        if resp.status_code != 200:
+            return None
+        rows = resp.json()
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def obter_credenciais_bling(cliente_id: str, conta: Optional[str] = None) -> dict:
     """client_id / client_secret / redirect_uri do app Bling (não são os tokens)."""
+    if conta:
+        app = obter_app_bling_supabase(conta)
+        if app:
+            return app
     if LOCAL_MODE:
         if LOCAL_BLING_CREDENTIALS:
             return json.loads(LOCAL_BLING_CREDENTIALS)
@@ -379,7 +398,7 @@ def obter_access_token_valido(cliente_id: str, conta: str, forcar_refresh: bool 
             return row["access_token"]
 
         log(f"[OAUTH] Token da conta '{conta}' expirando/expirado/inválido — renovando...")
-        creds = obter_credenciais_bling(cliente_id)
+        creds = obter_credenciais_bling(cliente_id, conta)
         tokens = renovar_access_token(creds["client_id"], creds["client_secret"], row["refresh_token"])
         salvar_tokens_supabase(conta, tokens["access_token"], tokens["refresh_token"], tokens["expires_in"])
 
