@@ -8,10 +8,10 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { cn } from 'cn'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { montarUrlNavegacao } from '@/lib/google-maps-route'
-import { STATUS_CLASSIFICAVEIS, STATUS_LEAD } from '@/lib/leads-status'
+import { STATUS_LEAD } from '@/lib/leads-status'
+import { useStatusLead } from '@/hooks/use-status-lead'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
 
-const OPCOES = STATUS_CLASSIFICAVEIS.map((status) => ({ status, label: STATUS_LEAD[status].label, classe: STATUS_LEAD[status].classeAtivo }))
 
 
 /** Ficha do estabelecimento no Google Maps (fotos, horário, avaliações) — pelo place_id
@@ -36,6 +36,8 @@ interface Props {
 /** Detalhe/classificação de um lead. No celular vem de baixo (alcance do polegar) e, ao
  * classificar um lead pendente, a página já abre o próximo — triagem em sequência. */
 export function LeadDetalheSheet({ lead, onOpenChange, onClassificar, onExcluir, onFavoritar, pendentesRestantes, onPular }: Props) {
+  const { classificaveis } = useStatusLead()
+  const OPCOES = classificaveis.map((status) => ({ status, label: STATUS_LEAD[status].label, classe: STATUS_LEAD[status].classeAtivo }))
   const isMobile = useIsMobile()
   const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
   const telefone = lead?.telefone?.replace(/[^\d+]/g, '')

@@ -9,6 +9,23 @@
  * Trocar de tenant recarrega a página, então não há dado do tenant anterior em memória.
  */
 
+/** Aba de canal do Dashboard (ver public.tenants.config, sql/multi_tenant_config.sql). */
+export interface AbaConfig {
+  id: string
+  label: string
+  /** canais_venda.grupo do cliente. */
+  grupo: string
+  /** Ids de situacoes_pedido do cliente usados como padrão da aba. Ausente = padrão geral. */
+  situacoes_padrao?: number[]
+}
+
+/** Configuração do dashboard que muda de cliente para cliente. */
+export interface TenantConfig {
+  abas?: AbaConfig[]
+  /** Classificações de lead usadas pelo cliente, na ordem (catálogo em lib/leads-status.ts). */
+  status_lead?: string[]
+}
+
 export interface Tenant {
   id: string
   slug: string
@@ -18,6 +35,7 @@ export interface Tenant {
   conta_bling: string | null
   logo_url: string | null
   is_admin: boolean
+  config: TenantConfig
 }
 
 /** Cookie com o slug do tenant escolhido (validado no servidor a cada requisição). */

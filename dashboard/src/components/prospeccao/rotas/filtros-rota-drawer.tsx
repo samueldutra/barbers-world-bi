@@ -3,7 +3,8 @@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { FiltrosDrawerBase } from '@/components/filtros/filtros-drawer-base'
-import { ORDEM_STATUS, STATUS_LEAD } from '@/lib/leads-status'
+import { STATUS_LEAD } from '@/lib/leads-status'
+import { useStatusLead } from '@/hooks/use-status-lead'
 import type { StatusLead } from '@/hooks/use-leads-mapeados'
 
 export interface FiltrosRota {
@@ -20,6 +21,7 @@ interface Props {
 
 /** Filtro de Classificação das paradas da rota, no drawer padrão (mesmo do Dashboard). */
 export function FiltrosRotaDrawer({ valor, onAplicar }: Props) {
+  const { ordem: ordemStatus } = useStatusLead()
   return (
     <FiltrosDrawerBase<FiltrosRota>
       valor={valor}
@@ -30,7 +32,7 @@ export function FiltrosRotaDrawer({ valor, onAplicar }: Props) {
         <div className="flex flex-col gap-2">
           <Label>Classificação</Label>
           <div className="flex flex-col gap-1.5">
-            {ORDEM_STATUS.map((st) => {
+            {ordemStatus.map((st) => {
               const marcado = rascunho.classificacoes.includes(st)
               return (
                 <div key={st} className="flex items-center gap-2 rounded-md border px-3 py-2">

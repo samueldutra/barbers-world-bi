@@ -1,7 +1,10 @@
-/** Abas fixas do Dashboard. "Geral" é o painel consolidado (com filtro de canais livre); as
- * demais fixam o filtro de canais no GRUPO do canal (canais_venda.grupo — cobre integrações
- * antigas/recriadas do mesmo marketplace, ex.: SHOPEE + D LEGEND). */
-export type AbaDashboard = 'geral' | 'loja-fisica' | 'nuvemshop' | 'mercado-livre' | 'shopee' | 'tiktok'
+import type { Tenant } from '@/lib/tenant'
+
+/** Abas do Dashboard. "Geral" é o painel consolidado (com filtro de canais livre); as demais fixam
+ * o filtro de canais no GRUPO do canal (canais_venda.grupo — cobre integrações antigas/recriadas do
+ * mesmo marketplace, ex.: SHOPEE + D LEGEND). Quais abas existem, e o padrão de situações de cada
+ * uma, vêm da configuração do cliente (public.tenants.config.abas). */
+export type AbaDashboard = string
 
 export interface AbaCanal {
   id: AbaDashboard
@@ -12,16 +15,18 @@ export interface AbaCanal {
   situacoesPadrao?: number[]
 }
 
-/** Padrão de situações dos canais online (Nuvemshop, Mercado Livre, Shopee, TikTok Shop):
- * Atendido (9), P/ Separação (914897), Verificado (24) e Em aberto (6). P/ Separação herda de
- * Em aberto, mas entra por id; as demais herdeiras de Em aberto continuam de fora. */
-const SITUACOES_PADRAO_CANAIS_ONLINE = [9, 914897, 24, 6]
+export const ABA_GERAL: AbaCanal = { id: 'geral', label: 'Geral', grupo: null }
 
-export const ABAS_DASHBOARD: AbaCanal[] = [
-  { id: 'geral', label: 'Geral', grupo: null },
-  { id: 'loja-fisica', label: 'Loja Física', grupo: 'Loja Física (PDV)' },
-  { id: 'nuvemshop', label: 'Nuvemshop', grupo: 'Nuvemshop', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
-  { id: 'mercado-livre', label: 'Mercado Livre', grupo: 'Mercado Livre', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
-  { id: 'shopee', label: 'Shopee', grupo: 'Shopee', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
-  { id: 'tiktok', label: 'TikTok Shop', grupo: 'TikTok', situacoesPadrao: SITUACOES_PADRAO_CANAIS_ONLINE },
-]
+/** Abas do cliente: Geral + as configuradas para ele (cliente sem configuração = só a Geral). */
+export function abasDoTenant(tenant: Pick<Tenant, 'config'> | null): AbaCanal[] {
+  const configuradas = tenant?.config?.abas ?? []
+  return [
+    ABA_GERAL,
+    ...configuradas.map((a) => ({
+      id: a.id,
+      label: a.label,
+      grupo: a.grupo,
+      situacoesPadrao: a.situacoes_padrao,
+    })),
+  ]
+}

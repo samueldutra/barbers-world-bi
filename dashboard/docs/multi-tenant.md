@@ -33,12 +33,21 @@ Conferir depois: com um usuário comum do tenant A, `rpc('obter_kpis_vendas', { 
 
 - Nuvemshop/Mercado Livre: o redirect é único (um domínio para todos) e o app é o mesmo para todos os clientes. Só o Bling tem app próprio por cliente.
 
+## Configuração do dashboard por cliente (`public.tenants.config`)
+
+`sql/multi_tenant_config.sql` adiciona `tenants.config` (JSONB) e `meus_tenants()` passa a devolvê-la.
+- `abas`: abas de canal do Dashboard (`{ id, label, grupo, situacoes_padrao? }`). `grupo` é o `canais_venda.grupo` do cliente; `situacoes_padrao` são ids de `situacoes_pedido` **dele** (os ids do Bling mudam por conta). A aba Geral sempre existe; sem `abas` só ela aparece.
+- `status_lead`: classificações de lead usadas, em ordem. Ids do catálogo de `src/lib/leads-status.ts`; sem configuração valem `pendente`, `cliente`, `concorrente` e `lead`.
+- Barbers recebe, na própria migração, a configuração que estava fixa no código. Exemplo para um cliente com Shopee pelo Bling:
+  `UPDATE public.tenants SET config = '{"abas":[{"id":"shopee","label":"Shopee","grupo":"Shopee","situacoes_padrao":[9,6]}]}' WHERE slug = '<slug>';`
+
 ## Bling: app próprio por cliente
 
 Cada cliente cria o app dele no Bling (Central de Extensões, aplicativo próprio) com redirect `http://localhost:8080/callback`. As credenciais ficam em `public.bling_apps` (uma linha por `conta`, RLS sem política: só `service_role`); a conta sem linha usa `BLING_CLIENT_ID/SECRET` (Barbers). O ETL (`obter_credenciais_bling(cliente, conta)`) e o dashboard (`lib/bling.ts`) consultam a tabela na renovação do token.
 
 Como cadastrar o Bling de um cliente novo: aplicar `etl-bling-pedidos-vendas/sql/create_table_bling_apps.sql` (uma vez) e, na pasta do ETL, com `.env` apontando para o app do cliente e `BLING_CONTA=<conta_bling do tenant>`, `BLING_APP_PROPRIO=1`, rodar `python bling_oauth_bootstrap.py` e autorizar com o login do Bling dele. Isso grava tokens e app.
-- Marca por tenant além de nome/logo; `abas-canais.ts` e `leads-status.ts` (status por vendedor da Barbers) por tenant.
+- Marca por tenant além de nome/logo.
+- Classificações de lead novas por cliente (hoje o cliente escolhe um subconjunto do catálogo de `leads-status.ts`).
 - Tela de Usuários só para super admin da plataforma; falta `tenant_users.is_admin` gerindo os próprios usuários.
 - Gerador de SQL: o script de instalação foi executado no Supabase de produção dentro de uma transação desfeita (schema de teste `teste_cli`, 25 tabelas, view, trigger, índices): sem erro de DDL e sem resíduo. As tabelas de estoque e de vínculos por loja foram incluídas depois e ainda não rodaram. Não se criam GRANTs: o schema da Barbers também não tem; só as RPCs (SECURITY DEFINER) acessam os dados. Fica de fora de propósito o que é só da Barbers (`consultas_precos*`, `titulos_*`).
-- `leads_mapeados.status` ainda nasce com os status da Barbers (`cliente_bw`, `cliente_anderson`, `cliente_leo`).
+- `leads_mapeados.status`: o gerador cria o CHECK só com `pendente`, `cliente`, `concorrente` e `lead`. Para um cliente usar mais classificações, ampliar o CHECK dele e incluir os ids em `config.status_lead`.

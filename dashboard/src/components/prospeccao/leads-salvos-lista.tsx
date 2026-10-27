@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from 'cn'
 import { montarUrlRota } from '@/lib/google-maps-route'
-import { ORDEM_STATUS, STATUS_LEAD } from '@/lib/leads-status'
+import { STATUS_LEAD } from '@/lib/leads-status'
+import { useStatusLead } from '@/hooks/use-status-lead'
 import type { LeadMapeado, StatusLead } from '@/hooks/use-leads-mapeados'
 
 const CLASSE_BADGE_PENDENTE = 'border-sky-400 text-sky-600 dark:border-sky-500 dark:text-sky-400'
@@ -105,6 +106,7 @@ export function LeadsSalvosLista({
   onFiltroStatusChange,
 }: Props) {
   const modoRota = modo === 'rota'
+  const { ordem: ordemStatus } = useStatusLead()
   const [filtroInterno, setFiltroInterno] = useState<StatusLead | 'todos'>('todos')
   const [soFavoritos, setSoFavoritos] = useState(false)
   const filtroStatus = filtroControlado ?? filtroInterno
@@ -151,7 +153,7 @@ export function LeadsSalvosLista({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os status</SelectItem>
-              {ORDEM_STATUS.map((st) => (
+              {ordemStatus.map((st) => (
                 <SelectItem key={st} value={st}>
                   {STATUS_LEAD[st].label}
                 </SelectItem>
@@ -253,7 +255,7 @@ export function LeadsSalvosLista({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {ORDEM_STATUS.map((st) => (
+                      {ordemStatus.map((st) => (
                         <SelectItem key={st} value={st}>
                           {STATUS_LEAD[st].label}
                         </SelectItem>
