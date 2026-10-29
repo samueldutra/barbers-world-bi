@@ -31,7 +31,7 @@ Conferir depois: com um usuário comum do tenant A, `rpc('obter_kpis_vendas', { 
 
 ## Falta (fase 3)
 
-- Nuvemshop/Mercado Livre: o app padrão é o da Barbers World (variáveis de ambiente / segredos do repositório). Um cliente com app próprio ganha uma linha em `public.canais_apps` (`dashboard/sql/canais_apps.sql`: tenant_id, plataforma `mercado-livre` ou `nuvemshop`, app_id, client_secret; só o service_role lê). O dashboard (conectar canal, trocar code) e o ETL do Mercado Livre (renovar token) usam a linha do cliente e, sem ela, o app global. O redirect continua sendo a URL do dashboard (`/api/canais-venda/<plataforma>/callback`), igual para todos, e deve estar cadastrada no app de cada cliente.
+- Nuvemshop/Mercado Livre: o app padrão é o da Barbers World (variáveis de ambiente / segredos do repositório). Um cliente com app próprio ganha uma linha em `public.canais_apps` (`dashboard/sql/canais_apps.sql`: tenant_id, plataforma `mercado-livre`, `nuvemshop` ou `shopee` (`app_id` = partner_id, `client_secret` = partner_key; ver `integracao-shopee.md`), app_id, client_secret; só o service_role lê). O dashboard (conectar canal, trocar code) e o ETL do Mercado Livre (renovar token) usam a linha do cliente e, sem ela, o app global. O redirect continua sendo a URL do dashboard (`/api/canais-venda/<plataforma>/callback`), igual para todos, e deve estar cadastrada no app de cada cliente.
 
 ## Configuração do dashboard por cliente (`public.tenants.config`)
 

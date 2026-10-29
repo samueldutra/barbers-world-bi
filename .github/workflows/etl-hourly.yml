@@ -238,6 +238,19 @@ jobs:
           pip install -r requirements.txt
           python etl-mercadolivre-pedidos.py
 
+      # Pedidos da Shopee (lojas conectadas em Canais de Venda). Sem loja conectada, só avisa e termina.
+      # Renova o access_token (4 h) com o app do cliente (public.canais_apps) ou SHOPEE_PARTNER_ID/KEY (segredos do repositório).
+      - name: Shopee (pedidos alterados recentemente)
+        if: ${{ !cancelled() && inputs.explorar_vinculos_lojas == '' && !inputs.sync_vinculos_lojas && inputs.vincular_produto_loja == '' && !inputs.comparar_estoque && inputs.atualizar_estoque_nuvemshop == '' && inputs.vincular_lote == '' && inputs.atualizar_estoque_lote == '' && inputs.aplicar_sku_lote == '' && inputs.diagnosticar_produto_nuvemshop == '' && inputs.gravar_marca_nuvemshop == '' && inputs.remover_categorias_nuvemshop == '' && inputs.aplicar_titulos_maquinas == '' }}
+        working-directory: etl-shopee-pedidos
+        env:
+          ETL_ALTERADOS_HORAS: ${{ inputs.alterados_horas || '24' }}
+          SHOPEE_PARTNER_ID: ${{ secrets.SHOPEE_PARTNER_ID }}
+          SHOPEE_PARTNER_KEY: ${{ secrets.SHOPEE_PARTNER_KEY }}
+        run: |
+          pip install -r requirements.txt
+          python etl-shopee-pedidos.py
+
       # Catálogo da Nuvemshop (uma linha por variante, com o SKU) — alimenta o módulo "Vínculo de SKU" do
       # dashboard. Precisa do escopo read_products no token da loja. Leitura completa (~10 requisições).
       - name: Nuvemshop (catálogo de produtos)

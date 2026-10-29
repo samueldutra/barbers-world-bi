@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-export type Plataforma = 'nuvemshop' | 'mercado-livre'
+export type Plataforma = 'nuvemshop' | 'mercado-livre' | 'shopee'
 
 export interface CanalIntegracao {
   id: string
@@ -39,9 +39,9 @@ export function useCanaisIntegracoes() {
 
   const carregar = useCallback(async () => {
     try {
-      const d = await chamar<{ canais: CanalIntegracao[]; nuvemshop: ConfigPlataforma; mercadoLivre: ConfigPlataforma }>('/api/canais-venda')
+      const d = await chamar<{ canais: CanalIntegracao[]; nuvemshop: ConfigPlataforma; mercadoLivre: ConfigPlataforma; shopee: ConfigPlataforma }>('/api/canais-venda')
       setCanais(d.canais)
-      setConfigs({ nuvemshop: d.nuvemshop, 'mercado-livre': d.mercadoLivre })
+      setConfigs({ nuvemshop: d.nuvemshop, 'mercado-livre': d.mercadoLivre, shopee: d.shopee })
       setErro(null)
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar os canais.')

@@ -9,7 +9,7 @@ export interface AppCanal {
  * App (id + secret) da plataforma para o cliente: o próprio (public.canais_apps) ou, sem linha, o da Barbers World
  * vindo do ambiente (`global`). Só usar no servidor.
  */
-export async function appDoTenant(tenantId: string, plataforma: 'mercado-livre' | 'nuvemshop', global: AppCanal): Promise<AppCanal> {
+export async function appDoTenant(tenantId: string, plataforma: 'mercado-livre' | 'nuvemshop' | 'shopee', global: AppCanal): Promise<AppCanal> {
   const { data } = await getAdminClient()
     .from('canais_apps')
     .select('app_id, client_secret')

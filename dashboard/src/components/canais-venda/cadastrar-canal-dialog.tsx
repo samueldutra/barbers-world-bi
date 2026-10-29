@@ -27,7 +27,7 @@ interface Props {
 const PLATAFORMAS = [
   { id: 'nuvemshop', nome: 'Nuvemshop', grupo: 'Nuvemshop', disponivel: true },
   { id: 'mercado-livre', nome: 'Mercado Livre', grupo: 'Mercado Livre', disponivel: true },
-  { id: 'shopee', nome: 'Shopee', grupo: 'Shopee', disponivel: false },
+  { id: 'shopee', nome: 'Shopee', grupo: 'Shopee', disponivel: true },
   { id: 'tiktok', nome: 'TikTok Shop', grupo: 'TikTok', disponivel: false },
 ] as const
 
@@ -46,7 +46,8 @@ export function CadastrarCanalDialog({ open, onOpenChange, configs, onCadastrar 
   }
 
   const ehML = plataforma === 'mercado-livre'
-  const nomePlataforma = ehML ? 'Mercado Livre' : 'Nuvemshop'
+  const ehShopee = plataforma === 'shopee'
+  const nomePlataforma = ehShopee ? 'Shopee' : ehML ? 'Mercado Livre' : 'Nuvemshop'
   const config = plataforma ? (configs?.[plataforma] ?? null) : null
   const faltando = config?.faltando ?? []
   const pronto = config !== null && faltando.length === 0
@@ -77,7 +78,7 @@ export function CadastrarCanalDialog({ open, onOpenChange, configs, onCadastrar 
         <DialogHeader>
           <DialogTitle>Cadastrar canal</DialogTitle>
           <DialogDescription>
-            {plataforma ? `Conecte a conta autorizando o app da Barbers World no ${nomePlataforma}.` : 'Escolha a plataforma do canal.'}
+            {plataforma ? `Conecte a conta autorizando o app no ${nomePlataforma}.` : 'Escolha a plataforma do canal.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -107,7 +108,9 @@ export function CadastrarCanalDialog({ open, onOpenChange, configs, onCadastrar 
               <p className="font-medium">O que é preciso para integrar</p>
               <ul className="flex flex-col gap-2">
                 <Requisito ok={config !== null && !faltando.some((f) => f.endsWith('_APP_ID') || f.endsWith('_CLIENT_SECRET'))}>
-                  {ehML ? (
+                  {ehShopee ? (
+                    <>App da Shopee do cliente (<code>partner_id</code> e <code>partner_key</code> de produção em <code>public.canais_apps</code>, ou <code>SHOPEE_PARTNER_ID</code> e <code>SHOPEE_PARTNER_KEY</code> no servidor)</>
+                  ) : ehML ? (
                     <>App da Barbers World criado no DevCenter do Mercado Livre (<code>MERCADOLIVRE_APP_ID</code> e <code>MERCADOLIVRE_CLIENT_SECRET</code> no servidor)</>
                   ) : (
                     <>App da Barbers World criado na Nuvemshop (<code>NUVEMSHOP_APP_ID</code> e <code>NUVEMSHOP_CLIENT_SECRET</code> no servidor)</>
@@ -117,7 +120,9 @@ export function CadastrarCanalDialog({ open, onOpenChange, configs, onCadastrar 
                   URL pública do BI (<code>NEXT_PUBLIC_APP_URL</code>) para a URL de retorno
                 </Requisito>
                 <Requisito ok={null}>
-                  {ehML ? (
+                  {ehShopee ? (
+                    <>Login da <strong>loja</strong> na Shopee (conta principal só se autorizar uma loja); você escolhe por quanto tempo autorizar (até 365 dias) e depois precisa reautorizar</>
+                  ) : ehML ? (
                     <>Login da conta <strong>principal</strong> do vendedor no Mercado Livre (colaborador/operador não consegue autorizar); você vai entrar nela e clicar em “Permitir”</>
                   ) : (
                     <>Acesso de <strong>administrador</strong> à loja Nuvemshop que será conectada (você vai entrar nela e clicar em “Aceitar”)</>
@@ -140,7 +145,7 @@ export function CadastrarCanalDialog({ open, onOpenChange, configs, onCadastrar 
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>
                     Falta configurar no servidor (Vercel → Environment Variables): <code>{faltando.join(', ')}</code>.
-                    Passo a passo em <code>dashboard/docs/integracao-{ehML ? 'mercado-livre' : 'nuvemshop'}.md</code>.
+                    Passo a passo em <code>dashboard/docs/integracao-{ehShopee ? 'shopee' : ehML ? 'mercado-livre' : 'nuvemshop'}.md</code>.
                   </span>
                 </p>
               )}
@@ -150,7 +155,7 @@ export function CadastrarCanalDialog({ open, onOpenChange, configs, onCadastrar 
               <Label htmlFor="nome-canal">Nome do canal</Label>
               <Input
                 id="nome-canal"
-                placeholder={ehML ? 'Ex.: Mercado Livre — Barbers World' : 'Ex.: Nuvemshop — Loja Barbers World'}
+                placeholder={ehShopee ? 'Ex.: Shopee — Invento3d' : ehML ? 'Ex.: Mercado Livre — Barbers World' : 'Ex.: Nuvemshop — Loja Barbers World'}
                 value={nome}
                 maxLength={80}
                 onChange={(e) => setNome(e.target.value)}

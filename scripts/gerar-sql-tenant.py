@@ -38,6 +38,7 @@ ARQUIVOS = [
     "etl-nuvemshop-produtos/sql/create_table_nuvemshop_produtos.sql",
     "etl-nuvemshop-produtos/sql/marca_categoria.sql",
     "etl-mercadolivre-pedidos/sql/create_table_mercadolivre_pedidos.sql",
+    "etl-shopee-pedidos/sql/create_table_shopee_pedidos.sql",
     "dashboard/sql/rpc_conferencia_precos.sql",
     "dashboard/sql/rpc_vinculo_sku_alteracao.sql",
     "dashboard/sql/rpc_sku_bling_propostas.sql",

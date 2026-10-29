@@ -9,6 +9,7 @@ import {
   configMercadoLivre,
   urlAutorizacaoMercadoLivre,
 } from '@/lib/canais-integracao/mercado-livre'
+import { configFaltandoShopee, configShopee, urlAutorizacaoShopee } from '@/lib/canais-integracao/shopee'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,15 +31,17 @@ export async function GET() {
 
   const config = await configNuvemshop(tenant.id)
   const ml = await configMercadoLivre(tenant.id)
+  const sp = await configShopee(tenant.id)
   return NextResponse.json({
     canais: data ?? [],
     nuvemshop: { faltando: configFaltando(config), redirectUri: config.redirectUri ?? null },
     mercadoLivre: { faltando: configFaltandoMercadoLivre(ml), redirectUri: ml.redirectUri ?? null },
+    shopee: { faltando: configFaltandoShopee(sp), redirectUri: sp.redirectUri ?? null },
   })
 }
 
 const schema = z.object({
-  plataforma: z.enum(['nuvemshop', 'mercado-livre']),
+  plataforma: z.enum(['nuvemshop', 'mercado-livre', 'shopee']),
   nome: z.string().trim().min(2, 'Dê um nome ao canal.').max(80),
 })
 
@@ -52,11 +55,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Dados inválidos.' }, { status: 400 })
   }
 
-  const ehML = parsed.data.plataforma === 'mercado-livre'
+  const plataforma = parsed.data.plataforma
   const config = await configNuvemshop(tenant.id)
   const configML = await configMercadoLivre(tenant.id)
-  const faltando = ehML ? configFaltandoMercadoLivre(configML) : configFaltando(config)
-  const appId = ehML ? configML.appId : config.appId
+  const configSP = await configShopee(tenant.id)
+  const faltando =
+    plataforma === 'shopee' ? configFaltandoShopee(configSP)
+    : plataforma === 'mercado-livre' ? configFaltandoMercadoLivre(configML)
+    : configFaltando(config)
+  const appId = plataforma === 'shopee' ? configSP.appId : plataforma === 'mercado-livre' ? configML.appId : config.appId
   if (faltando.length > 0 || !appId) {
     return NextResponse.json(
       { error: `Falta configurar no servidor: ${faltando.join(', ')}.`, faltando },
@@ -78,8 +85,9 @@ export async function POST(request: NextRequest) {
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const url = ehML
-    ? urlAutorizacaoMercadoLivre(appId, configML.redirectUri!, state)
+  const url =
+    plataforma === 'shopee' ? urlAutorizacaoShopee(appId, configSP.redirectUri!, state)
+    : plataforma === 'mercado-livre' ? urlAutorizacaoMercadoLivre(appId, configML.redirectUri!, state)
     : urlAutorizacao(appId, state)
   return NextResponse.json({ canal: data, urlAutorizacao: url }, { status: 201 })
 }
