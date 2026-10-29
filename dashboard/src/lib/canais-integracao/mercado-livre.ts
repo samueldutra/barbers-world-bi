@@ -7,6 +7,8 @@
  * (= ID do vendedor). Docs: https://developers.mercadolivre.com.br/pt_br/autenticacao-e-autorizacao
  */
 
+import { appDoTenant } from './app-do-tenant'
+
 const AUTHORIZE_URL = 'https://auth.mercadolivre.com.br/authorization'
 const API_URL = 'https://api.mercadolibre.com'
 
@@ -17,17 +19,21 @@ export interface ConfigMercadoLivre {
   redirectUri: string | undefined
 }
 
-export function configMercadoLivre(): ConfigMercadoLivre {
+/** Config do cliente: app próprio (public.canais_apps) ou, sem linha, o da Barbers World (variáveis de ambiente). */
+export async function configMercadoLivre(tenantId: string): Promise<ConfigMercadoLivre> {
   const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '')
-  return {
+  const app = await appDoTenant(tenantId, 'mercado-livre', {
     appId: process.env.MERCADOLIVRE_APP_ID,
     clientSecret: process.env.MERCADOLIVRE_CLIENT_SECRET,
+  })
+  return {
+    ...app,
     redirectUri: base ? `${base}/api/canais-venda/mercado-livre/callback` : undefined,
   }
 }
 
 /** Itens de configuração que faltam no servidor (nomes das variáveis de ambiente). */
-export function configFaltandoMercadoLivre(c: ConfigMercadoLivre = configMercadoLivre()): string[] {
+export function configFaltandoMercadoLivre(c: ConfigMercadoLivre): string[] {
   const faltando: string[] = []
   if (!c.appId) faltando.push('MERCADOLIVRE_APP_ID')
   if (!c.clientSecret) faltando.push('MERCADOLIVRE_CLIENT_SECRET')
@@ -49,8 +55,8 @@ export interface TokenMercadoLivre {
   scope: string
 }
 
-export async function trocarCodePorToken(code: string): Promise<TokenMercadoLivre> {
-  const { appId, clientSecret, redirectUri } = configMercadoLivre()
+export async function trocarCodePorToken(code: string, tenantId: string): Promise<TokenMercadoLivre> {
+  const { appId, clientSecret, redirectUri } = await configMercadoLivre(tenantId)
   if (!appId || !clientSecret || !redirectUri) {
     throw new Error('MERCADOLIVRE_APP_ID/MERCADOLIVRE_CLIENT_SECRET/NEXT_PUBLIC_APP_URL não configurados.')
   }
