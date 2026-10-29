@@ -29,7 +29,7 @@ function Conteudo() {
     const conectado = params.get('conectado')
     const falha = params.get('erro')
     if (!conectado && !falha) return
-    if (conectado) toast.success(`Canal conectado com o ${params.get('plataforma') === 'mercado-livre' ? 'Mercado Livre' : 'Nuvemshop'}.`)
+    if (conectado) toast.success(`Canal conectado com o ${({ 'mercado-livre': 'Mercado Livre', shopee: 'Shopee' } as Record<string, string>)[params.get('plataforma') ?? ''] ?? 'Nuvemshop'}.`)
     if (falha) toast.error(falha)
     router.replace('/canais-venda')
     void recarregar()
@@ -81,7 +81,7 @@ function Conteudo() {
         <div className="grid gap-4 md:grid-cols-2">
           {canais.map((c) => {
             const ehML = c.plataforma === 'mercado-livre'
-            const nomePlataforma = ehML ? 'Mercado Livre' : 'Nuvemshop'
+            const nomePlataforma = c.plataforma === 'shopee' ? 'Shopee' : ehML ? 'Mercado Livre' : 'Nuvemshop'
             const logo = logoDoCanal(nomePlataforma)
             const st = STATUS[c.status]
             return (
@@ -100,7 +100,7 @@ function Conteudo() {
                 <CardContent className="flex flex-col gap-3 text-sm">
                   {c.store_id && (
                     <p className="text-muted-foreground">
-                      {ehML ? 'Vendedor nº' : 'Loja nº'} {c.store_id}
+                      {ehML ? 'Vendedor nº' : c.plataforma === 'shopee' ? 'Shop ID' : 'Loja nº'} {c.store_id}
                       {c.store_url ? ` · ${c.store_url}` : ''}
                     </p>
                   )}

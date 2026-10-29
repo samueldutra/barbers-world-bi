@@ -8,6 +8,7 @@ import {
   configMercadoLivre,
   urlAutorizacaoMercadoLivre,
 } from '@/lib/canais-integracao/mercado-livre'
+import { configFaltandoShopee, configShopee, urlAutorizacaoShopee } from '@/lib/canais-integracao/shopee'
 import { randomBytes } from 'crypto'
 
 export const dynamic = 'force-dynamic'
@@ -37,11 +38,15 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   const { data: canal } = await admin.from('canais_integracoes').select('plataforma').eq('id', id.data).eq('tenant_id', tenant.id).maybeSingle()
   if (!canal) return NextResponse.json({ error: 'Canal não encontrado.' }, { status: 404 })
 
-  const ehML = canal.plataforma === 'mercado-livre'
+  const plataforma = canal.plataforma
   const config = await configNuvemshop(tenant.id)
   const configML = await configMercadoLivre(tenant.id)
-  const appId = ehML ? configML.appId : config.appId
-  const faltando = ehML ? configFaltandoMercadoLivre(configML) : configFaltando(config)
+  const configSP = await configShopee(tenant.id)
+  const appId = plataforma === 'shopee' ? configSP.appId : plataforma === 'mercado-livre' ? configML.appId : config.appId
+  const faltando =
+    plataforma === 'shopee' ? configFaltandoShopee(configSP)
+    : plataforma === 'mercado-livre' ? configFaltandoMercadoLivre(configML)
+    : configFaltando(config)
   if (faltando.length > 0 || !appId) {
     return NextResponse.json({ error: 'Integração não configurada no servidor.' }, { status: 409 })
   }
@@ -57,6 +62,9 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'Canal não encontrado.' }, { status: 404 })
   return NextResponse.json({
-    urlAutorizacao: ehML ? urlAutorizacaoMercadoLivre(appId, configML.redirectUri!, state) : urlAutorizacao(appId, state),
+    urlAutorizacao:
+      plataforma === 'shopee' ? urlAutorizacaoShopee(appId, configSP.redirectUri!, state)
+      : plataforma === 'mercado-livre' ? urlAutorizacaoMercadoLivre(appId, configML.redirectUri!, state)
+      : urlAutorizacao(appId, state),
   })
 }
