@@ -7,6 +7,8 @@
  * Docs: https://tiendanube.github.io/api-documentation/authentication
  */
 
+import { appDoTenant } from './app-do-tenant'
+
 const AUTHORIZE_URL = (appId: string) => `https://www.nuvemshop.com.br/apps/${appId}/authorize`
 const TOKEN_URL = 'https://www.tiendanube.com/apps/authorize/token'
 const API_URL = 'https://api.nuvemshop.com.br/v1'
@@ -18,17 +20,21 @@ export interface ConfigNuvemshop {
   redirectUri: string | undefined
 }
 
-export function configNuvemshop(): ConfigNuvemshop {
+/** Config do cliente: app próprio (public.canais_apps) ou, sem linha, o da Barbers World (variáveis de ambiente). */
+export async function configNuvemshop(tenantId: string): Promise<ConfigNuvemshop> {
   const base = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '')
-  return {
+  const app = await appDoTenant(tenantId, 'nuvemshop', {
     appId: process.env.NUVEMSHOP_APP_ID,
     clientSecret: process.env.NUVEMSHOP_CLIENT_SECRET,
+  })
+  return {
+    ...app,
     redirectUri: base ? `${base}/api/canais-venda/nuvemshop/callback` : undefined,
   }
 }
 
 /** Itens de configuração que faltam no servidor (nomes das variáveis de ambiente). */
-export function configFaltando(c: ConfigNuvemshop = configNuvemshop()): string[] {
+export function configFaltando(c: ConfigNuvemshop): string[] {
   const faltando: string[] = []
   if (!c.appId) faltando.push('NUVEMSHOP_APP_ID')
   if (!c.clientSecret) faltando.push('NUVEMSHOP_CLIENT_SECRET')
@@ -46,8 +52,8 @@ export interface TokenNuvemshop {
   scope: string
 }
 
-export async function trocarCodePorToken(code: string): Promise<TokenNuvemshop> {
-  const { appId, clientSecret } = configNuvemshop()
+export async function trocarCodePorToken(code: string, tenantId: string): Promise<TokenNuvemshop> {
+  const { appId, clientSecret } = await configNuvemshop(tenantId)
   if (!appId || !clientSecret) throw new Error('NUVEMSHOP_APP_ID/NUVEMSHOP_CLIENT_SECRET não configurados.')
 
   const resp = await fetch(TOKEN_URL, {

@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   if (!canal) return voltar(request, { erro: 'Autorização desconhecida ou já usada. Gere o link de novo.' })
 
   try {
-    const token = await trocarCodePorToken(code)
+    const token = await trocarCodePorToken(code, tenant.id)
     const vendedor = await buscarVendedor(token.accessToken).catch(() => ({ nome: null, url: null }))
     const agora = new Date().toISOString()
     const { error } = await admin

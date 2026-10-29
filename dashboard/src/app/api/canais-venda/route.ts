@@ -28,8 +28,8 @@ export async function GET() {
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const config = configNuvemshop()
-  const ml = configMercadoLivre()
+  const config = await configNuvemshop(tenant.id)
+  const ml = await configMercadoLivre(tenant.id)
   return NextResponse.json({
     canais: data ?? [],
     nuvemshop: { faltando: configFaltando(config), redirectUri: config.redirectUri ?? null },
@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
   }
 
   const ehML = parsed.data.plataforma === 'mercado-livre'
-  const config = configNuvemshop()
-  const configML = configMercadoLivre()
+  const config = await configNuvemshop(tenant.id)
+  const configML = await configMercadoLivre(tenant.id)
   const faltando = ehML ? configFaltandoMercadoLivre(configML) : configFaltando(config)
   const appId = ehML ? configML.appId : config.appId
   if (faltando.length > 0 || !appId) {

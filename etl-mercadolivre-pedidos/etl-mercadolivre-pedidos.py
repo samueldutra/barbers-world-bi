@@ -205,7 +205,18 @@ def listar_contas_conectadas(tenant_id: str) -> List[dict]:
            "&select=id,nome,store_id,access_token,refresh_token,token_expira_em&order=created_at")
     resp = get_http_session().get(url, headers=_supabase_headers(), timeout=30)
     resp.raise_for_status()
-    return resp.json()
+    contas = resp.json()
+    # App do cliente (public.canais_apps) ou, sem linha, o da Barbers World (segredos do repositório).
+    app_id, secret = MERCADOLIVRE_APP_ID, MERCADOLIVRE_CLIENT_SECRET
+    r = get_http_session().get(
+        f"{SUPABASE_URL}/rest/v1/canais_apps?tenant_id=eq.{tenant_id}&plataforma=eq.mercado-livre&select=app_id,client_secret",
+        headers=_supabase_headers(), timeout=30)
+    if r.status_code == 200 and r.json():
+        app_id, secret = r.json()[0]["app_id"], r.json()[0]["client_secret"]
+        log("  Usando o app do Mercado Livre próprio do cliente (public.canais_apps).")
+    for c in contas:
+        c["_app_id"], c["_client_secret"] = app_id, secret
+    return contas
 
 
 def marcar_canal_com_erro(id_canal: str, mensagem: str):
@@ -236,15 +247,16 @@ def _token_vence_logo(conta: dict) -> bool:
 
 def renovar_token(conta: dict):
     """Troca o refresh_token (uso único) por um novo par e GRAVA no banco antes de qualquer outra coisa."""
-    if not MERCADOLIVRE_APP_ID or not MERCADOLIVRE_CLIENT_SECRET:
+    app_id, client_secret = conta.get("_app_id"), conta.get("_client_secret")
+    if not app_id or not client_secret:
         raise RuntimeError("MERCADOLIVRE_APP_ID/MERCADOLIVRE_CLIENT_SECRET não definidos (necessários para renovar o token).")
     if not conta.get("refresh_token"):
         raise TokenInvalido("Conta sem refresh_token. Reconecte o canal em Canais de Venda.")
     resp = get_http_session().post(
         f"{ML_API_URL}/oauth/token",
         headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
-        data={"grant_type": "refresh_token", "client_id": MERCADOLIVRE_APP_ID,
-              "client_secret": MERCADOLIVRE_CLIENT_SECRET, "refresh_token": conta["refresh_token"]},
+        data={"grant_type": "refresh_token", "client_id": app_id,
+              "client_secret": client_secret, "refresh_token": conta["refresh_token"]},
         timeout=30,
     )
     corpo = resp.json() if resp.content else {}

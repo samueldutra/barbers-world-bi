@@ -38,8 +38,8 @@ export async function POST(_request: NextRequest, ctx: { params: Promise<{ id: s
   if (!canal) return NextResponse.json({ error: 'Canal não encontrado.' }, { status: 404 })
 
   const ehML = canal.plataforma === 'mercado-livre'
-  const config = configNuvemshop()
-  const configML = configMercadoLivre()
+  const config = await configNuvemshop(tenant.id)
+  const configML = await configMercadoLivre(tenant.id)
   const appId = ehML ? configML.appId : config.appId
   const faltando = ehML ? configFaltandoMercadoLivre(configML) : configFaltando(config)
   if (faltando.length > 0 || !appId) {
