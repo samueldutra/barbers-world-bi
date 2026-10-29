@@ -25,6 +25,7 @@ SCHEMA_ORIGEM = "barbers"
 # Ordem importa (chaves, views e triggers dependem de tabelas anteriores).
 ARQUIVOS = [
     "etl-bling-pedidos-vendas/sql/create_table_canais_venda.sql",
+    "etl-bling-pedidos-vendas/sql/canais_venda_nome_exibicao.sql",
     "etl-bling-pedidos-vendas/sql/create_table_contatos.sql",
     "etl-bling-pedidos-vendas/sql/create_table_produtos.sql",
     "etl-bling-pedidos-vendas/sql/create_table_situacoes_pedido.sql",
