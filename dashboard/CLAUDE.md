@@ -89,7 +89,7 @@ Hooks: `use-profile.ts`, `use-authorized-modules.ts`, `use-user.ts`.
 ### Banco (SQL em `sql/`)
 
 Aplicar no SQL Editor do Supabase (ou pelo MCP). Cada tela tem o seu arquivo de RPCs:
-`rpc_dashboard_vendas.sql` (padrão de situações, KPIs, canais), `rpc_dashboard_produtos.sql`,
+`rpc_dashboard_vendas.sql` (padrão de situações, KPIs, canais), `rpc_vendas_por_hora.sql` (vendas por horário, só Nuvemshop), `rpc_dashboard_produtos.sql`,
 `rpc_relatorio_produtos.sql`, `rpc_gestao_produtos.sql`, `rpc_relatorio_clientes.sql`, `rpc_conferencia_precos.sql`, `rpc_comparacao_precos.sql`,
 `rpc_vinculo_sku_nuvemshop.sql`, `rpc_vinculo_sku_alteracao.sql`, `rpc_sku_bling_propostas.sql`, `rpc_vinculo_sku_pedidos.sql`, `rpc_marca_categoria.sql`, `rpc_prospeccao_leads.sql`, `rpc_prospeccao_rotas.sql`, `rpc_prospeccao_cidades.sql`.
 

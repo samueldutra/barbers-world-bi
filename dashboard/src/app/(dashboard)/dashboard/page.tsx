@@ -12,12 +12,14 @@ import { useTvMode } from '@/contexts/tv-mode-context'
 import { Skeleton } from '@/components/ui/skeleton'
 import { KpiCard } from '@/components/dashboard/kpi-card'
 import { EvolucaoVendasChart } from '@/components/dashboard/evolucao-vendas-chart'
+import { VendasPorHoraChart } from '@/components/dashboard/vendas-por-hora-chart'
 import { VendasPorCanalChart } from '@/components/dashboard/vendas-por-canal-chart'
 import { FiltroPeriodo } from '@/components/dashboard/vendas-filtros'
 import { FiltrosDrawer } from '@/components/dashboard/filtros-drawer'
 import { RankingProdutos } from '@/components/dashboard/ranking-produtos'
 import { RankingBarChart } from '@/components/dashboard/ranking-bar-chart'
 import { useVendasDashboard } from '@/hooks/use-vendas-dashboard'
+import { useVendasPorHora } from '@/hooks/use-vendas-por-hora'
 import { useCanaisVenda } from '@/hooks/use-canais-venda'
 import { useSituacoesPedido } from '@/hooks/use-situacoes-pedido'
 import { descreverSelecaoSituacoes, nomesDoPadrao } from '@/components/filtros/filtro-situacoes'
@@ -81,6 +83,9 @@ export default function DashboardPage() {
   // Vale também para abas sem canal fixo (ex.: Fornecedor): só o padrão de situações muda.
   const idsPadraoDaAba = abaAtiva?.situacoesPadrao
   const situacoesEfetivas = situacoesSelecionadas ?? idsPadraoDaAba ?? null
+  // Hora do pedido só existe na Nuvemshop (o Bling guarda só a data): o gráfico aparece nessa aba.
+  const mostrarVendasPorHora = abaDeCanal?.grupo === 'Nuvemshop'
+  const { dados: vendasPorHora, loading: carregandoPorHora } = useVendasPorHora({ atual, ativo: mostrarVendasPorHora, refreshToken })
   const { situacoes } = useSituacoesPedido({ atual, canais: canaisEfetivos, refreshToken })
   const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm } = useVendasDashboard({
     atual,
@@ -269,6 +274,8 @@ export default function DashboardPage() {
           </div>
 
           <EvolucaoVendasChart dados={evolucao} comComparacao={comComparacao} />
+
+          {mostrarVendasPorHora && <VendasPorHoraChart dados={vendasPorHora} loading={carregandoPorHora} />}
 
           <VendasPorCanalChart
             dados={canaisDaAba ? porCanal.filter((c) => canaisDaAba.includes(c.id_loja)) : porCanal}
