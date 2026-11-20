@@ -25,7 +25,7 @@ export function abasDoTenant(tenant: Pick<Tenant, 'config'> | null): AbaCanal[] 
     ...configuradas.map((a) => ({
       id: a.id,
       label: a.label,
-      grupo: a.grupo,
+      grupo: a.grupo ?? null,
       situacoesPadrao: a.situacoes_padrao,
     })),
   ]

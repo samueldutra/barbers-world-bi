@@ -29,6 +29,8 @@ $$;
 -- Em aberto (6) e as situações personalizadas que herdam de Em aberto (Fornecedor,
 -- Eventos/Workshop, CARRO MATHEUS, Devolução...). Calculada no banco, então uma situação
 -- nova criada no Bling entra sozinha, a menos que herde de Em aberto.
+-- Exceção por cliente: public.tenants.config->'situacoes_extra_dashboard' (array de ids) lista
+-- situações que herdam de Em aberto mas SOMAM ao padrão (Barbers: Fornecedor = 453473).
 CREATE OR REPLACE FUNCTION situacoes_padrao_dashboard(p_schema_name TEXT)
 RETURNS BIGINT[]
 LANGUAGE plpgsql
@@ -38,8 +40,13 @@ SET search_path = public
 AS $$
 DECLARE
     v_ids BIGINT[];
+    v_extras BIGINT[];
 BEGIN
     PERFORM public.assert_tenant_access(p_schema_name);
+    SELECT COALESCE(ARRAY(SELECT jsonb_array_elements_text(t.config->'situacoes_extra_dashboard')::BIGINT), ARRAY[]::BIGINT[])
+    INTO v_extras
+    FROM public.tenants t WHERE t.schema_name = p_schema_name;
+    v_extras := COALESCE(v_extras, ARRAY[]::BIGINT[]);
     -- "Loose index scan": os ids de situação vistos nos pedidos são achados com ~1 sonda no índice
     -- por valor distinto (cerca de 25), em vez de ler as ~95 mil entradas do índice (DISTINCT) —
     -- de ~31 ms para <1 ms por chamada (o dashboard chama isso ~9x por carga).
@@ -59,8 +66,8 @@ BEGIN
         FROM ids
         LEFT JOIN %1$I.situacoes_pedido s ON s.id_situacao = ids.id_situacao
         WHERE ids.id_situacao NOT IN (12, 6)
-          AND COALESCE(s.id_herdado, 0) <> 6
-    ', p_schema_name)
+          AND (COALESCE(s.id_herdado, 0) <> 6 OR ids.id_situacao = ANY(%2$L::BIGINT[]))
+    ', p_schema_name, v_extras)
     INTO v_ids;
 
     RETURN v_ids;

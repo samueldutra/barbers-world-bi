@@ -13,8 +13,8 @@
 export interface AbaConfig {
   id: string
   label: string
-  /** canais_venda.grupo do cliente. */
-  grupo: string
+  /** canais_venda.grupo do cliente. Ausente/null = aba sem canal fixo (filtro de canais livre, como a Geral). */
+  grupo?: string | null
   /** Ids de situacoes_pedido do cliente usados como padrão da aba. Ausente = padrão geral. */
   situacoes_padrao?: number[]
 }
@@ -22,6 +22,9 @@ export interface AbaConfig {
 /** Configuração do dashboard que muda de cliente para cliente. */
 export interface TenantConfig {
   abas?: AbaConfig[]
+  /** Ids de situacoes_pedido que herdam de Em aberto mas SOMAM ao padrão do Dashboard (lido por
+   * situacoes_padrao_dashboard() no banco; aqui só para documentar o formato). */
+  situacoes_extra_dashboard?: number[]
   /** Classificações de lead usadas pelo cliente, na ordem (catálogo em lib/leads-status.ts). */
   status_lead?: string[]
 }

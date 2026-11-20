@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { IconDeviceTv, IconX } from '@tabler/icons-react'
+import { IconDeviceTv, IconTruckDelivery, IconX } from '@tabler/icons-react'
 import { LayoutDashboard } from 'lucide-react'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CanalLogo } from '@/components/filtros/canal-logo'
@@ -66,7 +66,8 @@ export default function DashboardPage() {
 
   // Aba de canal: usa o período e a situação escolhidos, mas IGNORA o filtro de canais — os
   // canais são todos os do grupo da aba (inclui lojas antigas/recriadas do mesmo marketplace).
-  const abaDeCanal = abas.find((a) => a.id === aba && a.grupo) ?? null
+  const abaAtiva = abas.find((a) => a.id === aba) ?? null
+  const abaDeCanal = abaAtiva?.grupo ? abaAtiva : null
   const canaisDaAba = useMemo(
     () => (abaDeCanal ? canais.filter((c) => c.grupo === abaDeCanal.grupo).map((c) => c.id_loja) : null),
     [abaDeCanal, canais]
@@ -77,7 +78,8 @@ export default function DashboardPage() {
   // lista explícita; sem padrão próprio, o banco aplica o padrão geral do dashboard.
   const situacoesSelecionadas = situacoesPorAba[aba] ?? null
   const setSituacoesSelecionadas = (ids: number[] | null) => setSituacoesPorAba((atual) => ({ ...atual, [aba]: ids }))
-  const idsPadraoDaAba = abaDeCanal?.situacoesPadrao
+  // Vale também para abas sem canal fixo (ex.: Fornecedor): só o padrão de situações muda.
+  const idsPadraoDaAba = abaAtiva?.situacoesPadrao
   const situacoesEfetivas = situacoesSelecionadas ?? idsPadraoDaAba ?? null
   const { situacoes } = useSituacoesPedido({ atual, canais: canaisEfetivos, refreshToken })
   const { kpisAtual, kpisComparacao, evolucao, porCanal, loading, error, atualizadoEm } = useVendasDashboard({
@@ -155,7 +157,7 @@ export default function DashboardPage() {
               >
                 {/* Pastilha branca: mantém logos escuros (Nuvemshop, TikTok) visíveis na aba ativa preta. */}
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-white text-foreground ring-1 ring-black/10">
-                  {a.grupo ? <CanalLogo grupo={a.grupo} tamanho={22} /> : <LayoutDashboard className="size-5" />}
+                  {a.grupo ? <CanalLogo grupo={a.grupo} tamanho={22} /> : a.id === 'geral' ? <LayoutDashboard className="size-5" /> : <IconTruckDelivery className="size-5" />}
                 </span>
                 {a.label}
               </TabsTrigger>
